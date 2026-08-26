@@ -1,0 +1,24 @@
+{
+    "name": "laikait/laika-bm",
+    "type": "package",
+    "autoload": {
+        "files": [
+            "helpers/loader.php"
+        ],
+        "psr-4": {
+            "LBM\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Laika IT",
+            "email": "strblackhawk@gmail.com"
+        },
+        {
+            "name": "Showket Ahmed",
+            "email": "riyadhtayf@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {}
+}
