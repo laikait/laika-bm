@@ -2,9 +2,6 @@
     "name": "laikait/laika-bm",
     "type": "package",
     "autoload": {
-        "files": [
-            "helpers/loader.php"
-        ],
         "psr-4": {
             "LBM\\": "src/"
         }
@@ -20,5 +17,29 @@
         }
     ],
     "minimum-stability": "stable",
-    "require": {}
+    "require": {},
+    "extra": {
+        "laika": {
+            "resources": {
+                "routes": {
+                    "path": "helpers/Routes"
+                },
+                "functions": {
+                    "path": "helpers/functions"
+                },
+                "hooks": {
+                    "path": "helpers/hooks"
+                },
+                "models": {
+                    "path": "src/Model",
+                    "namespace": "LBM\\Model"
+                },
+                "schemas": {
+                    "path": "src/Schema",
+                    "namespace": "LBM\\Schema",
+                    "contract": "Laika\\Model\\Contract\\SchemaAbstract"
+                }
+            }
+        }
+    }
 }
