@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\ClientNoteModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class ClientNoteSchema extends SchemaAbstract
 {
@@ -40,6 +40,12 @@ class ClientNoteSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new ClientNoteModel())->count() > 0) {
+            return;
+        }
+
         $model = new ClientNoteModel();
         $model->transaction(function (ClientNoteModel $m) {
             $logs = [

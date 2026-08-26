@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\ProductTypeModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class ProductTypeSchema extends SchemaAbstract
 {
@@ -24,7 +24,7 @@ class ProductTypeSchema extends SchemaAbstract
 
     public function up(): void
     {
-        Schema::on()->createIfNotExists('product_types', function (Blueprint $t) {
+        Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('product_type_id');
             $t->string('type_name');
             $t->enum('is_default', ['yes', 'no'])->default('no');

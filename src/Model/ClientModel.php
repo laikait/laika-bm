@@ -37,8 +37,14 @@ class ClientModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'cid'            =>  'int',
+        'country_relid'  =>  'int',
+        'currency_relid' =>  'int',
+        'status_relid'   =>  'int',
+        'credit_balance' =>  'decimal',
+    ];
 
     // Start Code From Here
 }

@@ -37,8 +37,16 @@ class ClientServiceAddonModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'csa_id'              =>  'int',
+        'service_relid'       =>  'int',
+        'addon_relid'         =>  'int',
+        'billing_cycle_relid' =>  'int',
+        'currency_relid'      =>  'int',
+        'amount'              =>  'decimal',
+        'status_relid'        =>  'int',
+    ];
 
     // Start Code From Here
 }

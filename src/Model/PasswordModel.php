@@ -34,8 +34,11 @@ class PasswordModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    /** @var array<string,string> Casts. Example: ['column1' => 'int', 'column2' => 'string', [.....]] */
-    protected array $casts = [];
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'id'     =>  'int',
+        'rel_id' =>  'int',
+    ];
 
     // Start writing from here
 }

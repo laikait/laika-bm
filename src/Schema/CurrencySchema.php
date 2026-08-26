@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\CurrencyModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class CurrencySchema extends SchemaAbstract
 {
@@ -45,6 +45,12 @@ class CurrencySchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new CurrencyModel())->count() > 0) {
+            return;
+        }
+
         $model = new CurrencyModel();
         $model->transaction(function (CurrencyModel $m) {
             try {

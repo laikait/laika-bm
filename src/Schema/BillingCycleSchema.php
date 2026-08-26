@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\BillingCycleModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class BillingCycleSchema extends SchemaAbstract
 {
@@ -35,6 +35,12 @@ class BillingCycleSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new BillingCycleModel())->count() > 0) {
+            return;
+        }
+
         $cycles = [
             ['billing_cycle_name' => 'one_time'],
             ['billing_cycle_name' => 'monthly'],

@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\EmailQueueStatusModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class EmailQueueStatusSchema extends SchemaAbstract
 {
@@ -26,15 +26,24 @@ class EmailQueueStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id')->comment('Status ID');
-            $t->enum('status_name', ['queued', 'completed', 'failed', 'manual'])->default('queued')->comment('Status Name');
+            $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
+            $t->enum('system_default', ['yes', 'no'])->default('no');
 
-            $t->index('status_name');
+            // Indexes
+            $t->unique('status_name');
+            $t->index('system_default');
         });
     }
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new EmailQueueStatusModel())->count() > 0) {
+            return;
+        }
+
         $model = new EmailQueueStatusModel();
         $model->transaction(function (EmailQueueStatusModel $m) {
             try {

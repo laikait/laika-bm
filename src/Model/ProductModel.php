@@ -37,8 +37,18 @@ class ProductModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = ['module_config' => 'serialize']; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'pid'                 =>  'int',
+        'group_relid'         =>  'int',
+        'type_relid'          =>  'int',
+        'setup_fee'           =>  'decimal',
+        'tax_rate'            =>  'decimal',
+        'welcome_email_relid' =>  'int',
+        'module_config'       =>  'serialize',
+        'stock_qty'           =>  'int',
+        'status_relid'        =>  'int',
+    ];
 
     // Start Code From Here
 }

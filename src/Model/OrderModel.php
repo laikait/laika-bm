@@ -37,8 +37,17 @@ class OrderModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'oid'            =>  'int',
+        'client_relid'   =>  'int',
+        'invoice_relid'  =>  'int',
+        'promo_relid'    =>  'int',
+        'status_relid'   =>  'int',
+        'currency_relid' =>  'int',
+        'amount'         =>  'decimal',
+        'fraud_score'    =>  'decimal',
+    ];
 
     // Start Code From Here
 }

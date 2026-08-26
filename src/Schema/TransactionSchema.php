@@ -10,7 +10,7 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class TransactionSchema extends SchemaAbstract
 {
@@ -33,7 +33,7 @@ class TransactionSchema extends SchemaAbstract
             $t->decimal('fee', 18, 4)->default(0.0000);
             $t->decimal('exchange_rate', 18, 4)->default(1.0000);
             $t->enum('type', ['payment','refund','credit','chargeback','reversal'])->default('payment');
-            $t->enum('status', ['pending','completed','failed','cancelled'])->default('pending');
+            $t->unsignedInteger('status_relid')->default(1)->comment('transaction_statuses -> status_id');
             $t->string('description')->nullable()->default(null);
             $t->serialize('gateway_data')->nullable()->default(null);
             $t->timestamps('tx_created_at', 'tx_updated_at');
@@ -44,7 +44,7 @@ class TransactionSchema extends SchemaAbstract
             $t->index('currency_relid');
             $t->index('gateway_relid');
             $t->index('transaction_ref');
-            $t->index('status');
+            $t->index('status_relid');
             $t->index('tx_created_at');
             $t->index('tx_updated_at');
         });

@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\EmailTemplateModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class EmailTemplateSchema extends SchemaAbstract
 {
@@ -43,6 +43,12 @@ class EmailTemplateSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new EmailTemplateModel())->count() > 0) {
+            return;
+        }
+
         $model = new EmailTemplateModel();
         $model->transaction(function (EmailTemplateModel $m) {
             try {

@@ -10,7 +10,7 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class InvoiceNoteSchema extends SchemaAbstract
 {
@@ -22,7 +22,7 @@ class InvoiceNoteSchema extends SchemaAbstract
 
     public function up(): void
     {
-        Schema::on()->createIfNotExists('invoice_notes', function (Blueprint $t) {
+        Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('note_id');
             $t->unsignedBigInteger('invoice_relid')->comment('invoices -> invoice_id');
             $t->unsignedBigInteger('staff_relid')->comment('staffs -> sid');

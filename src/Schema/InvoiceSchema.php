@@ -13,7 +13,7 @@ use LBM\Model\InvoiceModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Service\Date;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class InvoiceSchema extends SchemaAbstract
 {
@@ -58,6 +58,12 @@ class InvoiceSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new InvoiceModel())->count() > 0) {
+            return;
+        }
+
         $model = new InvoiceModel();
         $model->transaction(function (InvoiceModel $m) {
             try {

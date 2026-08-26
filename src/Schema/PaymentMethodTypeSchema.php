@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\PaymentMethodTypeModel;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class PaymentMethodTypeSchema extends SchemaAbstract
 {
@@ -37,6 +37,12 @@ class PaymentMethodTypeSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new PaymentMethodTypeModel())->count() > 0) {
+            return;
+        }
+
         $model = new PaymentMethodTypeModel();
         $model->transaction(function ($m) {
             try {

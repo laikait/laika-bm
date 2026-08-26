@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\OrderNoteModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class OrderNoteSchema extends SchemaAbstract
 {
@@ -41,6 +41,12 @@ class OrderNoteSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new OrderNoteModel())->count() > 0) {
+            return;
+        }
+
         $model = new OrderNoteModel();
         $model->transaction(function (OrderNoteModel $m) {
             try {

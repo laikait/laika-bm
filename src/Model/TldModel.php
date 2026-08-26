@@ -37,8 +37,18 @@ class TldModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'tld_id'          =>  'int',
+        'registrar_relid' =>  'int',
+        'currency_relid'  =>  'int',
+        'min_years'       =>  'int',
+        'max_years'       =>  'int',
+        'register_price'  =>  'decimal',
+        'renew_price'     =>  'decimal',
+        'transfer_price'  =>  'decimal',
+        'restore_price'   =>  'decimal',
+    ];
 
     // Start Code From Here
 }

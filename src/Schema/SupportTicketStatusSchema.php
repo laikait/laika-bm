@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\SupportTicketStatusModel;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class SupportTicketStatusSchema extends SchemaAbstract
 {
@@ -38,6 +38,12 @@ class SupportTicketStatusSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new SupportTicketStatusModel())->count() > 0) {
+            return;
+        }
+
         $model = new SupportTicketStatusModel();
         $model->transaction(function (SupportTicketStatusModel $m) {
             try {

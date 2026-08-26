@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\ClientServiceStatusModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class ClientServiceStatusSchema extends SchemaAbstract
 {
@@ -38,6 +38,12 @@ class ClientServiceStatusSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new ClientServiceStatusModel())->count() > 0) {
+            return;
+        }
+
         $statuses = [
             ['status_name' => 'pending', 'status_color' => '#00000', 'system_default' => 'yes'],
             ['status_name' => 'active', 'status_color' => '#00000', 'system_default' => 'yes'],

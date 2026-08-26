@@ -12,7 +12,7 @@ use Laika\Core\Exceptions\SchemaException;
 use LBM\Model\CountryModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class CountrySchema extends SchemaAbstract
 {
@@ -24,7 +24,7 @@ class CountrySchema extends SchemaAbstract
 
     public function up(): void
     {
-        Schema::on()->createIfNotExists('countries', function (Blueprint $t) {
+        Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('country_id');
             $t->char('iso2', 2);
             $t->char('iso3', 3);
@@ -42,6 +42,12 @@ class CountrySchema extends SchemaAbstract
      */
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new CountryModel())->count() > 0) {
+            return;
+        }
+
         $model = new CountryModel();
         $model->transaction(function (CountryModel $m) {
             try {

@@ -17,7 +17,7 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Model;
 
-class DomainContact extends Model
+class DomainContactModel extends Model
 {
     // Table Name
     protected string $table = 'domain_contacts';
@@ -37,8 +37,12 @@ class DomainContact extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'dc_id'         =>  'int',
+        'domain_relid'  =>  'int',
+        'country_relid' =>  'int',
+    ];
 
     // Start Code From Here
 }

@@ -37,8 +37,14 @@ class ClientServiceConfigValueModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'cscv_id'       =>  'int',
+        'service_relid' =>  'int',
+        'pco_relid'     =>  'int',
+        'pcos_relid'    =>  'int',
+        'quantity'      =>  'int',
+    ];
 
     // Start Code From Here
 }

@@ -37,8 +37,19 @@ class InvoiceModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'invoice_id'     =>  'int',
+        'client_relid'   =>  'int',
+        'currency_relid' =>  'int',
+        'status_relid'   =>  'int',
+        'subtotal'       =>  'decimal',
+        'discount'       =>  'decimal',
+        'tax'            =>  'decimal',
+        'total'          =>  'decimal',
+        'credit_applied' =>  'decimal',
+        'amount_paid'    =>  'decimal',
+    ];
 
     // Start Code From Here
 }

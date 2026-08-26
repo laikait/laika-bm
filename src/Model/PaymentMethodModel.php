@@ -37,8 +37,16 @@ class PaymentMethodModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = ['billing_address' => 'json']; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'pm_id'           =>  'int',
+        'client_relid'    =>  'int',
+        'gateway_relid'   =>  'int',
+        'type_relid'      =>  'int',
+        'expiry_month'    =>  'int',
+        'expiry_year'     =>  'int',
+        'billing_address' =>  'json',
+    ];
 
     // Start Code From Here
 }

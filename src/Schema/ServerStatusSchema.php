@@ -11,8 +11,8 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 use Laika\Core\Exceptions\SchemaException;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use LBM\Model\ServerStatus;
-use Laika\Core\Abstracts\SchemaAbstract;
+use LBM\Model\ServerStatusModel;
+use Laika\Model\Contract\SchemaAbstract;
 
 class ServerStatusSchema extends SchemaAbstract
 {
@@ -38,13 +38,19 @@ class ServerStatusSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new ServerStatusModel())->count() > 0) {
+            return;
+        }
+
         $statuses = [
             ['status_name' => 'online', 'status_color' => '#000000', 'system_default' => 'yes'],
             ['status_name' => 'offline', 'status_color' => '#000000', 'system_default' => 'yes'],
             ['status_name' => 'maintenance', 'status_color' => '#000000', 'system_default' => 'yes']
         ];
-        $model = new ServerStatus();
-        $model->transaction(function ($m) use ($statuses) {
+        $model = new ServerStatusModel();
+        $model->transaction(function (ServerStatusModel $m) use ($statuses) {
             try {
                 $m->insert($statuses);
             } catch (\Throwable $e) {

@@ -37,8 +37,11 @@ class StaffRoleModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = ['permissions' => 'json']; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'role_id'     =>  'int',
+        'permissions' =>  'json',
+    ];
 
     // Start Code From Here
 }

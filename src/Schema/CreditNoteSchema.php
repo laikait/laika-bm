@@ -10,7 +10,7 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class CreditNoteSchema extends SchemaAbstract
 {
@@ -29,12 +29,13 @@ class CreditNoteSchema extends SchemaAbstract
             $t->decimal('amount', 18, 4);
             $t->decimal('used_amount', 18, 4)->default(0.0000);
             $t->text('reason')->nullable()->default(NULL);
-            $t->enum('status', ['open','partial','used','voided'])->default('open');
+            $t->unsignedInteger('status_relid')->default(1)->comment('credit_note_statuses -> status_id');
             $t->timestamp('credit_created_at');
 
             // Indexes
             $t->index('client_relid');
             $t->index('currency_relid');
+            $t->index('status_relid');
             $t->index('credit_created_at');
         });
     }

@@ -37,8 +37,14 @@ class ProductAddonPricingModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'pap_id'              =>  'int',
+        'addon_relid'         =>  'int',
+        'currency_relid'      =>  'int',
+        'billing_cycle_relid' =>  'int',
+        'addon_price'         =>  'decimal',
+    ];
 
     // Start Code From Here
 }

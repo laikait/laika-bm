@@ -1,11 +1,8 @@
 {
     "name": "laikait/laika-bm",
+    "description": "Laika Bill Manager - billing, provisioning and support for the Laika PHP Framework",
     "type": "package",
-    "autoload": {
-        "psr-4": {
-            "LBM\\": "src/"
-        }
-    },
+    "license": "MIT",
     "authors": [
         {
             "name": "Laika IT",
@@ -16,28 +13,27 @@
             "email": "riyadhtayf@gmail.com"
         }
     ],
+    "require": {
+        "php": ">=8.1",
+        "laikait/laika-core": "^4.4"
+    },
+    "autoload": {
+        "files": [
+            "helpers/loader.php"
+        ],
+        "psr-4": {
+            "LBM\\": "src/"
+        }
+    },
     "minimum-stability": "stable",
-    "require": {},
+    "prefer-stable": true,
     "extra": {
         "laika": {
             "resources": {
-                "routes": {
-                    "path": "helpers/routes"
-                },
-                "functions": {
-                    "path": "helpers/functions"
-                },
-                "hooks": {
-                    "path": "helpers/hooks"
-                },
-                "models": {
-                    "path": "src/Model",
-                    "namespace": "LBM\\Model"
-                },
-                "schemas": {
-                    "path": "src/Schema",
-                    "namespace": "LBM\\Schema",
-                    "contract": "Laika\\Model\\Contract\\SchemaAbstract"
+                "relays": {
+                    "path": "src/Relay",
+                    "namespace": "LBM\\Relay",
+                    "contract": "Laika\\Relay\\RelayProvider"
                 }
             }
         }

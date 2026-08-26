@@ -37,8 +37,16 @@ class DomainModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = ['registrar_data' => 'serialize']; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'domain_id'       =>  'int',
+        'client_relid'    =>  'int',
+        'registrar_relid' =>  'int',
+        'status_relid'    =>  'int',
+        'currency_relid'  =>  'int',
+        'amount'          =>  'decimal',
+        'registrar_data'  =>  'serialize',
+    ];
 
     // Start Code From Here
 }

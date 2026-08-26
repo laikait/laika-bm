@@ -12,14 +12,11 @@ declare(strict_types=1);
 
 namespace LBM\Schema;
 
-use Laika\Service\Vault;
-use LBM\Model\PasswordModel;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Schema\Blueprint;
-use Laika\Core\Abstracts\SchemaAbstract;
-use Laika\Core\Exceptions\SchemaException;
+use Laika\Model\Contract\SchemaAbstract;
 
-class PasswordModelSchema extends SchemaAbstract
+class PasswordSchema extends SchemaAbstract
 {
     /** @var string Database Table Name */
     protected string $table = 'passwords';
@@ -43,21 +40,8 @@ class PasswordModelSchema extends SchemaAbstract
         });
     }
 
-    public function seed(): void
-    {
-        try {
-            $model = new PasswordModel();
-            $arr = [
-                'rel_id'    =>  1,
-                'rel_type'  =>  'staff',
-                'hash'      =>  Vault::hashPassword('123456'),
-            ];
-
-            $model->transaction(function (PasswordModel $m) use ($arr) {
-                $m->insert($arr);
-            });
-        } catch (\Throwable $e) {
-            throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
-        }
-    }
+    /*
+     * No seed(): Credentials are created by the installer, never seeded. Shipping a
+     * known password in every install would be a hole.
+     */
 }

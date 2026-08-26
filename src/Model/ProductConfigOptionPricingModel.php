@@ -37,8 +37,15 @@ class ProductConfigOptionPricingModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'pcop_id'             =>  'int',
+        'pcos_relid'          =>  'int',
+        'currency_relid'      =>  'int',
+        'billing_cycle_relid' =>  'int',
+        'setup_fee'           =>  'decimal',
+        'price'               =>  'decimal',
+    ];
 
     // Start Code From Here
 }

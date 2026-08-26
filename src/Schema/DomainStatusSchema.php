@@ -11,8 +11,8 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 use Laika\Core\Exceptions\SchemaException;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use LBM\Model\DomainStatus;
-use Laika\Core\Abstracts\SchemaAbstract;
+use LBM\Model\DomainStatusModel;
+use Laika\Model\Contract\SchemaAbstract;
 
 class DomainStatusSchema extends SchemaAbstract
 {
@@ -38,6 +38,12 @@ class DomainStatusSchema extends SchemaAbstract
 
     public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new DomainStatusModel())->count() > 0) {
+            return;
+        }
+
         $statuses = [
             ['status_name' => 'pending', 'status_color' => '#000000', 'system_default' => 'yes'],
             ['status_name' => 'active', 'status_color' => '#000000', 'system_default' => 'yes'],
@@ -49,8 +55,8 @@ class DomainStatusSchema extends SchemaAbstract
             ['status_name' => 'redemption', 'status_color' => '#000000', 'system_default' => 'yes'],
             ['status_name' => 'suspended', 'status_color' => '#000000', 'system_default' => 'yes']
         ];
-        $model = new DomainStatus();
-        $model->transaction(function (DomainStatus $m) use ($statuses) {
+        $model = new DomainStatusModel();
+        $model->transaction(function (DomainStatusModel $m) use ($statuses) {
             try {
                 $m->insert($statuses);
             } catch (\Throwable $e) {

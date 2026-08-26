@@ -37,8 +37,15 @@ class ProductUsageTierModel extends Model
     /** @var string Deleted At Column */
     protected string $deletedAtColumn = 'deleted_at';
 
-    // Cast Columns
-    protected array $casts = []; // Example: ['col_1' => 'int', 'col_2' => 'string', ....]
+    /** @var array<string,string> Casts, derived from the column types in the schema */
+    protected array $casts = [
+        'pst_id'         =>  'int',
+        'product_relid'  =>  'int',
+        'currency_relid' =>  'int',
+        'units_from'     =>  'int',
+        'units_to'       =>  'int',
+        'unit_price'     =>  'decimal',
+    ];
 
     // Start Code From Here
 }

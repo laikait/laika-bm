@@ -8,11 +8,9 @@ namespace LBM\Schema;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
-use Laika\Core\Exceptions\SchemaException;
-use LBM\Model\StaffModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class StaffSchema extends SchemaAbstract
 {
@@ -50,25 +48,7 @@ class StaffSchema extends SchemaAbstract
         });
     }
 
-    public function seed(): void
-    {
-        $model = new StaffModel();
-        $model->transaction(function (StaffModel $m) {
-            try {
-                $statuses = [
-                    'role_relid' => 1,
-                    'uid' => $m->uid(),
-                    'first_name' => 'Showket',
-                    'last_name' => 'Ahmed',
-                    'username' => 'riyadhtayf',
-                    'email' => 'riyadhtayf@gmail.com',
-                    'status_relid' => 1
-                ];
-                $m->insert($statuses);
-            } catch (\Throwable $e) {
-                throw new SchemaException("Unable to Insert Default Into 'staffs. {$e->getMessage()}", (int) $e->getCode(), $e);
-            }
-        });
-        return;
-    }
+    /*
+     * No seed(): The first staff account is created by the installer, not seeded.
+     */
 }

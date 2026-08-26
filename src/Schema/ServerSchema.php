@@ -10,7 +10,7 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
-use Laika\Core\Abstracts\SchemaAbstract;
+use Laika\Model\Contract\SchemaAbstract;
 
 class ServerSchema extends SchemaAbstract
 {
@@ -22,7 +22,7 @@ class ServerSchema extends SchemaAbstract
 
     public function up(): void
     {
-        Schema::on()->createIfNotExists('servers', function (Blueprint $t) {
+        Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('server_id');
             $t->unsignedInteger('group_relid')->nullable()->default(null)->comment('server_groups -> group_id');
             $t->string('name', 100);
