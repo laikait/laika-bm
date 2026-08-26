@@ -51,19 +51,3 @@ add_hook('total_pages', 'total_pages', 1000);
  * Check Staff Has Access
  */
 add_hook('staff_has_access', 'staff_has_access', 1000);
-
-/*=========================== DATE FILTERS ===========================*/
-/** To App Date Format */
-add_hook('date_format', 'format_date', 1000);
-
-/*=========================== AMOUNT FILTERS ===========================*/
-/** Default Currency */
-add_hook('currency', 'default_currency', 1000);
-/** Decimal Format */
-add_hook('decimal', 'decimal', 1000);
-/** Format Currency */
-add_hook('format_currency', 'format_currency', 1000);
-/** Decimal Symbol */
-add_hook('decimal_symbol', 'decimal_symbol', 1000);
-/** Thousand Separator */
-add_hook('thousand_separator', 'thousand_separator', 1000);

@@ -1,33 +1,11 @@
 <?php
 
-/**
- * Laika PHP MVC Framework
- * Author: Showket Ahmed
- * Email: riyadhtayf@gmail.com
- * License: MIT
- * This file is part of the Laika PHP MVC Framework.
- * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
- */
-
 declare(strict_types=1);
 
 use Laika\Service\Url;
 use Laika\Service\Math;
 use Laika\Service\Date;
-use LBM\Service\Currency;
-use LBM\Service\PasswordValidator;
 
-
-/**
- * Get Default Currency
- * @return array
- */
-function default_currency(): array
-{
-    static $currency = null;
-    if ($currency === null) $currency = Currency::default();
-    return $currency;
-}
 
 /**
  * Decimal Symbol
@@ -60,18 +38,6 @@ function decimal(string|float|int $amount): string
 {
     $amount = preg_replace('/[^0-9.\-]+/i', '', (string) $amount);
     return number_format((float) $amount, 2, decimal_symbol(), thousand_separator());
-};
-
-/**
- * Format Currency
- * @param string|float|int $amount
- * @return string
- */
-function format_currency(string|float|int $amount): string
-{
-    $amount = preg_replace('/[^0-9.\-]+/i', '', (string) $amount);
-    $currency = default_currency();
-    return (string) $currency['prefix_symbol'] . number_format((float) $amount, 2, decimal_symbol(), thousand_separator()) . (string) $currency['suffix_symbol'];
 };
 
 /**
@@ -142,15 +108,4 @@ function total_pages(int|string $totalRows): int
 {
     $totalRows = (int) $totalRows;
     return $totalRows > data_limit() ? (int) ceil($totalRows / data_limit()) : 1;
-}
-
-/**
- * Validate Password
- * @param string $password
- * @return bool
- */
-function validate_password(string $password): bool
-{
-    $res = PasswordValidator::validate($password);
-    return $res['status'];
 }

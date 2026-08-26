@@ -22,7 +22,7 @@
         "laika": {
             "resources": {
                 "routes": {
-                    "path": "helpers/Routes"
+                    "path": "helpers/routes"
                 },
                 "functions": {
                     "path": "helpers/functions"
