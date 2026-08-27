@@ -24,6 +24,7 @@ class AnnouncementSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('id');
+            $t->uid('uid');
             $t->unsignedBigInteger('staff_relid')->comment('staffs -> id');
             $t->string('title');
             $t->longText('body');

@@ -13,6 +13,7 @@ use LBM\Model\OrderNoteModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class OrderNoteSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class OrderNoteSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('note_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('order_relid')->comment('orders -> oid');
             $t->enum('creator_type', ['client', 'staff', 'system']);
             $t->unsignedBigInteger('creator_relid')->nullable()->default(NULL);
@@ -50,18 +52,18 @@ class OrderNoteSchema extends SchemaAbstract
         $model = new OrderNoteModel();
         $model->transaction(function (OrderNoteModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     'order_relid' => 1,
                     'creator_type' => 'client',
                     'creator_relid' => 1,
                     'note' => 'New Order Created By Client ID 1'
-                ]);
-                $m->insert([
+                ]));
+                $m->insert(Uid::stamp([
                     'order_relid' => 1,
                     'creator_type' => 'client',
                     'creator_relid' => 1,
                     'note' => 'New Order Status Pending By Client ID 1'
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

@@ -1,102 +1,157 @@
 <?php
+/**
+ * Laika Bill Manager
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of Laika Bill Manager.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
 
 declare(strict_types=1);
 
-use LBM\Model\StaffRoleModel;
-use Laika\Auth\AuthManager;
-use Laika\Session\Session;
-use Laika\Service\Request;
+// Deny Direct Access
+defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
-/*=============================== ADMIN INFO ===============================*/
+use Laika\Service\Request;
+use LBM\Pipeline\Auth;
+use LBM\Service\Permission;
+
+####################################################################################
+/*--------------------------------- ADMIN IDENTITY -------------------------------*/
+####################################################################################
+
 /**
- * Get Logged-in Staff Info
+ * The Signed-In Staff Member
+ *
+ * Delegates to the Auth pipeline rather than re-reading the session and
+ * re-validating the token. Auth owns the session key name, the TTL and the
+ * strict-IP flag, and memoises the result per area - so a template calling this
+ * twenty times costs one lookup, and the helper can never drift out of sync with
+ * the pipeline that issued the token.
  * @return ?array
  */
 function current_staff(): ?array
 {
-    static $staff = null;
-
-    if ($staff === null) {
-        $guard = (new AuthManager(config('auth')))->guard('staff');
-        $token = Session::get(ADMIN . '_token', for:ADMIN);
-
-        $staff = $guard->validateToken($token, (int) option('login_lifetime', '3600'), option_bool('strict_ip'));
-    }
-    return $staff;
+    return Auth::user(ADMIN);
 }
 
-/*================================= ACCESS =================================*/
+/**
+ * The Signed-In Staff Member's Role Id
+ * @return ?int
+ */
+function current_staff_role(): ?int
+{
+    $staff = current_staff();
+
+    return isset($staff['role_relid']) ? (int) $staff['role_relid'] : null;
+}
 
 /**
- * Check Staff Has Access
- * @param string $access Access Name. Example: 'product.read'
+ * Whether Somebody Is Signed Into The Admin Area
+ * @return bool
+ */
+function is_staff(): bool
+{
+    return current_staff() !== null;
+}
+
+####################################################################################
+/*------------------------------------ ACCESS ------------------------------------*/
+####################################################################################
+
+/**
+ * Whether The Signed-In Staff Member Holds an Access
+ *
+ * The one implementation lives in LBM\Support\Permission, which is also what the
+ * Permission pipeline calls - so a screen that hides a button and the route that
+ * refuses the request can never disagree.
+ * @param string $access Access Name. Example: 'invoice.read'
+ * @return bool
  */
 function staff_has_access(string $access): bool
 {
-    static $accesses = null;
-
-    // Validate Parameter
-    if (!preg_match('/^[a-z]+\.[a-z]+$/i', $access)) {
-        throw new InvalidArgumentException("Invalid Parameter [{$access}] in Function " . __FUNCTION__ . ". Example: 'staff.create'");
-    }
-
-    [$key, $action] = explode('.', $access, 2);
-
-    if ($accesses === null) {
-        $m = new StaffRoleModel();
-        $accesses = $m->select('permissions')->find(current_staff()['role_relid'])['permissions'];
-    }
-
-    if (isset($accesses[$key]) && is_array($accesses[$key])) {
-        return $accesses[$key][$action] ?? false;
-    }
-    return false;
+    return Permission::allows(current_staff_role(), $access);
 }
 
+####################################################################################
+/*------------------------------------ LISTINGS ----------------------------------*/
+####################################################################################
+
 /**
- * Match Database Columns with Queries
- * @param array<string:string> $keyValuePair [query_key => db_column...]. Example: ['id' => 'note_id']
- * @return array
+ * Map Request Query Keys Onto Database Columns
+ *
+ * Search screens are GET (instruction 17), and this is what turns the query
+ * string into a where() array - only for keys the caller explicitly allows, so a
+ * crafted query cannot filter on a column the screen never offered.
+ * @param array<string,string> $keyValuePair [query_key => db_column]. Example: ['id' => 'note_id']
+ * @return array<string,mixed>
  */
 function query_to_columns(array $keyValuePair): array
 {
-    $keys = [];
-    // Get Accepted Query Values
-    foreach(Request::inputs() as $k => $v) {
-        if (!$v) {
+    $columns = [];
+
+    foreach (Request::inputs() as $key => $value) {
+        if ($value === null || $value === '' || !isset($keyValuePair[$key])) {
             continue;
         }
-        if (in_array($k, array_keys($keyValuePair))) {
-            $keys[$keyValuePair[$k]] = $v;
-        }
+
+        $columns[$keyValuePair[$key]] = $value;
     }
-    return $keys;
+
+    return $columns;
 }
 
+####################################################################################
+/*------------------------------------- CHARTS -----------------------------------*/
+####################################################################################
+
 /**
- * Make PI Chart From Data
- * @param array<int, array{label: string, total: int, color: string}> $data
- * Example: array(array('label'=>'paid', 'total'=>5, ));
- * @return array{circumf: float|int, offset: float|int, arc: array{color: string, dash: float|int, gap: float|int, offset: float|int}}
+ * Build The Arcs For a Donut Chart
+ *
+ * Returns stroke-dasharray/offset values for an SVG circle of radius 50, so the
+ * dashboard draws its charts inline with no JavaScript charting library.
+ * @param array<int,array{label:string,total:int|string,color:string}> $data Slices
+ * @return array{circumf:float,total:int,arc:array<int,array{label:string,color:string,dash:float,gap:float,offset:float,percent:float}>}
  */
-function pi_chart(array $data) {
-    $count = array_sum(array_column($data, 'total'));
+function pi_chart(array $data): array
+{
     $circumf = 2 * M_PI * 50;
-    $offset  = 0;
+    $total = 0;
+
+    foreach ($data as $slice) {
+        $total += (int) ($slice['total'] ?? 0);
+    }
+
+    // A fresh install has no invoices and no orders, so every slice is zero.
+    // Dividing by that total would fatal on the first dashboard render.
+    if ($total === 0) {
+        return ['circumf' => $circumf, 'total' => 0, 'arc' => []];
+    }
+
+    $offset = 0.0;
     $arcs = [];
-    foreach ($data as $d) {
-        $dash = (int) $d['total'] / $count * $circumf;
+
+    foreach ($data as $slice) {
+        $value = (int) ($slice['total'] ?? 0);
+
+        if ($value === 0) {
+            continue;
+        }
+
+        $dash = $value / $total * $circumf;
+
         $arcs[] = [
-            'color'  => $d['color'],
-            'dash'   => round($dash, 2),
-            'gap'    => round($circumf - $dash, 2),
-            'offset' => round(-$offset, 2),
+            'label'   =>  (string) ($slice['label'] ?? ''),
+            'color'   =>  (string) ($slice['color'] ?? '#6c757d'),
+            'dash'    =>  round($dash, 2),
+            'gap'     =>  round($circumf - $dash, 2),
+            'offset'  =>  round(-$offset, 2),
+            'percent' =>  round($value / $total * 100, 1),
         ];
+
         $offset += $dash;
     }
-    return [
-        'circumf' => $circumf,
-        'offset' => $offset,
-        'arc' => $arcs
-    ];
-};
+
+    return ['circumf' => $circumf, 'total' => $total, 'arc' => $arcs];
+}

@@ -24,6 +24,7 @@ class PaymentGatewaySchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('gateway_id');
+            $t->uid('uid');
             $t->string('gateway_name', 100)->comment('stripe, paypal, paypal');
             $t->string('gateway_slug');
             $t->string('display_name', 100);

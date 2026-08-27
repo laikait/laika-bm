@@ -13,6 +13,7 @@ use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\DomainStatusModel;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class DomainStatusSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class DomainStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id')->comment('Domain Status');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -45,20 +47,20 @@ class DomainStatusSchema extends SchemaAbstract
         }
 
         $statuses = [
-            ['status_name' => 'pending', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'active', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'expired', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'transferred', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'cancelled', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'fraud', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'grace', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'redemption', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'suspended', 'status_color' => '#000000', 'system_default' => 'yes']
+            ['status_name' => 'pending', 'status_color' => '#ffc107', 'system_default' => 'yes'],
+            ['status_name' => 'active', 'status_color' => '#198754', 'system_default' => 'yes'],
+            ['status_name' => 'expired', 'status_color' => '#b02a37', 'system_default' => 'yes'],
+            ['status_name' => 'transferred', 'status_color' => '#0dcaf0', 'system_default' => 'yes'],
+            ['status_name' => 'cancelled', 'status_color' => '#6c757d', 'system_default' => 'yes'],
+            ['status_name' => 'fraud', 'status_color' => '#dc3545', 'system_default' => 'yes'],
+            ['status_name' => 'grace', 'status_color' => '#fd7e14', 'system_default' => 'yes'],
+            ['status_name' => 'redemption', 'status_color' => '#d63384', 'system_default' => 'yes'],
+            ['status_name' => 'suspended', 'status_color' => '#6f42c1', 'system_default' => 'yes']
         ];
         $model = new DomainStatusModel();
         $model->transaction(function (DomainStatusModel $m) use ($statuses) {
             try {
-                $m->insert($statuses);
+                $m->insert(Uid::stamp($statuses));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

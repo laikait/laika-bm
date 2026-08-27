@@ -24,6 +24,7 @@ class ServiceUsageRecordSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('sur_id')->comment('Service Usage Records ID');
+            $t->uid('uid');
             $t->unsignedBigInteger('service_relid')->comment('client_services -> service_id');
             $t->string('metric_name', 60);
             $t->unsignedBigInteger('quantity');

@@ -24,6 +24,7 @@ class TldSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('tld_id');
+            $t->uid('uid');
             $t->unsignedInteger('registrar_relid')->comment('domain_registrars -> dr_id');
             $t->unsignedInteger('currency_relid')->comment('currencies -> currency_id');
             $t->string('tld', 30)->comment('e.g. .com, .net');

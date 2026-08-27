@@ -24,6 +24,7 @@ class ProductUsageTierSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pst_id')->comment('Product Usage Tiers ID');
+            $t->uid('uid');
             $t->unsignedInteger('product_relid')->comment('products -> id');
             $t->unsignedInteger('currency_relid')->comment('currencies -> currency_id');
             $t->string('metric_name', 60)->comment('e.g. "bandwidth_gb", "api_calls"');

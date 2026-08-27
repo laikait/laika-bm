@@ -24,6 +24,7 @@ class ProvisioningLogSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('log_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('service_relid')->comment('client_services -> service_id');
             $t->enum('creator_type', ['staff', 'client', 'system']);
             $t->unsignedBigInteger('creator_relid')->nullable()->comment('staff/client/null -> sid/cid/system');

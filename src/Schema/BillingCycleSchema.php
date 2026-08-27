@@ -13,6 +13,7 @@ use LBM\Model\BillingCycleModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class BillingCycleSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class BillingCycleSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('billing_cycle_id');
+            $t->uid('uid');
             $t->string('billing_cycle_name', 50);
             $t->timestamp('billing_cycle_created_at');
 
@@ -52,7 +54,7 @@ class BillingCycleSchema extends SchemaAbstract
         $model = new BillingCycleModel();
         $model->transaction(function (BillingCycleModel $m) use ($cycles) {
             try {
-                $m->insert($cycles);
+                $m->insert(Uid::stamp($cycles));
             } catch (\Throwable $e) {
                 throw new SchemaException("Insert Failed Into [{$this->table}].", (int) $e->getCode(), $e);
             }

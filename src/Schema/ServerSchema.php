@@ -24,6 +24,7 @@ class ServerSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('server_id');
+            $t->uid('uid');
             $t->unsignedInteger('group_relid')->nullable()->default(null)->comment('server_groups -> group_id');
             $t->string('name', 100);
             $t->string('hostname');

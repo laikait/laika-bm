@@ -24,6 +24,7 @@ class ClientServiceSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('service_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
             $t->unsignedInteger('product_relid')->comment('products -> pid');
             $t->unsignedInteger('server_relid')->nullable()->default(NULL)->comment('servers -> server_id');

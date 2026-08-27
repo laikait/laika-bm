@@ -24,6 +24,7 @@ class ClientServiceNoteSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('note_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('service_relid')->comment('client_services -> service_id');
             $t->unsignedBigInteger('staff_relid')->comment('staffs -> sid');
             $t->text('note');

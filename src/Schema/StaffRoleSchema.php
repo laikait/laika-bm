@@ -24,6 +24,7 @@ class StaffRoleSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('role_id');
+            $t->uid('uid');
             $t->string('role_name', 50)->comment('Role Name');
             $t->json('permissions')->comment('JSON Data');
             $t->timestamps('role_created_at', 'role_updated_at');

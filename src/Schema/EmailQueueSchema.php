@@ -24,6 +24,7 @@ class EmailQueueSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('queue_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
             $t->unsignedInteger('template_relid')->comment('email_templates -> et_id');
             $t->string('to_email', 150);

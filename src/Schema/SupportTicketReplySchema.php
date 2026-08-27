@@ -24,6 +24,7 @@ class SupportTicketReplySchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('reply_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('ticket_relid')->comment('support_tickets -> ticket_id');
             $t->enum('author_type', ['client','staff','system'])->comment('client, staff, system');
             $t->unsignedBigInteger('author_relid')->nullable()->default(NULL)->comment('NULL if author is system');

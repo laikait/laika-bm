@@ -13,6 +13,7 @@ use LBM\Model\ClientServiceStatusModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class ClientServiceStatusSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class ClientServiceStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -55,7 +57,7 @@ class ClientServiceStatusSchema extends SchemaAbstract
         $model = new ClientServiceStatusModel();
         $model->transaction(function (ClientServiceStatusModel $m) use ($statuses) {
             try {
-                $m->insert($statuses);
+                $m->insert(Uid::stamp($statuses));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

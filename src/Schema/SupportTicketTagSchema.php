@@ -24,6 +24,7 @@ class SupportTicketTagSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('tag_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('ticket_relid')->comment('support_tickets -> ticket_id');
             $t->string('tag', 60);
 

@@ -24,6 +24,7 @@ class SupportTicketSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('ticket_id');
+            $t->uid('uid');
             $t->string('ticket_number', 50);
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
             $t->unsignedInteger('department_relid')->comment('support_departments -> dep_id');

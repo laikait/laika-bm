@@ -13,6 +13,7 @@ use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\SupportTicketStatusModel;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class SupportTicketStatusSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class SupportTicketStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -48,13 +50,13 @@ class SupportTicketStatusSchema extends SchemaAbstract
         $model->transaction(function (SupportTicketStatusModel $m) {
             try {
                 $default = [
-                    ['status_name' => 'open', 'status_color' => '#000000', 'system_default' => 'yes'],
-                    ['status_name' => 'answered', 'status_color' => '#000000', 'system_default' => 'yes'],
-                    ['status_name' => 'customer_reply', 'status_color' => '#000000', 'system_default' => 'yes'],
-                    ['status_name' => 'on_hold', 'status_color' => '#000000', 'system_default' => 'yes'],
-                    ['status_name' => 'closed', 'status_color' => '#000000', 'system_default' => 'yes'],
+                    ['status_name' => 'open', 'status_color' => '#198754', 'system_default' => 'yes'],
+                    ['status_name' => 'answered', 'status_color' => '#0dcaf0', 'system_default' => 'yes'],
+                    ['status_name' => 'customer_reply', 'status_color' => '#ffc107', 'system_default' => 'yes'],
+                    ['status_name' => 'on_hold', 'status_color' => '#6c757d', 'system_default' => 'yes'],
+                    ['status_name' => 'closed', 'status_color' => '#495057', 'system_default' => 'yes'],
                 ];
-                $m->insert($default);
+                $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

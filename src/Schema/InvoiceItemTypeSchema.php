@@ -13,6 +13,7 @@ use LBM\Model\InvoiceItemTypeModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class InvoiceItemTypeSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class InvoiceItemTypeSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('type_id');
+            $t->uid('uid');
             $t->string('type_name', 50)->comment('Item Type Name');
             $t->timestamp('type_created_at');
 
@@ -55,7 +57,7 @@ class InvoiceItemTypeSchema extends SchemaAbstract
                     ['type_name' => 'discount'],
                     ['type_name' => 'other']
                 ];
-                $m->insert($default);
+                $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

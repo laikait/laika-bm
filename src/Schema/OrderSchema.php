@@ -13,6 +13,7 @@ use LBM\Model\OrderModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class OrderSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class OrderSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('oid');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
             $t->unsignedBigInteger('invoice_relid')->nullable()->default(NULL)->comment('invoices -> invoice_id');
             $t->unsignedInteger('promo_relid')->nullable()->default(NULL)->comment('promo_codes -> promo_id');
@@ -60,7 +62,7 @@ class OrderSchema extends SchemaAbstract
         $model = new OrderModel();
         $model->transaction(function (OrderModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     'client_relid' => 1,
                     'invoice_relid' => 1,
                     'order_number' => 'ord-20251214c',
@@ -68,8 +70,8 @@ class OrderSchema extends SchemaAbstract
                     'amount' => 25.0000,
                     'currency_relid' => 1,
                     'order_from_ip' => '::1'
-                ]);
-                $m->insert([
+                ]));
+                $m->insert(Uid::stamp([
                     'client_relid' => 1,
                     'invoice_relid' => 1,
                     'order_number' => 'ord-20260209b',
@@ -77,7 +79,7 @@ class OrderSchema extends SchemaAbstract
                     'amount' => 45.0000,
                     'currency_relid' => 1,
                     'order_from_ip' => '::1'
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

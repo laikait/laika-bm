@@ -13,6 +13,7 @@ use LBM\Model\InvoiceItemModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class InvoiceItemSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class InvoiceItemSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('invoice_item_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('invoice_relid')->comment('invoices -> invoice_id');
             $t->unsignedInteger('item_type_relid')->default(1)->comment('invoice_item_types -> type_id');
             $t->string('description', 500);
@@ -61,14 +63,14 @@ class InvoiceItemSchema extends SchemaAbstract
         $model = new InvoiceItemModel();
         $model->transaction(function (InvoiceItemModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     'invoice_relid' => 1,
                     'item_type_relid' => 1,
                     'description' => '',
                     'quantity' => 1.0000,
                     'unit_price' => 5.0000,
                     'total' => 5.000 * 1.000 - 0.000 // quantity * unit_price - discount
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

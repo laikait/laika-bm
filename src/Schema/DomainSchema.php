@@ -24,6 +24,7 @@ class DomainSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('domain_id');
+            $t->uid('uid');
             $t->string('domain');
             $t->string('tld', 30)->comment('e.g. .com, .net');
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');

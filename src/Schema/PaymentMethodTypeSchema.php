@@ -13,6 +13,7 @@ use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\PaymentMethodTypeModel;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class PaymentMethodTypeSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class PaymentMethodTypeSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pm_type_id');
+            $t->uid('uid');
             $t->string('type_name', 100);
             $t->enum('is_default', ['yes', 'no'])->default('no');
 
@@ -52,7 +54,7 @@ class PaymentMethodTypeSchema extends SchemaAbstract
                     ['type_name' => 'paypal', 'is_default' => 'yes'],
                     ['type_name' => 'other', 'is_default' => 'yes']
                 ];
-                $m->insert($default);
+                $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

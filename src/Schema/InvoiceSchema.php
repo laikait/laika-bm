@@ -14,6 +14,7 @@ use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Service\Date;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class InvoiceSchema extends SchemaAbstract
 {
@@ -27,6 +28,7 @@ class InvoiceSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('invoice_id');
+            $t->uid('uid');
             $t->string('invoice_number', 50);
             $t->unsignedBigInteger('client_relid');
             $t->unsignedInteger('currency_relid')->default(1);
@@ -67,7 +69,7 @@ class InvoiceSchema extends SchemaAbstract
         $model = new InvoiceModel();
         $model->transaction(function (InvoiceModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     'client_relid' => 1,
                     'currency_relid' => 1,
                     'invoice_number' => 'inv-202507-12',
@@ -80,8 +82,8 @@ class InvoiceSchema extends SchemaAbstract
                     'amount_paid' => 30.0000,
                     'invoice_due_date' => (Date::modify('+7 days'))->format('Y-m-d H:i:s'),
                     'payment_gateway' => 'credit-card'
-                ]);
-                $m->insert([
+                ]));
+                $m->insert(Uid::stamp([
                     'client_relid' => 1,
                     'currency_relid' => 1,
                     'invoice_number' => 'inv-202608-9',
@@ -94,8 +96,8 @@ class InvoiceSchema extends SchemaAbstract
                     'amount_paid' => 28.0000,
                     'invoice_due_date' => (Date::modify('+7 days'))->format('Y-m-d H:i:s'),
                     'payment_gateway' => 'credit-card'
-                ]);
-                $m->insert([
+                ]));
+                $m->insert(Uid::stamp([
                     'client_relid' => 1,
                     'currency_relid' => 1,
                     'invoice_number' => 'inv-202613-19',
@@ -108,7 +110,7 @@ class InvoiceSchema extends SchemaAbstract
                     'amount_paid' => 25.0000 + (25.0000 * 0.15) - (25.0000 * 0.1),
                     'invoice_paid_date' => Date::now()->format('Y-m-d H:i:s'),
                     'payment_gateway' => 'credit-card'
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

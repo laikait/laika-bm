@@ -24,6 +24,7 @@ class TransactionSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('tx_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
             $t->unsignedBigInteger('invoice_relid')->nullable()->default(null)->comment('invoices -> invoice_id');
             $t->unsignedInteger('currency_relid')->comment('currencies -> currency_id');

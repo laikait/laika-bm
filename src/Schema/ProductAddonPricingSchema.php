@@ -24,6 +24,7 @@ class ProductAddonPricingSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pap_id')->comment('Product Addon Pricing ID');
+            $t->uid('uid');
             $t->unsignedInteger('addon_relid')->comment('product_addons -> addon_id');
             $t->unsignedInteger('currency_relid')->comment('currencies -> currency_id');
             $t->unsignedInteger('billing_cycle_relid');

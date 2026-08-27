@@ -13,6 +13,7 @@ use LBM\Model\ClientNoteModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class ClientNoteSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class ClientNoteSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('note_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
             $t->unsignedBigInteger('staff_relid')->comment('staffs -> sid');
             $t->text('note');
@@ -77,7 +79,7 @@ class ClientNoteSchema extends SchemaAbstract
             ];
 
             try {
-                $m->insert($logs);
+                $m->insert(Uid::stamp($logs));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

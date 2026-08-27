@@ -24,6 +24,7 @@ class PromoCodeSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('promo_id');
+            $t->uid('uid');
             $t->string('promo_code', 100);
             $t->enum('promo_type', ['percentage','fixed'])->default('percentage');
             $t->decimal('promo_value', 18, 4);

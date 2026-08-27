@@ -24,6 +24,7 @@ class DomainNameserverSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('ns_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('domain_relid')->comment('domains -> dimain_id');
             $t->string('hostname');
             $t->string('ip_address', 100)->nullable()->default(NULL);

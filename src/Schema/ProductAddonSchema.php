@@ -24,6 +24,7 @@ class ProductAddonSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('addon_id')->comment('Product Addon ID');
+            $t->uid('uid');
             $t->string('addon_name', 150);
             $t->text('description');
             $t->enum('pricing_model', ['one_time','recurring'])->default('recurring');

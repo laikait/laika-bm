@@ -25,6 +25,7 @@ class ClientServiceAddonSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('csa_id')->comment('Client Service Addon ID');
+            $t->uid('uid');
             $t->unsignedBigInteger('service_relid')->comment('client_services -> service_id');
             $t->unsignedInteger('addon_relid')->comment('product_addons -> addon_id');
             $t->unsignedInteger('billing_cycle_relid')->comment('billing_cycles -> billing_cycle_id');

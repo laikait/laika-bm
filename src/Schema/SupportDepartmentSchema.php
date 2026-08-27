@@ -24,6 +24,7 @@ class SupportDepartmentSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('dep_id');
+            $t->uid('uid');
             $t->string('dep_name', 100);
             $t->string('dep_email', 100)->nullable()->default(null)->comment('Inbound Email');
             $t->text('dep_description');

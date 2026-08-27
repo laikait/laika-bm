@@ -24,6 +24,7 @@ class ProductGroupSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('group_id');
+            $t->uid('uid');
             $t->string('group_slug');
             $t->string('group_name', 100);
             $t->text('description');

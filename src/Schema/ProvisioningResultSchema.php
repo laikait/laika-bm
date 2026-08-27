@@ -19,6 +19,7 @@ use LBM\Model\ProvisioningResultModel;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 use Laika\Core\Exceptions\SchemaException;
 
 class ProvisioningResultSchema extends SchemaAbstract
@@ -33,6 +34,7 @@ class ProvisioningResultSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('result_id');
+            $t->uid('uid');
             $t->string('result_name', 50)->comment('Result Name');
             $t->string('result_color', 25)->comment('Result Colour');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -54,11 +56,11 @@ class ProvisioningResultSchema extends SchemaAbstract
         $model = new ProvisioningResultModel();
         $model->transaction(function (ProvisioningResultModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     ['result_name' => 'pending', 'result_color' => '#f0ad4e', 'system_default' => 'yes'],
                     ['result_name' => 'success', 'result_color' => '#5cb85c', 'system_default' => 'yes'],
                     ['result_name' => 'failure', 'result_color' => '#d9534f', 'system_default' => 'yes']
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

@@ -13,6 +13,9 @@ declare(strict_types=1);
 namespace LBM\Relay;
 
 use LBM\Mail\MailerFactory;
+use LBM\Support\Uid;
+use LBM\Support\Money;
+use LBM\Support\Status;
 use LBM\Support\Permission;
 use LBM\Support\Paginator;
 use LBM\Support\PasswordValidator;
@@ -23,6 +26,13 @@ class Provider extends RelayProvider
     public function register(): void
     {
         // Support -------------------------------------------------------------
+        //
+        // Singletons because each one memoises: Status holds the lookup tables,
+        // Money the currency list, Permission the parsed role JSON. A second
+        // instance would mean a second round of the same queries.
+        $this->registry->singleton('support.uid', Uid::class);
+        $this->registry->singleton('support.money', Money::class);
+        $this->registry->singleton('support.status', Status::class);
         $this->registry->singleton('support.paginator', Paginator::class);
         $this->registry->singleton('support.permission', Permission::class);
         $this->registry->singleton('support.password.validator', PasswordValidator::class);

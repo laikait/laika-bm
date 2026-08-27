@@ -13,6 +13,7 @@ use LBM\Model\CountryModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class CountrySchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class CountrySchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('country_id');
+            $t->uid('uid');
             $t->char('iso2', 2);
             $t->char('iso3', 3);
             $t->string('country_name', 100);
@@ -51,7 +53,7 @@ class CountrySchema extends SchemaAbstract
         $model = new CountryModel();
         $model->transaction(function (CountryModel $m) {
             try {
-                $m->insert($this->countries());
+                $m->insert(Uid::stamp($this->countries()));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

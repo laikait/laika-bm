@@ -24,6 +24,7 @@ class OrderItemSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('order_item_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('order_relid')->comment('orders -> oid');
             $t->enum('type', ['product', 'addon', 'domain']);
             $t->unsignedInteger('product_relid')->nullable()->default(NULL)->comment('products -> pid');

@@ -24,6 +24,7 @@ class ProductStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');

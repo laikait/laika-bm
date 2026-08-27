@@ -24,6 +24,7 @@ class SupportCannedResponseSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('response_id');
+            $t->uid('uid');
             $t->unsignedInteger('department_relid')->nullable()->default(NULL)->comment('NULL = all departments');
             $t->string('title');
             $t->text('message');

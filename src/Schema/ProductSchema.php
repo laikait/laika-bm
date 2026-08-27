@@ -24,6 +24,7 @@ class ProductSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pid');
+            $t->uid('uid');
             $t->string('product_slug');
             $t->unsignedInteger('group_relid')->comment('product_groups -> group_id');
             $t->string('product_name');

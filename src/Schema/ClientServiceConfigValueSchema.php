@@ -24,6 +24,7 @@ class ClientServiceConfigValueSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('cscv_id')->comment('Client Service Config Values ID');
+            $t->uid('uid');
             $t->unsignedBigInteger('service_relid')->comment('client_services -> service_id');
             $t->unsignedInteger('pco_relid')->comment('product_config_options -> pco_id');
             $t->unsignedInteger('pcos_relid')->nullable()->default(null)->comment('product_config_option_subs -> pcos_id');

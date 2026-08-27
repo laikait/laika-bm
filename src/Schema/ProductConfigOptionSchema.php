@@ -24,6 +24,7 @@ class ProductConfigOptionSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pco_id')->comment('Product Config Options');
+            $t->uid('uid');
             $t->unsignedInteger('config_group_relid')->comment('product_config_groups -> pcg_id');
             $t->enum('config_type', ['dropdown','radio','checkbox','text','quantity'])->default('dropdown')->comment('dropdown, radio, checkbox, text, quantity');
             $t->enum('is_required', ['yes', 'no']);

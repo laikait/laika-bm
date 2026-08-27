@@ -13,6 +13,7 @@ use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\ServerStatusModel;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class ServerStatusSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class ServerStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -45,14 +47,14 @@ class ServerStatusSchema extends SchemaAbstract
         }
 
         $statuses = [
-            ['status_name' => 'online', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'offline', 'status_color' => '#000000', 'system_default' => 'yes'],
-            ['status_name' => 'maintenance', 'status_color' => '#000000', 'system_default' => 'yes']
+            ['status_name' => 'online', 'status_color' => '#198754', 'system_default' => 'yes'],
+            ['status_name' => 'offline', 'status_color' => '#dc3545', 'system_default' => 'yes'],
+            ['status_name' => 'maintenance', 'status_color' => '#fd7e14', 'system_default' => 'yes']
         ];
         $model = new ServerStatusModel();
         $model->transaction(function (ServerStatusModel $m) use ($statuses) {
             try {
-                $m->insert($statuses);
+                $m->insert(Uid::stamp($statuses));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

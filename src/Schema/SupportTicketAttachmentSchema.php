@@ -24,6 +24,7 @@ class SupportTicketAttachmentSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('attachment_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('reply_relid')->comment('support_ticket_replies -> reply_id');
             $t->string('filename');
             $t->string('path');

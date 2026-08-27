@@ -24,6 +24,7 @@ class DomainRegistrarSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('dr_id');
+            $t->uid('uid');
             $t->string('name', 100)->comment('Registrar Name');
             $t->string('module_name', 60)->comment('e.g. enom, namesilo, resellerclub');
             $t->string('api_url');

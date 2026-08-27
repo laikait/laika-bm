@@ -24,6 +24,7 @@ class DomainContactSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('dc_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('domain_relid')->comment('domains -> id');
             $t->enum('type', ['registrant','admin','tech','billing', 'abuse']);
             $t->string('company_name')->nullable()->default(NULL);

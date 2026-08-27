@@ -19,6 +19,7 @@ use LBM\Model\TransactionStatusModel;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 use Laika\Core\Exceptions\SchemaException;
 
 class TransactionStatusSchema extends SchemaAbstract
@@ -33,6 +34,7 @@ class TransactionStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Colour');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -54,12 +56,12 @@ class TransactionStatusSchema extends SchemaAbstract
         $model = new TransactionStatusModel();
         $model->transaction(function (TransactionStatusModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     ['status_name' => 'pending', 'status_color' => '#f0ad4e', 'system_default' => 'yes'],
                     ['status_name' => 'completed', 'status_color' => '#5cb85c', 'system_default' => 'yes'],
                     ['status_name' => 'failed', 'status_color' => '#d9534f', 'system_default' => 'yes'],
                     ['status_name' => 'cancelled', 'status_color' => '#777777', 'system_default' => 'yes']
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

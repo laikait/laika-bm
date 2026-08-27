@@ -24,6 +24,7 @@ class ProductPricingSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('price_id');
+            $t->uid('uid');
             $t->unsignedInteger('product_relid')->comment('products -> pid');
             $t->unsignedInteger('currency_relid')->comment('currencies -> currency_id');
             $t->unsignedInteger('billing_cycle_relid')->comment('billing_cycles -> bc_id');

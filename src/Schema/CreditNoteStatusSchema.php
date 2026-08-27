@@ -19,6 +19,7 @@ use LBM\Model\CreditNoteStatusModel;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 use Laika\Core\Exceptions\SchemaException;
 
 class CreditNoteStatusSchema extends SchemaAbstract
@@ -33,6 +34,7 @@ class CreditNoteStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Colour');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -54,12 +56,12 @@ class CreditNoteStatusSchema extends SchemaAbstract
         $model = new CreditNoteStatusModel();
         $model->transaction(function (CreditNoteStatusModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     ['status_name' => 'open', 'status_color' => '#5bc0de', 'system_default' => 'yes'],
                     ['status_name' => 'partial', 'status_color' => '#f0ad4e', 'system_default' => 'yes'],
                     ['status_name' => 'used', 'status_color' => '#5cb85c', 'system_default' => 'yes'],
                     ['status_name' => 'voided', 'status_color' => '#777777', 'system_default' => 'yes']
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

@@ -24,6 +24,7 @@ class ProductConfigOptionPricingSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pcop_id')->comment('Product Config Option Pricing ID');
+            $t->uid('uid');
             $t->unsignedInteger('pcos_relid')->comment('product_config_option_subs -> pcos_id');
             $t->unsignedInteger('currency_relid')->comment('currencies -> currency_id');
             $t->unsignedInteger('billing_cycle_relid');

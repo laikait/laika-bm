@@ -13,6 +13,7 @@ use LBM\Model\SupportTicketPriorityModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class SupportTicketPrioritySchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class SupportTicketPrioritySchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('priority_id');
+            $t->uid('uid');
             $t->string('priority_name');
             $t->string('priority_color');
 
@@ -46,12 +48,12 @@ class SupportTicketPrioritySchema extends SchemaAbstract
         $model->transaction(function (SupportTicketPriorityModel $m) {
             try {
                 $default = [
-                    ['priority_name' => 'low', 'priority_color' => '#000000'],
-                    ['priority_name' => 'medium', 'priority_color' => '#000000'],
-                    ['priority_name' => 'high', 'priority_color' => '#000000'],
-                    ['priority_name' => 'urgent', 'priority_color' => '#000000']
+                    ['priority_name' => 'low', 'priority_color' => '#0dcaf0'],
+                    ['priority_name' => 'medium', 'priority_color' => '#ffc107'],
+                    ['priority_name' => 'high', 'priority_color' => '#fd7e14'],
+                    ['priority_name' => 'urgent', 'priority_color' => '#dc3545']
                 ];
-                $m->insert($default);
+                $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

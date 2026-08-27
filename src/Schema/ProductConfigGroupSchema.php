@@ -24,6 +24,7 @@ class ProductConfigGroupSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pcg_id')->comment('Product Config Groups ID');
+            $t->uid('uid');
             $t->string('config_group_name', 100)->comment('e.g. ram_size, disk_size, dropdown');
             $t->text('description');
             $t->timestamp('pcg_created_at');

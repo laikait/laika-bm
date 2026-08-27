@@ -24,6 +24,7 @@ class InvoiceNoteSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('note_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('invoice_relid')->comment('invoices -> invoice_id');
             $t->unsignedBigInteger('staff_relid')->comment('staffs -> sid');
             $t->text('note');

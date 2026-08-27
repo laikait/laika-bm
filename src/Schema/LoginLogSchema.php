@@ -24,6 +24,7 @@ class LoginLogSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('log_id');
+            $t->uid('uid');
             $t->string('rel_type', 50);
             $t->unsignedBigInteger('rel_id')->comment('staffs/clients -> id');
             $t->string('ip', 50);

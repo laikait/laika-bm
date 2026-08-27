@@ -13,6 +13,7 @@ use LBM\Model\CurrencyModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class CurrencySchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class CurrencySchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('currency_id');
+            $t->uid('uid');
             $t->string('currency_code', 3)->comment('ISO 4217 e.g. USD');
             $t->string('prefix_symbol');
             $t->string('suffix_symbol');
@@ -54,13 +56,13 @@ class CurrencySchema extends SchemaAbstract
         $model = new CurrencyModel();
         $model->transaction(function (CurrencyModel $m) {
             try {
-                $m->insert([
+                $m->insert(Uid::stamp([
                     'currency_code' => 'USD',
                     'prefix_symbol' => '$',
                     'suffix_symbol' => '',
                     'is_active' => 'yes',
                     'is_default' => 'yes'
-                ]);
+                ]));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

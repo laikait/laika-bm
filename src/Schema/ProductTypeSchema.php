@@ -13,6 +13,7 @@ use LBM\Model\ProductTypeModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class ProductTypeSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class ProductTypeSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('product_type_id');
+            $t->uid('uid');
             $t->string('type_name');
             $t->enum('is_default', ['yes', 'no'])->default('no');
 
@@ -53,7 +55,7 @@ class ProductTypeSchema extends SchemaAbstract
                     ['type_name' => 'software', 'is_default' => 'yes'],
                     ['type_name' => 'other', 'is_default' => 'yes']
                 ];
-                $m->insert($default);
+                $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

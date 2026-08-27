@@ -24,6 +24,7 @@ class KnowledgeBaseCategorySchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('kb_cat_id');
+            $t->uid('uid');
             $t->unsignedInteger('parent_id')->nullable()->default(NULL)->comment('self -> kb_cat_id');
             $t->string('name');
             $t->string('slug');

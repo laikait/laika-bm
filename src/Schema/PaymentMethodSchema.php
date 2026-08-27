@@ -24,6 +24,7 @@ class PaymentMethodSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pm_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid')->comment('clients -> id');
             $t->unsignedInteger('gateway_relid')->comment('payment_gateways -> gateway_id');
             $t->unsignedInteger('type_relid')->comment('payment_method_types -> pm_type_id');

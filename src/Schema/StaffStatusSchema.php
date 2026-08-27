@@ -13,6 +13,7 @@ use LBM\Model\StaffStatusModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class StaffStatusSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class StaffStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -48,11 +50,11 @@ class StaffStatusSchema extends SchemaAbstract
         $model->transaction(function (StaffStatusModel $m) {
             try {
                 $statuses = [
-                    ['status_name' => 'active', 'status_color' => '#000000', 'system_default' => 'yes'],
-                    ['status_name' => 'inactive', 'status_color' => '#000000', 'system_default' => 'yes'],
-                    ['status_name' => 'suspended', 'status_color' => '#000000', 'system_default' => 'yes']
+                    ['status_name' => 'active', 'status_color' => '#198754', 'system_default' => 'yes'],
+                    ['status_name' => 'inactive', 'status_color' => '#6c757d', 'system_default' => 'yes'],
+                    ['status_name' => 'suspended', 'status_color' => '#dc3545', 'system_default' => 'yes']
                 ];
-                $m->insert($statuses);
+                $m->insert(Uid::stamp($statuses));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

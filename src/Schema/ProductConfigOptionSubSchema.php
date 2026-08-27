@@ -24,6 +24,7 @@ class ProductConfigOptionSubSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('pcos_id')->comment('Product Config Option Subs ID');
+            $t->uid('uid');
             $t->unsignedInteger('pco_relid')->comment('product_config_options -> pco_id');
             $t->string('option_name');
             $t->enum('is_active', ['yes', 'no'])->default('yes');

@@ -28,6 +28,7 @@ class PasswordSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('id');
+            $t->uid('uid');
             $t->unsignedBigInteger('rel_id')->comment('Client/Staff/... ID');
             $t->string('rel_type', 50)->comment('User Type');
             $t->string('hash')->comment('Password Hash');

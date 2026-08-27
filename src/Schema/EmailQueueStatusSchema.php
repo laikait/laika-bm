@@ -13,6 +13,7 @@ use LBM\Model\EmailQueueStatusModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
+use LBM\Support\Uid;
 
 class EmailQueueStatusSchema extends SchemaAbstract
 {
@@ -26,6 +27,7 @@ class EmailQueueStatusSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('status_id')->comment('Status ID');
+            $t->uid('uid');
             $t->string('status_name', 50)->comment('Status Name');
             $t->string('status_color', 25)->comment('Status Color');
             $t->enum('system_default', ['yes', 'no'])->default('no');
@@ -48,12 +50,12 @@ class EmailQueueStatusSchema extends SchemaAbstract
         $model->transaction(function (EmailQueueStatusModel $m) {
             try {
                 $default = [
-                    ['status_name' => 'queued', 'status_color' => '#000000'], // Modify Later
-                    ['status_name' => 'completed', 'status_color' => '#000000'],
-                    ['status_name' => 'failed', 'status_color' => '#000000'],
-                    ['status_name' => 'manual', 'status_color' => '#000000'],
+                    ['status_name' => 'queued', 'status_color' => '#ffc107'], // Modify Later
+                    ['status_name' => 'completed', 'status_color' => '#198754'],
+                    ['status_name' => 'failed', 'status_color' => '#dc3545'],
+                    ['status_name' => 'manual', 'status_color' => '#6c757d'],
                 ];
-                $m->insert($default);
+                $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {
                 throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
             }

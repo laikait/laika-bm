@@ -24,6 +24,7 @@ class CreditNoteSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('credit_note_id');
+            $t->uid('uid');
             $t->unsignedBigInteger('client_relid');
             $t->unsignedInteger('currency_relid');
             $t->decimal('amount', 18, 4);

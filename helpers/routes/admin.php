@@ -1,0 +1,416 @@
+<?php
+/**
+ * Laika Bill Manager
+ * Author: Showket Ahmed
+ * Email: riyadhtayf@gmail.com
+ * License: MIT
+ * This file is part of Laika Bill Manager.
+ * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+// Deny Direct Access
+defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
+
+use Laika\Route\Url;
+use LBM\Pipeline\Auth;
+use LBM\Pipeline\Permission;
+use LBM\Controller\Admin\AuthController;
+use LBM\Controller\Admin\StaffController;
+use LBM\Controller\Admin\OrderController;
+use LBM\Controller\Admin\ClientController;
+use LBM\Controller\Admin\DomainController;
+use LBM\Controller\Admin\ModuleController;
+use LBM\Controller\Admin\ReportController;
+use LBM\Controller\Admin\ServerController;
+use LBM\Controller\Admin\TicketController;
+use LBM\Controller\Admin\InvoiceController;
+use LBM\Controller\Admin\ProductController;
+use LBM\Controller\Admin\ProfileController;
+use LBM\Controller\Admin\ActivityController;
+use LBM\Controller\Admin\CurrencyController;
+use LBM\Controller\Admin\SettingsController;
+use LBM\Controller\Admin\DashboardController;
+use LBM\Controller\Admin\TransactionController;
+
+####################################################################################
+/*--------------------------------- ADMIN PANEL ----------------------------------*/
+####################################################################################
+//
+// Conventions used throughout, so a reader can predict any URL from any other:
+//
+//   /admin/<plural>              GET   collection, searched and filtered by query
+//   /admin/<plural>/new          GET   blank form          POST  create
+//   /admin/<singular>/{uid}      GET   single record
+//   /admin/<singular>/{uid}/edit GET   filled form         POST  update
+//   /admin/<singular>/{uid}/...  POST  a named state change
+//
+// Plural for collections and singular for members is what keeps `/clients/new`
+// from ever colliding with a record identifier.
+//
+// GET for every search and listing (instruction 17), POST for every mutation
+// (instruction 16), CSRF-checked centrally in GlobalPipeline (instruction 15).
+//
+// Records are addressed by `uid`, never by the auto-increment primary key, so a
+// URL leaks nothing about how many clients or invoices exist.
+//
+// Controllers are referenced as [Class::class, 'method']. A bare 'Foo@bar'
+// string would be resolved against App\Controller\ by Invoke::controller(), which
+// is the app root - not this package.
+//
+// One thing to know before adding a route here: the group's Auth pipeline is
+// attached by Handler::applyToPrefix() *after* this closure has run, so it is
+// appended behind any per-route pipeline. A guarded route's real chain is
+// [Permission, Auth], not [Auth, Permission]. LBM\Pipeline\Permission is written
+// to resolve the staff member itself rather than to depend on that order, so
+// nothing here has to work around it.
+
+/** @var string Identifier pattern - uid, never the primary key */
+$uid = '[a-zA-Z0-9\-]+';
+
+Url::group(ADMIN, function () use ($uid): void {
+
+    /*============================== DASHBOARD ==============================*/
+    Url::get('/', [DashboardController::class, 'index'])->name('staff.dashboard');
+
+    /*=============================== CLIENTS ===============================*/
+    Url::get('/clients', [ClientController::class, 'index'])
+        ->name('staff.clients')->pipeline([Permission::class . '|perm=client.read']);
+
+    Url::get('/clients/new', [ClientController::class, 'create'])
+        ->name('staff.client.new')->pipeline([Permission::class . '|perm=client.create']);
+    Url::post('/clients/new', [ClientController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=client.create']);
+
+    Url::get("/client/{client:{$uid}}", [ClientController::class, 'show'])
+        ->name('staff.client')->pipeline([Permission::class . '|perm=client.read']);
+
+    Url::get("/client/{client:{$uid}}/edit", [ClientController::class, 'edit'])
+        ->name('staff.client.edit')->pipeline([Permission::class . '|perm=client.update']);
+    Url::post("/client/{client:{$uid}}/edit", [ClientController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=client.update']);
+
+    Url::post("/client/{client:{$uid}}/delete", [ClientController::class, 'delete'])
+        ->name('staff.client.delete')->pipeline([Permission::class . '|perm=client.delete']);
+
+    /*---------------------------- Client Contacts ----------------------------*/
+    Url::get("/client/{client:{$uid}}/contacts", [ClientController::class, 'contacts'])
+        ->name('staff.client.contacts')->pipeline([Permission::class . '|perm=client.read']);
+
+    Url::get("/client/{client:{$uid}}/contacts/new", [ClientController::class, 'contactCreate'])
+        ->name('staff.client.contact.new')->pipeline([Permission::class . '|perm=client.create']);
+    Url::post("/client/{client:{$uid}}/contacts/new", [ClientController::class, 'contactCreate'])
+        ->pipeline([Permission::class . '|perm=client.create']);
+
+    Url::get("/client/{client:{$uid}}/contact/{contact:{$uid}}/edit", [ClientController::class, 'contactEdit'])
+        ->name('staff.client.contact.edit')->pipeline([Permission::class . '|perm=client.update']);
+    Url::post("/client/{client:{$uid}}/contact/{contact:{$uid}}/edit", [ClientController::class, 'contactEdit'])
+        ->pipeline([Permission::class . '|perm=client.update']);
+
+    Url::post("/client/{client:{$uid}}/contact/{contact:{$uid}}/delete", [ClientController::class, 'contactDelete'])
+        ->name('staff.client.contact.delete')->pipeline([Permission::class . '|perm=client.delete']);
+
+    /*------------------------------ Client Notes -----------------------------*/
+    Url::get("/client/{client:{$uid}}/notes", [ClientController::class, 'notes'])
+        ->name('staff.client.notes')->pipeline([Permission::class . '|perm=note.read']);
+    Url::post("/client/{client:{$uid}}/notes", [ClientController::class, 'noteCreate'])
+        ->pipeline([Permission::class . '|perm=note.create']);
+    Url::post("/client/{client:{$uid}}/note/{note:{$uid}}/delete", [ClientController::class, 'noteDelete'])
+        ->name('staff.client.note.delete')->pipeline([Permission::class . '|perm=note.delete']);
+
+    /*=============================== PRODUCTS ==============================*/
+    Url::get('/products', [ProductController::class, 'index'])
+        ->name('staff.products')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get('/products/new', [ProductController::class, 'create'])
+        ->name('staff.product.new')->pipeline([Permission::class . '|perm=product.create']);
+    Url::post('/products/new', [ProductController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=product.create']);
+
+    Url::get("/product/{product:{$uid}}", [ProductController::class, 'show'])
+        ->name('staff.product')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get("/product/{product:{$uid}}/edit", [ProductController::class, 'edit'])
+        ->name('staff.product.edit')->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/product/{product:{$uid}}/edit", [ProductController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=product.update']);
+
+    Url::post("/product/{product:{$uid}}/delete", [ProductController::class, 'delete'])
+        ->name('staff.product.delete')->pipeline([Permission::class . '|perm=product.delete']);
+
+    /*--------------------------- Product Groups ---------------------------*/
+    Url::get('/product-groups', [ProductController::class, 'groups'])
+        ->name('staff.product.groups')->pipeline([Permission::class . '|perm=product.read']);
+    Url::post('/product-groups', [ProductController::class, 'groupSave'])
+        ->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/product-group/{group:{$uid}}/delete", [ProductController::class, 'groupDelete'])
+        ->name('staff.product.group.delete')->pipeline([Permission::class . '|perm=product.delete']);
+
+    /*================================ ORDERS ===============================*/
+    Url::get('/orders', [OrderController::class, 'index'])
+        ->name('staff.orders')->pipeline([Permission::class . '|perm=order.read']);
+
+    Url::get('/orders/new', [OrderController::class, 'create'])
+        ->name('staff.order.new')->pipeline([Permission::class . '|perm=order.create']);
+    Url::post('/orders/new', [OrderController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=order.create']);
+
+    Url::get("/order/{order:{$uid}}", [OrderController::class, 'show'])
+        ->name('staff.order')->pipeline([Permission::class . '|perm=order.read']);
+
+    Url::get("/order/{order:{$uid}}/edit", [OrderController::class, 'edit'])
+        ->name('staff.order.edit')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/order/{order:{$uid}}/edit", [OrderController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=order.update']);
+
+    Url::post("/order/{order:{$uid}}/accept", [OrderController::class, 'accept'])
+        ->name('staff.order.accept')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/order/{order:{$uid}}/cancel", [OrderController::class, 'cancel'])
+        ->name('staff.order.cancel')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/order/{order:{$uid}}/delete", [OrderController::class, 'delete'])
+        ->name('staff.order.delete')->pipeline([Permission::class . '|perm=order.delete']);
+
+    /*=============================== INVOICES ==============================*/
+    Url::get('/invoices', [InvoiceController::class, 'index'])
+        ->name('staff.invoices')->pipeline([Permission::class . '|perm=invoice.read']);
+
+    Url::get('/invoices/new', [InvoiceController::class, 'create'])
+        ->name('staff.invoice.new')->pipeline([Permission::class . '|perm=invoice.create']);
+    Url::post('/invoices/new', [InvoiceController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=invoice.create']);
+
+    Url::get("/invoice/{invoice:{$uid}}", [InvoiceController::class, 'show'])
+        ->name('staff.invoice')->pipeline([Permission::class . '|perm=invoice.read']);
+
+    Url::get("/invoice/{invoice:{$uid}}/edit", [InvoiceController::class, 'edit'])
+        ->name('staff.invoice.edit')->pipeline([Permission::class . '|perm=invoice.update']);
+    Url::post("/invoice/{invoice:{$uid}}/edit", [InvoiceController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=invoice.update']);
+
+    Url::get("/invoice/{invoice:{$uid}}/print", [InvoiceController::class, 'print'])
+        ->name('staff.invoice.print')->pipeline([Permission::class . '|perm=invoice.read']);
+
+    Url::post("/invoice/{invoice:{$uid}}/send", [InvoiceController::class, 'send'])
+        ->name('staff.invoice.send')->pipeline([Permission::class . '|perm=invoice.update']);
+    Url::post("/invoice/{invoice:{$uid}}/pay", [InvoiceController::class, 'pay'])
+        ->name('staff.invoice.pay')->pipeline([Permission::class . '|perm=transaction.create']);
+    Url::post("/invoice/{invoice:{$uid}}/cancel", [InvoiceController::class, 'cancel'])
+        ->name('staff.invoice.cancel')->pipeline([Permission::class . '|perm=invoice.update']);
+    Url::post("/invoice/{invoice:{$uid}}/delete", [InvoiceController::class, 'delete'])
+        ->name('staff.invoice.delete')->pipeline([Permission::class . '|perm=invoice.delete']);
+
+    /*============================= TRANSACTIONS ============================*/
+    Url::get('/transactions', [TransactionController::class, 'index'])
+        ->name('staff.transactions')->pipeline([Permission::class . '|perm=transaction.read']);
+
+    Url::get('/transactions/new', [TransactionController::class, 'create'])
+        ->name('staff.transaction.new')->pipeline([Permission::class . '|perm=transaction.create']);
+    Url::post('/transactions/new', [TransactionController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=transaction.create']);
+
+    Url::get("/transaction/{transaction:{$uid}}", [TransactionController::class, 'show'])
+        ->name('staff.transaction')->pipeline([Permission::class . '|perm=transaction.read']);
+
+    Url::post("/transaction/{transaction:{$uid}}/refund", [TransactionController::class, 'refund'])
+        ->name('staff.transaction.refund')->pipeline([Permission::class . '|perm=transaction.update']);
+    Url::post("/transaction/{transaction:{$uid}}/delete", [TransactionController::class, 'delete'])
+        ->name('staff.transaction.delete')->pipeline([Permission::class . '|perm=transaction.delete']);
+
+    /*=============================== SUPPORT ===============================*/
+    Url::get('/tickets', [TicketController::class, 'index'])
+        ->name('staff.tickets')->pipeline([Permission::class . '|perm=ticket.read']);
+
+    Url::get('/tickets/new', [TicketController::class, 'create'])
+        ->name('staff.ticket.new')->pipeline([Permission::class . '|perm=ticket.create']);
+    Url::post('/tickets/new', [TicketController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=ticket.create']);
+
+    Url::get("/ticket/{ticket:{$uid}}", [TicketController::class, 'show'])
+        ->name('staff.ticket')->pipeline([Permission::class . '|perm=ticket.read']);
+    Url::post("/ticket/{ticket:{$uid}}/reply", [TicketController::class, 'reply'])
+        ->name('staff.ticket.reply')->pipeline([Permission::class . '|perm=ticket.update']);
+    Url::post("/ticket/{ticket:{$uid}}/status", [TicketController::class, 'status'])
+        ->name('staff.ticket.status')->pipeline([Permission::class . '|perm=ticket.update']);
+    Url::post("/ticket/{ticket:{$uid}}/delete", [TicketController::class, 'delete'])
+        ->name('staff.ticket.delete')->pipeline([Permission::class . '|perm=ticket.delete']);
+
+    Url::get('/ticket-departments', [TicketController::class, 'departments'])
+        ->name('staff.ticket.departments')->pipeline([Permission::class . '|perm=ticket.read']);
+    Url::post('/ticket-departments', [TicketController::class, 'departmentSave'])
+        ->pipeline([Permission::class . '|perm=ticket.update']);
+
+    /*=============================== DOMAINS ===============================*/
+    Url::get('/domains', [DomainController::class, 'index'])
+        ->name('staff.domains')->pipeline([Permission::class . '|perm=domain.read']);
+    Url::get("/domain/{domain:{$uid}}", [DomainController::class, 'show'])
+        ->name('staff.domain')->pipeline([Permission::class . '|perm=domain.read']);
+    Url::get("/domain/{domain:{$uid}}/edit", [DomainController::class, 'edit'])
+        ->name('staff.domain.edit')->pipeline([Permission::class . '|perm=domain.update']);
+    Url::post("/domain/{domain:{$uid}}/edit", [DomainController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=domain.update']);
+
+    /*=============================== SERVERS ===============================*/
+    Url::get('/servers', [ServerController::class, 'index'])
+        ->name('staff.servers')->pipeline([Permission::class . '|perm=server.read']);
+
+    Url::get('/servers/new', [ServerController::class, 'create'])
+        ->name('staff.server.new')->pipeline([Permission::class . '|perm=server.create']);
+    Url::post('/servers/new', [ServerController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=server.create']);
+
+    Url::get("/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
+        ->name('staff.server.edit')->pipeline([Permission::class . '|perm=server.update']);
+    Url::post("/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=server.update']);
+
+    Url::post("/server/{server:{$uid}}/test", [ServerController::class, 'test'])
+        ->name('staff.server.test')->pipeline([Permission::class . '|perm=server.update']);
+    Url::post("/server/{server:{$uid}}/delete", [ServerController::class, 'delete'])
+        ->name('staff.server.delete')->pipeline([Permission::class . '|perm=server.delete']);
+
+    /*============================== CURRENCIES =============================*/
+    Url::get('/currencies', [CurrencyController::class, 'index'])
+        ->name('staff.currencies')->pipeline([Permission::class . '|perm=currency.read']);
+    Url::post('/currencies', [CurrencyController::class, 'save'])
+        ->pipeline([Permission::class . '|perm=currency.update']);
+    Url::post("/currency/{currency:{$uid}}/default", [CurrencyController::class, 'makeDefault'])
+        ->name('staff.currency.default')->pipeline([Permission::class . '|perm=currency.update']);
+    Url::post("/currency/{currency:{$uid}}/delete", [CurrencyController::class, 'delete'])
+        ->name('staff.currency.delete')->pipeline([Permission::class . '|perm=currency.delete']);
+
+    /*================================ STAFF ================================*/
+    Url::get('/staffs', [StaffController::class, 'index'])
+        ->name('staff.staffs')->pipeline([Permission::class . '|perm=staff.read']);
+
+    Url::get('/staffs/new', [StaffController::class, 'create'])
+        ->name('staff.staff.new')->pipeline([Permission::class . '|perm=staff.create']);
+    Url::post('/staffs/new', [StaffController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=staff.create']);
+
+    Url::get("/staff/{staff:{$uid}}", [StaffController::class, 'show'])
+        ->name('staff.staff')->pipeline([Permission::class . '|perm=staff.read']);
+
+    Url::get("/staff/{staff:{$uid}}/edit", [StaffController::class, 'edit'])
+        ->name('staff.staff.edit')->pipeline([Permission::class . '|perm=staff.update']);
+    Url::post("/staff/{staff:{$uid}}/edit", [StaffController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=staff.update']);
+
+    Url::post("/staff/{staff:{$uid}}/delete", [StaffController::class, 'delete'])
+        ->name('staff.staff.delete')->pipeline([Permission::class . '|perm=staff.delete']);
+
+    /*-------------------------- Roles & Permissions ------------------------*/
+    Url::get('/roles', [StaffController::class, 'roles'])
+        ->name('staff.roles')->pipeline([Permission::class . '|perm=role.read']);
+
+    Url::get('/roles/new', [StaffController::class, 'roleCreate'])
+        ->name('staff.role.new')->pipeline([Permission::class . '|perm=role.create']);
+    Url::post('/roles/new', [StaffController::class, 'roleCreate'])
+        ->pipeline([Permission::class . '|perm=role.create']);
+
+    /** The group x action permission matrix (Permission instructions 1-2). */
+    Url::get("/role/{role:{$uid}}/edit", [StaffController::class, 'roleEdit'])
+        ->name('staff.role.edit')->pipeline([Permission::class . '|perm=role.update']);
+    Url::post("/role/{role:{$uid}}/edit", [StaffController::class, 'roleEdit'])
+        ->pipeline([Permission::class . '|perm=role.update']);
+
+    Url::post("/role/{role:{$uid}}/delete", [StaffController::class, 'roleDelete'])
+        ->name('staff.role.delete')->pipeline([Permission::class . '|perm=role.delete']);
+
+    /*=============================== REPORTS ===============================*/
+    Url::get('/reports', [ReportController::class, 'index'])
+        ->name('staff.reports')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/income', [ReportController::class, 'income'])
+        ->name('staff.report.income')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/orders', [ReportController::class, 'orders'])
+        ->name('staff.report.orders')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/tickets', [ReportController::class, 'tickets'])
+        ->name('staff.report.tickets')->pipeline([Permission::class . '|perm=report.read']);
+
+    /*============================== ACTIVITIES =============================*/
+    Url::get('/activities', [ActivityController::class, 'index'])
+        ->name('staff.activities')->pipeline([Permission::class . '|perm=activity.read']);
+
+    /*=============================== MODULES ===============================*/
+    Url::get('/modules', [ModuleController::class, 'index'])
+        ->name('staff.modules')->pipeline([Permission::class . '|perm=module.read']);
+    Url::post("/module/{module:{$uid}}/toggle", [ModuleController::class, 'toggle'])
+        ->name('staff.module.toggle')->pipeline([Permission::class . '|perm=module.update']);
+
+    /*============================== SETTINGS ===============================*/
+    //
+    // One GET per tab, one POST per tab. Settings are option rows, and option()
+    // memoises per key for the whole request - so every save ends in a redirect
+    // rather than re-rendering, or the form would show the value it just replaced.
+    Url::get('/settings', [SettingsController::class, 'general'])
+        ->name('staff.settings')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings', [SettingsController::class, 'general'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    Url::get('/settings/localisation', [SettingsController::class, 'localisation'])
+        ->name('staff.settings.localisation')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings/localisation', [SettingsController::class, 'localisation'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    Url::get('/settings/billing', [SettingsController::class, 'billing'])
+        ->name('staff.settings.billing')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings/billing', [SettingsController::class, 'billing'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    Url::get('/settings/security', [SettingsController::class, 'security'])
+        ->name('staff.settings.security')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings/security', [SettingsController::class, 'security'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    Url::get('/settings/mail', [SettingsController::class, 'mail'])
+        ->name('staff.settings.mail')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings/mail', [SettingsController::class, 'mail'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    /** Queues one message through the same path a real notification takes. */
+    Url::post('/settings/mail/test', [SettingsController::class, 'mailTest'])
+        ->name('staff.settings.mail.test')->pipeline([Permission::class . '|perm=settings.update']);
+
+    Url::get('/settings/email-templates', [SettingsController::class, 'emailTemplates'])
+        ->name('staff.settings.templates')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::get("/settings/email-template/{template:{$uid}}", [SettingsController::class, 'emailTemplate'])
+        ->name('staff.settings.template')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post("/settings/email-template/{template:{$uid}}", [SettingsController::class, 'emailTemplate'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    Url::get('/settings/statuses', [SettingsController::class, 'statuses'])
+        ->name('staff.settings.statuses')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings/statuses', [SettingsController::class, 'statuses'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
+    /*============================== MY ACCOUNT =============================*/
+    //
+    // No permission pipeline: everybody may manage their own account, whatever
+    // their role grants them over other people's.
+    Url::get('/my-account', [ProfileController::class, 'index'])->name('staff.account');
+    Url::post('/my-account', [ProfileController::class, 'update']);
+    Url::post('/my-account/password', [ProfileController::class, 'password'])->name('staff.account.password');
+
+    /** Revokes every auth_tokens row for this staff member, not just this one. */
+    Url::post('/my-account/sessions/revoke', [ProfileController::class, 'revokeSessions'])
+        ->name('staff.account.sessions.revoke');
+
+})->pipeline([Auth::class]);
+
+
+####################################################################################
+/*------------------------------ PUBLIC ADMIN ROUTES -----------------------------*/
+####################################################################################
+//
+// Registered after the group above, and that ordering is the whole point.
+// Url::group()->pipeline() calls Handler::applyToPrefix(), which attaches the
+// pipeline to every /admin route registered *so far* - so anything declared
+// afterwards is left unguarded. Putting the login form inside the guarded group
+// would redirect it to itself, forever.
+Url::group(ADMIN, function (): void {
+    Url::get('/login', [AuthController::class, 'login'])->name('staff.login');
+    Url::post('/login', [AuthController::class, 'login']);
+
+    /** POST, not GET: signing out is a state change (instruction 16). */
+    Url::post('/logout', [AuthController::class, 'logout'])->name('staff.logout');
+});

@@ -24,6 +24,7 @@ class TaxRuleSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('tr_id');
+            $t->uid('uid');
             $t->string('rule_name', 100);
             $t->decimal('rate', 7, 4)->default(0.0000);
             $t->unsignedInteger('country_relid')->nullable()->default(NULL)->comment('NULL = all countries');

@@ -24,6 +24,7 @@ class KnowledgeBaseSchema extends SchemaAbstract
     {
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('kb_id');
+            $t->uid('uid');
             $t->unsignedInteger('category_relid')->nullable()->default(NULL)->comment('kb_categories -> kb_cat_id');
             $t->unsignedBigInteger('staff_relid')->comment('staffs -> sid');
             $t->string('title');
