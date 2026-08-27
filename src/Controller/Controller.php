@@ -15,6 +15,7 @@ namespace LBM\Controller;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use Throwable;
 use Twig\Markup;
 use Laika\Service\Url;
 use Laika\Core\App\Template;
@@ -171,15 +172,40 @@ abstract class Controller
     protected function shared(): array
     {
         return [
-            'app_name'  =>  apply_hook('app_name'),
-            'app_host'  =>  apply_hook('app_host'),
-            'app_logo'  =>  app_logo(),
-            'app_icon'  =>  app_icon(),
+            // Every one of these reads the `options` table, and the installer
+            // renders in a window where the database is connected but has no
+            // tables yet - between the database step and the migrate step that
+            // creates them. Unguarded, the screen whose job is to create the
+            // options table would fatal because it could not read it.
+            'app_name'  =>  $this->safe(static fn() => apply_hook('app_name'), 'Laika Bill Manager'),
+            'app_host'  =>  $this->safe(static fn() => apply_hook('app_host'), rtrim(Url::base(), '/')),
+            'app_logo'  =>  $this->safe(static fn() => app_logo(), ''),
+            'app_icon'  =>  $this->safe(static fn() => app_icon(), ''),
             'head'      =>  $this->capture('lf_header'),
             'foot'      =>  $this->capture('lf_footer'),
             'alert'     =>  $this->alert(),
             'area'      =>  Url::segment(1) === PANEL ? PANEL : ADMIN,
         ];
+    }
+
+    /**
+     * Read a Value That Needs The Database, Falling Back If It Is Not There
+     *
+     * Only the shared chrome uses this. A controller that genuinely needs data
+     * should fail loudly rather than render half a page.
+     * @param callable $read Reader
+     * @param mixed $default Fallback
+     * @return mixed
+     */
+    protected function safe(callable $read, mixed $default = null): mixed
+    {
+        try {
+            $value = $read();
+        } catch (Throwable) {
+            return $default;
+        }
+
+        return ($value === null || $value === '') ? $default : $value;
     }
 
     /**
