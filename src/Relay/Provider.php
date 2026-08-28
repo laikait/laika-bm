@@ -65,6 +65,7 @@ class Provider extends RelayProvider
             'action.client'         =>  Action\Client::class,
             'action.client.contact' =>  Action\ClientContact::class,
             'action.client.note'    =>  Action\ClientNote::class,
+            'action.client.service' =>  Action\ClientService::class,
             'action.staff'          =>  Action\Staff::class,
             'action.product'        =>  Action\Product::class,
             'action.order'          =>  Action\Order::class,

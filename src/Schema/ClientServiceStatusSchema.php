@@ -46,13 +46,16 @@ class ClientServiceStatusSchema extends SchemaAbstract
             return;
         }
 
+        // Six-digit hex, like every other status table. These shipped as
+        // '#00000' - five digits, which is not a colour any browser accepts -
+        // so every service pill rendered with no background at all.
         $statuses = [
-            ['status_name' => 'pending', 'status_color' => '#00000', 'system_default' => 'yes'],
-            ['status_name' => 'active', 'status_color' => '#00000', 'system_default' => 'yes'],
-            ['status_name' => 'suspended', 'status_color' => '#00000', 'system_default' => 'yes'],
-            ['status_name' => 'terminated', 'status_color' => '#00000', 'system_default' => 'yes'],
-            ['status_name' => 'cancelled', 'status_color' => '#00000', 'system_default' => 'yes'],
-            ['status_name' => 'fraud', 'status_color' => '#00000', 'system_default' => 'yes']
+            ['status_name' => 'pending', 'status_color' => '#ffc107', 'system_default' => 'yes'],
+            ['status_name' => 'active', 'status_color' => '#198754', 'system_default' => 'yes'],
+            ['status_name' => 'suspended', 'status_color' => '#fd7e14', 'system_default' => 'yes'],
+            ['status_name' => 'terminated', 'status_color' => '#dc3545', 'system_default' => 'yes'],
+            ['status_name' => 'cancelled', 'status_color' => '#495057', 'system_default' => 'yes'],
+            ['status_name' => 'fraud', 'status_color' => '#b02a37', 'system_default' => 'yes']
         ];
         $model = new ClientServiceStatusModel();
         $model->transaction(function (ClientServiceStatusModel $m) use ($statuses) {

@@ -174,6 +174,34 @@ class Invoice extends Action
     }
 
     /**
+     * How Much Tax Is On An Invoice, In Money
+     *
+     * `tax` is a percentage, and a percentage on its own is not something a
+     * person can check against their own books - or, in a good many places,
+     * something an invoice is allowed to state without the amount beside it.
+     *
+     * Derived rather than stored, from the same contract the totals are built
+     * on: taxable is the subtotal less the invoice discount, and the tax is
+     * whatever the total is above it. Recomputing the percentage here instead
+     * would give a second answer to a question the stored total has already
+     * settled, and the two would disagree on any invoice whose total was ever
+     * adjusted by hand.
+     * @param array $invoice Invoice Row
+     * @return string Decimal string. Never negative
+     */
+    public function taxAmount(array $invoice): string
+    {
+        $taxable = Money::sub(
+            (string) ($invoice['subtotal'] ?? '0'),
+            (string) ($invoice['discount'] ?? '0')
+        );
+
+        $tax = Money::sub((string) ($invoice['total'] ?? '0'), $taxable);
+
+        return Money::isGreater($tax, '0') ? Money::round($tax) : '0';
+    }
+
+    /**
      * Whether An Invoice Is Fully Settled
      * @param array $invoice Invoice Row
      * @return bool

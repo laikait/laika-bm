@@ -22,6 +22,7 @@ use Laika\Core\Exceptions\HttpException;
 use Laika\Model\Connection;
 use Laika\Session\SessionConfig;
 use Laika\Route\Contracts\PipelineInterface;
+use LBM\Support\Clock;
 
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
@@ -98,11 +99,13 @@ class GlobalPipeline implements PipelineInterface
 
         // 2. Timezone. The app clock and the database clock must agree, or a row
         //    written now and read back reports a different time.
-        $timezone = option('time_zone', self::TIMEZONE) ?: self::TIMEZONE;
-
-        Date::setAppTimezone($timezone);
-        Date::setFormat(option('datetime_format', 'Y-m-d H:i:s') ?: 'Y-m-d H:i:s');
-        Connection::applyTimezone(Date::getOffset());
+        //
+        //    Through Clock rather than inline, because a web request is not the
+        //    only way in: a queue worker runs no pipeline at all, and the jobs
+        //    call the same method. Two copies of this drift, and the symptom -
+        //    a reminder sent on the wrong day - does not look like a timezone
+        //    bug when it turns up.
+        Clock::apply(true);
 
         // 3. Session in the database, so sessions survive a load-balanced
         //    deployment and the auth token is never written to a shared disk.

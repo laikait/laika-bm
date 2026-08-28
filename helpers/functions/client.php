@@ -14,6 +14,8 @@ declare(strict_types=1);
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use LBM\Pipeline\Auth;
+use LBM\Service\Client;
+use LBM\Service\ClientContact;
 use LBM\Service\Money;
 
 ####################################################################################
@@ -27,11 +29,37 @@ use LBM\Service\Money;
 
 /**
  * The Signed-In Client
+ *
+ * On a contact session this is the *parent client*, not the contact. A contact
+ * has no company name, no credit balance and no currency of their own - those
+ * belong to the account they are a sub-login of, and a screen asking "whose
+ * records am I looking at" always means the client.
+ *
+ * Memoised against the resolved user, so a template calling it twenty times
+ * costs one lookup while a sign-in part-way through a request is still seen.
  * @return ?array
  */
 function current_client(): ?array
 {
-    return Auth::user(PANEL);
+    static $cache = [];
+
+    $user = Auth::user(PANEL);
+
+    if ($user === null) {
+        return null;
+    }
+
+    if (Auth::guardOf(PANEL) !== Auth::CONTACT) {
+        return $user;
+    }
+
+    $parent = (int) ($user['client_relid'] ?? 0);
+
+    if ($parent === 0) {
+        return null;
+    }
+
+    return $cache[$parent] ??= Client::find($parent);
 }
 
 /**
@@ -53,6 +81,31 @@ function current_contact(): ?array
 function is_client(): bool
 {
     return current_client() !== null;
+}
+
+/**
+ * Whether The Person Looking May Reach Something
+ *
+ * The account holder may reach everything of their own - they own the records,
+ * and there is nobody to grant them anything. A contact may reach only what the
+ * client ticked for them, in the same shape the admin panel uses for staff:
+ * {"invoice":{"read":1,...},...}.
+ *
+ * Used by the client sidebar to hide what a contact cannot open. Hiding a link
+ * is a courtesy - every controller checks the same thing server-side, because a
+ * hidden link is not a control.
+ * @param string $access Access Name. Example: 'invoice.read'
+ * @return bool
+ */
+function client_can(string $access): bool
+{
+    $contact = current_contact();
+
+    if ($contact === null) {
+        return is_client();
+    }
+
+    return ClientContact::allows($contact, $access);
 }
 
 /**

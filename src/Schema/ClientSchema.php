@@ -42,7 +42,14 @@ class ClientSchema extends SchemaAbstract
             $t->unsignedInteger('status_relid')->default(2)->comment('client_statuses -> status_id');
             $t->timestamp('email_verified_at')->nullable()->default(null);
             $t->decimal('credit_balance', 18, 4)->default(0.0000);
-            $t->enum('tax_exempt', ['yes', 'no'])->default('yes');
+            // 'no', not 'yes'. Tax exemption is the exception a client has to
+            // prove - a certificate, a valid VAT number - and defaulting to
+            // 'yes' meant every account created anywhere in the app was exempt
+            // until somebody noticed, with no tax on any invoice they were
+            // raised. An operator who is wrong about one client can fix that
+            // client; an operator who is silently wrong about all of them
+            // finds out from an auditor.
+            $t->enum('tax_exempt', ['yes', 'no'])->default('no');
             $t->string('tax_id')->nullable()->default(NULL)->comment('VAT / GST / EIN etc');
             $t->timestamp('last_login_at')->nullable()->default(null);
             $t->string('last_login_ip', 100)->nullable()->default(null);

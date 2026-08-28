@@ -27,6 +27,9 @@ add_hook('current_contact', 'current_contact', 1000);
 /** Whether somebody is signed into the client area */
 add_hook('is_client', 'is_client', 1000);
 
+/** Whether the person looking may reach something - the client sidebar's gate */
+add_hook('client_can', 'client_can', 1000);
+
 /*=================================== NAMES ===================================*/
 /** A client's display name - company first, then the person */
 add_hook('client_name', 'client_name', 1000);

@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Model\Model;
 use Laika\Queue\Abstracts\Job;
+use LBM\Support\Clock;
 use LBM\Model\PasswordResetModel;
 
 /**
@@ -59,6 +60,12 @@ class PruneTokensJob extends Job
      */
     public function handle(): void
     {
+        // A worker runs no pipeline, so nothing has put this process on the
+        // operator's timezone. Every date column here is a TIMESTAMP, which the
+        // database converts using the session timezone - so without this the job
+        // reads back different times than the web app wrote.
+        Clock::apply();
+
         $cutoff = date('Y-m-d H:i:s', strtotime("-{$this->days} days"));
 
         $this->pruneAuthTokens($cutoff);

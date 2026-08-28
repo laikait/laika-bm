@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Throwable;
 use Laika\Queue\Abstracts\Job;
+use LBM\Support\Clock;
 use LBM\Model\BillingCycleModel;
 use LBM\Model\ClientServiceModel;
 use LBM\Model\InvoiceItemModel;
@@ -81,6 +82,12 @@ class InvoiceGenerateJob extends Job
      */
     public function handle(): void
     {
+        // A worker runs no pipeline, so nothing has put this process on the
+        // operator's timezone. Every date column here is a TIMESTAMP, which the
+        // database converts using the session timezone - so without this the job
+        // reads back different times than the web app wrote.
+        Clock::apply();
+
         foreach ($this->due() as $service) {
             try {
                 $this->bill($service);

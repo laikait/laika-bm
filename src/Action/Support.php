@@ -389,6 +389,34 @@ class Support extends Action
     }
 
     /**
+     * The Department a Ticket Lands In When Nobody Chose One
+     *
+     * The first department a client is allowed to see, by name. There is no
+     * "is default" column, and adding one would be another setting an operator
+     * has to maintain for a case that only comes up when nobody picked - a
+     * cancellation request, a system-raised ticket. First-by-name is stable,
+     * and every install seeds at least one department.
+     *
+     * Null when there are none at all, which callers have to handle: a ticket
+     * raised into a department that does not exist is a row nobody can see.
+     * @return ?int
+     */
+    public function defaultDepartmentId(): ?int
+    {
+        $departments = $this->departments(true);
+
+        if ($departments === []) {
+            // Nothing client-visible. Any department at all is still better
+            // than losing the request.
+            $departments = $this->departments(false);
+        }
+
+        $first = $departments[0] ?? null;
+
+        return $first === null ? null : ((int) $first['dep_id'] ?: null);
+    }
+
+    /**
      * Find One Department
      * @param int|string $key Department ID Or Uid
      * @return ?array

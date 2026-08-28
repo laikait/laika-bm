@@ -112,6 +112,7 @@ class InvoiceController extends AdminController
             'items'        =>  Invoice::items($id),
             'transactions' =>  Transaction::forInvoice($id),
             'balance'      =>  Invoice::balance($row),
+            'tax_amount'   =>  Invoice::taxAmount($row),
             'settled'      =>  Invoice::isSettled($row),
             'overdue'      =>  Invoice::isOverdue($row),
         ]);
@@ -163,6 +164,7 @@ class InvoiceController extends AdminController
             'client'     =>  Client::find((int) $row['client_relid']),
             'items'      =>  Invoice::items((int) $row['invoice_id']),
             'balance'    =>  Invoice::balance($row),
+            'tax_amount' =>  Invoice::taxAmount($row),
             'settled'    =>  Invoice::isSettled($row),
         ]);
     }

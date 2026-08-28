@@ -244,6 +244,24 @@ class Activity extends Action
     }
 
     /**
+     * Record Something a Client Contact Did
+     *
+     * Kept apart from recordClient() rather than folded into it. When five
+     * people share one account through sub-logins, "who changed the billing
+     * address" is exactly the question the trail exists to answer, and an entry
+     * attributed to the account instead of the person cannot answer it.
+     * @param string $event Event Name
+     * @param string $log What Happened, In Words
+     * @param ?int $contactId Client Contact ID
+     * @param array $changes Changed Fields
+     * @return bool
+     */
+    public function recordContact(string $event, string $log, ?int $contactId, array $changes = []): bool
+    {
+        return $this->record($event, $log, self::CONTACT, $contactId, $changes);
+    }
+
+    /**
      * What One Staff Member Has Done
      *
      * A named wrapper rather than making callers pass self::STAFF: a relay

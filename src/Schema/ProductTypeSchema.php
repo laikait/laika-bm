@@ -38,11 +38,23 @@ class ProductTypeSchema extends SchemaAbstract
     }
 
     /**
-     * Default Values to Insert
+     * The kinds of thing a product can be.
+     *
+     * This was called default() rather than seed(), and nothing calls default()
+     * - app:migrate runs up() then seed(). So the rows never appeared, and
+     * `products.type_relid` is a NOT NULL column: on a fresh install the type
+     * dropdown on the new-product form was empty and a product could not be
+     * created at all.
      * @return void
      */
-    public function default(): void
+    public function seed(): void
     {
+        // Seeds re-run on every app:migrate, not just on table creation,
+        // so a bare insert() would collide on the second run.
+        if ((new ProductTypeModel())->count() > 0) {
+            return;
+        }
+
         $model = new ProductTypeModel();
         $model->transaction(function (ProductTypeModel $m) {
             try {
