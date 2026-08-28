@@ -8,12 +8,9 @@ namespace LBM\Schema;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
-use Laika\Core\Exceptions\SchemaException;
-use LBM\Model\OrderNoteModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
 
 class OrderNoteSchema extends SchemaAbstract
 {
@@ -38,35 +35,6 @@ class OrderNoteSchema extends SchemaAbstract
             $t->index('order_relid');
             $t->index(['creator_type', 'creator_relid'], 'note_created_by');
             $t->index('note_created_at');
-        });
-    }
-
-    public function seed(): void
-    {
-        // Seeds re-run on every app:migrate, not just on table creation,
-        // so a bare insert() would collide on the second run.
-        if ((new OrderNoteModel())->count() > 0) {
-            return;
-        }
-
-        $model = new OrderNoteModel();
-        $model->transaction(function (OrderNoteModel $m) {
-            try {
-                $m->insert(Uid::stamp([
-                    'order_relid' => 1,
-                    'creator_type' => 'client',
-                    'creator_relid' => 1,
-                    'note' => 'New Order Created By Client ID 1'
-                ]));
-                $m->insert(Uid::stamp([
-                    'order_relid' => 1,
-                    'creator_type' => 'client',
-                    'creator_relid' => 1,
-                    'note' => 'New Order Status Pending By Client ID 1'
-                ]));
-            } catch (\Throwable $e) {
-                throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
-            }
         });
     }
 }

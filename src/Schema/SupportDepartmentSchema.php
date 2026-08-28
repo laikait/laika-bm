@@ -8,6 +8,9 @@ namespace LBM\Schema;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
+use Laika\Core\Exceptions\SchemaException;
+use LBM\Model\SupportDepartmentModel;
+use LBM\Support\Uid;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
@@ -39,6 +42,47 @@ class SupportDepartmentSchema extends SchemaAbstract
             $t->index('dep_is_active');
             $t->index('dep_created_at');
             $t->index('dep_updated_at');
+        });
+    }
+
+    /**
+     * Seed One Department
+     *
+     * Not decoration: support_tickets.department_relid is NOT NULL, so with an
+     * empty table nobody can open a ticket at all and the client area's "new
+     * ticket" form has an empty dropdown with nothing to pick.
+     *
+     * Seeds re-run on every app:migrate, not only on table creation, so this
+     * guards on the row count - a bare insert would collide with itself on the
+     * second run.
+     * @return void
+     */
+    public function seed(): void
+    {
+        $model = new SupportDepartmentModel();
+
+        if ($model->count() > 0) {
+            return;
+        }
+
+        $departments = [
+            [
+                'dep_name'            =>  'General Support',
+                'dep_email'           =>  null,
+                'dep_description'     =>  'Questions about your account, services or invoices.',
+                'dep_requires_login'  =>  'yes',
+                'dep_hidden'          =>  'no',
+                'dep_auto_close_days' =>  7,
+                'dep_is_active'       =>  'yes',
+            ],
+        ];
+
+        $model->transaction(function (SupportDepartmentModel $m) use ($departments) {
+            try {
+                $m->insert(Uid::stamp($departments));
+            } catch (\Throwable $e) {
+                throw new SchemaException("Insert Failed Into [{$this->table}].", (int) $e->getCode(), $e);
+            }
         });
     }
 }

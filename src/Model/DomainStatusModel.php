@@ -23,7 +23,7 @@ class DomainStatusModel extends Model
     protected string $table = 'domain_statuses';
 
     // Primary Column Name
-    protected string $id = 'ds_id';
+    protected string $id = 'status_id';
 
     /** @var string UID Column Name */
     protected string $uid = 'uid';

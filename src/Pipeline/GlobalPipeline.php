@@ -20,6 +20,7 @@ use Laika\Service\Local;
 use Laika\Service\Request;
 use Laika\Core\Exceptions\HttpException;
 use Laika\Model\Connection;
+use Laika\Session\SessionConfig;
 use Laika\Route\Contracts\PipelineInterface;
 
 // Deny Direct Access
@@ -115,6 +116,26 @@ class GlobalPipeline implements PipelineInterface
         // access, so starting eagerly would cost a query per request on requests
         // that never touch the session.
         Init::model('default');
+
+        // lazy_write off, deliberately.
+        //
+        // With it on (PHP's default) a request that reads the session without
+        // changing it makes PHP call the handler's updateTimestamp() instead of
+        // write(). laika-session routes that to SessionModel::touch(), which is
+        // `update([...]) > 0` - and MySQL reports zero affected rows when an
+        // UPDATE writes the value already there. So any request finishing in the
+        // same second the session was last touched gets `false` back, which PHP
+        // reports as "Failed to write session data" and turns into a fatal at
+        // shutdown. That is most requests on a responsive page.
+        //
+        // The sibling method touchRow() already guards against exactly this with
+        // an existence check; touch() was missed. Turning lazy_write off routes
+        // every request through write() -> touchRow() instead, which is correct.
+        // It costs one UPDATE per request, which the database driver was already
+        // doing on every write.
+        //
+        // Remove this once SessionModel::touch() is fixed upstream.
+        SessionConfig::options(['lazy_write' => 0]);
     }
 
     /**

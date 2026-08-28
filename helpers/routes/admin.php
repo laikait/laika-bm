@@ -16,6 +16,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Route\Url;
 use LBM\Pipeline\Auth;
 use LBM\Pipeline\Permission;
+use LBM\Filter\ActivityFilter;
 use LBM\Controller\Admin\AuthController;
 use LBM\Controller\Admin\StaffController;
 use LBM\Controller\Admin\OrderController;
@@ -58,6 +59,11 @@ use LBM\Controller\Admin\TransactionController;
 // Controllers are referenced as [Class::class, 'method']. A bare 'Foo@bar'
 // string would be resolved against App\Controller\ by Invoke::controller(), which
 // is the app root - not this package.
+//
+// ActivityFilter is attached to the same group. Filters run on the way out,
+// after the controller has returned, so it only records requests that actually
+// completed - and it writes a generic entry only where the action recorded
+// nothing more specific of its own.
 //
 // One thing to know before adding a route here: the group's Auth pipeline is
 // attached by Handler::applyToPrefix() *after* this closure has run, so it is
@@ -395,7 +401,7 @@ Url::group(ADMIN, function () use ($uid): void {
     Url::post('/my-account/sessions/revoke', [ProfileController::class, 'revokeSessions'])
         ->name('staff.account.sessions.revoke');
 
-})->pipeline([Auth::class]);
+})->pipeline([Auth::class])->filter([ActivityFilter::class]);
 
 
 ####################################################################################

@@ -23,7 +23,7 @@ class BillingCycleModel extends Model
     protected string $table = 'billing_cycles';
 
     // Primary Column Name
-    protected string $id = 'bc_id';
+    protected string $id = 'billing_cycle_id';
 
     /** @var string UID Column Name */
     protected string $uid = 'uid';

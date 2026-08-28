@@ -640,11 +640,19 @@ class Installer
             'thousand_separator'  =>  ',',
             'default_currency'    =>  'USD',
 
-            // Billing
+            // Billing. The three *_prefix keys are what LBM\Action\Invoice,
+            // Order and Support build their document numbers from.
             'invoice_prefix'      =>  'INV-',
             'order_prefix'        =>  'ORD-',
+            'ticket_prefix'       =>  'TKT-',
             'invoice_due_days'    =>  14,
             'late_fee_percent'    =>  '0',
+
+            // How far ahead InvoiceGenerateJob raises renewals, and which days
+            // InvoiceReminderJob chases on - offsets relative to the due date,
+            // so -7 is a week before and 3 is three days after.
+            'invoice_generate_days' =>  14,
+            'invoice_reminder_days' =>  '-7,0,3',
 
             // Security. Booleans are strings - option_bool() matches only 'true'.
             'login_lifetime'      =>  3600,

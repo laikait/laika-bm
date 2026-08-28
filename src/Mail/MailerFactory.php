@@ -81,7 +81,7 @@ class MailerFactory
     /**
      * Forward Fluent Calls To The Mailer
      *
-     * Lets the LBM\Service\Mail facade read as
+     * Lets the LBM\Service\Mailer facade read as
      * Mail::to($a)->subject($s)->html($b)->send().
      * @param string $method
      * @param array $args

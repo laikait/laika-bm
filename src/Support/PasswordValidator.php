@@ -148,7 +148,12 @@ class PasswordValidator
                         ->update(['revoked_at' => $now]);
                 }
 
+                // The uid is written explicitly. `passwords`.uid is UNIQUE with
+                // no default, so leaving it out inserts '' - which works exactly
+                // once and then collides with itself on every later password
+                // anybody sets.
                 $m->insert([
+                    $m->uid      =>  Uid::make(),
                     'rel_id'     =>  $relId,
                     'rel_type'   =>  $relType,
                     'hash'       =>  $hash,

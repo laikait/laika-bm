@@ -15,6 +15,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Route\Url;
 use LBM\Pipeline\Auth;
+use LBM\Filter\ActivityFilter;
 use LBM\Controller\Client\AuthController;
 use LBM\Controller\Client\DomainController;
 use LBM\Controller\Client\TicketController;
@@ -91,7 +92,7 @@ Url::group(PANEL, function () use ($uid): void {
     Url::post("/contact/{contact:{$uid}}/delete", [ProfileController::class, 'contactDelete'])
         ->name('client.contact.delete');
 
-})->pipeline([Auth::class]);
+})->pipeline([Auth::class])->filter([ActivityFilter::class]);
 
 
 ####################################################################################

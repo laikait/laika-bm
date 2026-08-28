@@ -8,12 +8,9 @@ namespace LBM\Schema;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
-use Laika\Core\Exceptions\SchemaException;
-use LBM\Model\OrderModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
 
 class OrderSchema extends SchemaAbstract
 {
@@ -48,41 +45,6 @@ class OrderSchema extends SchemaAbstract
             $t->unique('order_number');
             $t->index('order_created_at');
             $t->index('order_updated_at');
-        });
-    }
-
-    public function seed(): void
-    {
-        // Seeds re-run on every app:migrate, not just on table creation,
-        // so a bare insert() would collide on the second run.
-        if ((new OrderModel())->count() > 0) {
-            return;
-        }
-
-        $model = new OrderModel();
-        $model->transaction(function (OrderModel $m) {
-            try {
-                $m->insert(Uid::stamp([
-                    'client_relid' => 1,
-                    'invoice_relid' => 1,
-                    'order_number' => 'ord-20251214c',
-                    'status_relid' => 2,
-                    'amount' => 25.0000,
-                    'currency_relid' => 1,
-                    'order_from_ip' => '::1'
-                ]));
-                $m->insert(Uid::stamp([
-                    'client_relid' => 1,
-                    'invoice_relid' => 1,
-                    'order_number' => 'ord-20260209b',
-                    'status_relid' => 1,
-                    'amount' => 45.0000,
-                    'currency_relid' => 1,
-                    'order_from_ip' => '::1'
-                ]));
-            } catch (\Throwable $e) {
-                throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
-            }
         });
     }
 }

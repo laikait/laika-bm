@@ -8,12 +8,9 @@ namespace LBM\Schema;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
-use Laika\Core\Exceptions\SchemaException;
-use LBM\Model\InvoiceItemModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
 
 class InvoiceItemSchema extends SchemaAbstract
 {
@@ -49,31 +46,6 @@ class InvoiceItemSchema extends SchemaAbstract
             $t->index('domain_relid');
             $t->index('invoice_item_created_at');
             $t->index('invoice_item_updated_at');
-        });
-    }
-
-    public function seed(): void
-    {
-        // Seeds re-run on every app:migrate, not just on table creation,
-        // so a bare insert() would collide on the second run.
-        if ((new InvoiceItemModel())->count() > 0) {
-            return;
-        }
-
-        $model = new InvoiceItemModel();
-        $model->transaction(function (InvoiceItemModel $m) {
-            try {
-                $m->insert(Uid::stamp([
-                    'invoice_relid' => 1,
-                    'item_type_relid' => 1,
-                    'description' => '',
-                    'quantity' => 1.0000,
-                    'unit_price' => 5.0000,
-                    'total' => 5.000 * 1.000 - 0.000 // quantity * unit_price - discount
-                ]));
-            } catch (\Throwable $e) {
-                throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
-            }
         });
     }
 }

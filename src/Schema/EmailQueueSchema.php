@@ -25,8 +25,13 @@ class EmailQueueSchema extends SchemaAbstract
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->bigId('queue_id');
             $t->uid('uid');
-            $t->unsignedBigInteger('client_relid')->comment('clients -> cid');
-            $t->unsignedInteger('template_relid')->comment('email_templates -> et_id');
+            // Both nullable: not every message is about a client or built from
+            // a template. The SMTP test from the settings screen is neither, and
+            // a NOT NULL column would force a fake id of 0 - a foreign key
+            // pointing at a row that does not exist, which reads as corruption
+            // the first time somebody joins on it.
+            $t->unsignedBigInteger('client_relid')->nullable()->default(NULL)->comment('clients -> cid');
+            $t->unsignedInteger('template_relid')->nullable()->default(NULL)->comment('email_templates -> et_id');
             $t->string('to_email', 150);
             $t->string('from_name', 150)->nullable()->default(NULL);
             $t->string('from_email', 150);

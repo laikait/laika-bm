@@ -111,8 +111,21 @@ class Money
             }
         }
 
-        // No currency is flagged default - fall back to the first active one so
-        // a half-configured install still renders totals instead of fatalling.
+        // Nothing is flagged. The default_currency option names the ISO code
+        // the installer chose and Currency::makeDefault() keeps it in step, so
+        // it is the next best answer.
+        $code = strtoupper((string) (option('default_currency', '') ?: ''));
+
+        if ($code !== '') {
+            foreach ($all as $row) {
+                if (strtoupper((string) ($row['currency_code'] ?? '')) === $code) {
+                    return $this->default = $row;
+                }
+            }
+        }
+
+        // Neither - fall back to the first active one so a half-configured
+        // install still renders totals instead of fatalling.
         $first = reset($all);
 
         return $this->default = ($first ?: null);
@@ -182,6 +195,156 @@ class Money
         $suffix = (string) ($row['suffix_symbol'] ?? '');
 
         return $prefix . $formatted . $suffix;
+    }
+
+    ####################################################################################
+    /*================================== ARITHMETIC ==================================*/
+    ####################################################################################
+    //
+    // Thin wrappers over Math, fixed at this class's scale. They exist so an
+    // invoice total is added up the same way everywhere, and so no action has to
+    // remember to pass SCALE - a subtotal summed at bcmath's default scale of 0
+    // would silently truncate every fractional amount.
+
+    /**
+     * Add Two Amounts
+     * @param int|float|string $a First Amount
+     * @param int|float|string $b Second Amount
+     * @return string
+     */
+    public function add(int|float|string $a, int|float|string $b): string
+    {
+        return Math::add($this->normalize($a), $this->normalize($b), self::SCALE);
+    }
+
+    /**
+     * Subtract The Second Amount From The First
+     * @param int|float|string $a First Amount
+     * @param int|float|string $b Second Amount
+     * @return string
+     */
+    public function sub(int|float|string $a, int|float|string $b): string
+    {
+        return Math::sub($this->normalize($a), $this->normalize($b), self::SCALE);
+    }
+
+    /**
+     * Multiply Two Amounts
+     * @param int|float|string $a First Amount
+     * @param int|float|string $b Second Amount
+     * @return string
+     */
+    public function mul(int|float|string $a, int|float|string $b): string
+    {
+        return Math::mul($this->normalize($a), $this->normalize($b), self::SCALE);
+    }
+
+    /**
+     * Divide The First Amount By The Second
+     *
+     * Dividing by zero returns '0' rather than throwing. Every caller here is
+     * working out a ratio for display - "revenue is up N% on last month" - and
+     * an empty baseline means there is no percentage to show, not that the page
+     * should fail.
+     * @param int|float|string $a Dividend
+     * @param int|float|string $b Divisor
+     * @return string
+     */
+    public function div(int|float|string $a, int|float|string $b): string
+    {
+        $b = $this->normalize($b);
+
+        if (Math::isZero($b)) {
+            return '0';
+        }
+
+        return Math::div($this->normalize($a), $b, self::SCALE);
+    }
+
+    /**
+     * Add Up a List Of Amounts
+     * @param array $amounts Amounts
+     * @return string
+     */
+    public function sum(array $amounts): string
+    {
+        $total = '0';
+
+        foreach ($amounts as $amount) {
+            $total = $this->add($total, $amount);
+        }
+
+        return $total;
+    }
+
+    /**
+     * A Percentage Of An Amount
+     *
+     * Tax and discount rates are stored as percentages, not multipliers.
+     * @param int|float|string $amount Amount
+     * @param int|float|string $percent Percentage. 7.5 means 7.5%
+     * @return string
+     */
+    public function percent(int|float|string $amount, int|float|string $percent): string
+    {
+        return Math::percentOf($this->normalize($percent), $this->normalize($amount), self::SCALE);
+    }
+
+    /**
+     * Compare Two Amounts
+     * @param int|float|string $a First Amount
+     * @param int|float|string $b Second Amount
+     * @return int -1, 0 or 1
+     */
+    public function compare(int|float|string $a, int|float|string $b): int
+    {
+        return Math::compare($this->normalize($a), $this->normalize($b), self::SCALE);
+    }
+
+    /**
+     * Whether An Amount Is Zero
+     * @param int|float|string $amount Amount
+     * @return bool
+     */
+    public function isZero(int|float|string $amount): bool
+    {
+        return Math::isZero($this->normalize($amount));
+    }
+
+    /**
+     * Whether The First Amount Is Greater Than The Second
+     * @param int|float|string $a First Amount
+     * @param int|float|string $b Second Amount
+     * @return bool
+     */
+    public function isGreater(int|float|string $a, int|float|string $b): bool
+    {
+        return $this->compare($a, $b) > 0;
+    }
+
+    /**
+     * Round An Amount To The Display Scale
+     *
+     * What gets written to a money column at the end of a calculation: the
+     * intermediate steps run at SCALE so nothing is lost on the way, and this
+     * is the single place that decides where the result is cut off.
+     * @param int|float|string $amount Amount
+     * @return string
+     */
+    public function round(int|float|string $amount): string
+    {
+        return Math::round($this->normalize($amount), self::DISPLAY_SCALE);
+    }
+
+    /**
+     * The Larger Of Two Amounts
+     * @param int|float|string $a First Amount
+     * @param int|float|string $b Second Amount
+     * @return string
+     */
+    public function max(int|float|string $a, int|float|string $b): string
+    {
+        return $this->compare($a, $b) >= 0 ? $this->normalize($a) : $this->normalize($b);
     }
 
     /**

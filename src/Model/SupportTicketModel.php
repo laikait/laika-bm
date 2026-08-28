@@ -23,7 +23,7 @@ class SupportTicketModel extends Model
     protected string $table = 'support_tickets';
 
     // Primary Column Name
-    protected string $id = 'id';
+    protected string $id = 'ticket_id';
 
     /** @var string UID Column Name */
     protected string $uid = 'uid';

@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace LBM\Relay;
 
+use LBM\Action;
 use LBM\Mail\MailerFactory;
 use LBM\Support\Uid;
 use LBM\Support\Money;
@@ -44,6 +45,45 @@ class Provider extends RelayProvider
         // singleton() only builds on first make(), so nothing touches the DB
         // until something actually sends.
         $this->registry->singleton('mailer', MailerFactory::class);
+
+        // Actions -------------------------------------------------------------
+        //
+        // All the business logic, fronted by the LBM\Service\* facades so a
+        // controller reads as Invoice::store(...) rather than assembling
+        // collaborators itself.
+        //
+        // Singletons for the same reason as the support classes: several of them
+        // memoise per request - Country the whole reference list, Activity
+        // whether anything has been recorded yet, which is what ActivityFilter
+        // reads on the way out. A fresh instance per call would lose that.
+        //
+        // Every one is lazy. The container builds on first make(), and none of
+        // these constructors touches the database, so binding them all costs
+        // nothing on a request that uses none of them - including a request
+        // during install, when there is no database to touch.
+        foreach ([
+            'action.client'         =>  Action\Client::class,
+            'action.client.contact' =>  Action\ClientContact::class,
+            'action.client.note'    =>  Action\ClientNote::class,
+            'action.staff'          =>  Action\Staff::class,
+            'action.product'        =>  Action\Product::class,
+            'action.order'          =>  Action\Order::class,
+            'action.invoice'        =>  Action\Invoice::class,
+            'action.transaction'    =>  Action\Transaction::class,
+            'action.support'        =>  Action\Support::class,
+            'action.currency'       =>  Action\Currency::class,
+            'action.country'        =>  Action\Country::class,
+            'action.activity'       =>  Action\Activity::class,
+            'action.setting'        =>  Action\Setting::class,
+            'action.mail'           =>  Action\Mail::class,
+            'action.auth.staff'     =>  Action\AuthStaff::class,
+            'action.auth.client'    =>  Action\AuthClient::class,
+            'action.domain'         =>  Action\Domain::class,
+            'action.server'         =>  Action\Server::class,
+            'action.module'         =>  Action\Module::class,
+        ] as $accessor => $class) {
+            $this->registry->singleton($accessor, $class);
+        }
     }
 
     public function boot(): void

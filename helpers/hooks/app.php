@@ -77,6 +77,12 @@ add_hook('thousand_separator', 'thousand_separator', 1000);
 /** Format a timestamp in the app's format and timezone */
 add_hook('format_date', 'format_date', 1000);
 
+/** Format a timestamp as a date, with no time */
+add_hook('format_day', 'format_day', 1000);
+
+/** Format a timestamp as a time, with no date */
+add_hook('format_time', 'format_time', 1000);
+
 /*================================= LISTINGS ==================================*/
 /** Rows per page */
 add_hook('data_limit', 'data_limit', 1000);

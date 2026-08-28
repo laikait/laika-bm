@@ -199,6 +199,41 @@ function format_date(null|string $time): string
     return $time ? Date::parse($time)->format() : '';
 }
 
+/**
+ * Format a Timestamp As a Date, With No Time
+ *
+ * An invoice due date, a renewal date and a registration date are all days, not
+ * moments - printing "2026-08-27 00:00" next to one is noise. Uses the
+ * `date_format` option, which is what that setting is for.
+ * @param null|string $time Timestamp
+ * @return string
+ */
+function format_day(null|string $time): string
+{
+    if (!$time) {
+        return '';
+    }
+
+    return Date::parse($time)->format(option('date_format', 'Y-m-d') ?: 'Y-m-d');
+}
+
+/**
+ * Format a Timestamp As a Time, With No Date
+ *
+ * For a list of things that all happened today - ticket replies, activity on a
+ * dashboard - where repeating the date on every row tells the reader nothing.
+ * @param null|string $time Timestamp
+ * @return string
+ */
+function format_time(null|string $time): string
+{
+    if (!$time) {
+        return '';
+    }
+
+    return Date::parse($time)->format(option('time_format', 'H:i') ?: 'H:i');
+}
+
 ####################################################################################
 /*----------------------------------- LISTINGS -----------------------------------*/
 ####################################################################################

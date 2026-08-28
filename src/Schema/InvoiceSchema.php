@@ -8,13 +8,10 @@ namespace LBM\Schema;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
-use Laika\Core\Exceptions\SchemaException;
-use LBM\Model\InvoiceModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Service\Date;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
 
 class InvoiceSchema extends SchemaAbstract
 {
@@ -55,65 +52,6 @@ class InvoiceSchema extends SchemaAbstract
             $t->index('payment_gateway');
             $t->index('invoice_created_at');
             $t->index('invoice_updated_at');
-        });
-    }
-
-    public function seed(): void
-    {
-        // Seeds re-run on every app:migrate, not just on table creation,
-        // so a bare insert() would collide on the second run.
-        if ((new InvoiceModel())->count() > 0) {
-            return;
-        }
-
-        $model = new InvoiceModel();
-        $model->transaction(function (InvoiceModel $m) {
-            try {
-                $m->insert(Uid::stamp([
-                    'client_relid' => 1,
-                    'currency_relid' => 1,
-                    'invoice_number' => 'inv-202507-12',
-                    'status_relid' => 1,
-                    'subtotal' => 45.4500,
-                    'discount' => 45.4500 * 0.1,
-                    'tax' => 45.4500 * 0.15,
-                    'total' => 45.4500 + (45.4500 * 0.15) - (45.4500 * 0.1),
-                    'credit_applied' => 0.0000,
-                    'amount_paid' => 30.0000,
-                    'invoice_due_date' => (Date::modify('+7 days'))->format('Y-m-d H:i:s'),
-                    'payment_gateway' => 'credit-card'
-                ]));
-                $m->insert(Uid::stamp([
-                    'client_relid' => 1,
-                    'currency_relid' => 1,
-                    'invoice_number' => 'inv-202608-9',
-                    'status_relid' => 1,
-                    'subtotal' => 48.4500,
-                    'discount' => 48.4500 * 0.1,
-                    'tax' => 48.4500 * 0.15,
-                    'total' => 48.4500 + (48.4500 * 0.15) - (48.4500 * 0.1),
-                    'credit_applied' => 0.0000,
-                    'amount_paid' => 28.0000,
-                    'invoice_due_date' => (Date::modify('+7 days'))->format('Y-m-d H:i:s'),
-                    'payment_gateway' => 'credit-card'
-                ]));
-                $m->insert(Uid::stamp([
-                    'client_relid' => 1,
-                    'currency_relid' => 1,
-                    'invoice_number' => 'inv-202613-19',
-                    'status_relid' => 2,
-                    'subtotal' => 25.0000,
-                    'discount' => 25.0000 * 0.1,
-                    'tax' => 25.0000 * 0.15,
-                    'total' => 25.0000 + (25.0000 * 0.15) - (25.0000 * 0.1),
-                    'credit_applied' => 0.0000,
-                    'amount_paid' => 25.0000 + (25.0000 * 0.15) - (25.0000 * 0.1),
-                    'invoice_paid_date' => Date::now()->format('Y-m-d H:i:s'),
-                    'payment_gateway' => 'credit-card'
-                ]));
-            } catch (\Throwable $e) {
-                throw new SchemaException($e->getMessage(), (int) $e->getCode(), $e);
-            }
         });
     }
 }

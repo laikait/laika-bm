@@ -23,7 +23,7 @@ class ClientServiceStatusModel extends Model
     protected string $table = 'client_service_statuses';
 
     // Primary Column Name
-    protected string $id = 'css_id';
+    protected string $id = 'status_id';
 
     /** @var string UID Column Name */
     protected string $uid = 'uid';

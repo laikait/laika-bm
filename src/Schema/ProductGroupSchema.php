@@ -33,7 +33,12 @@ class ProductGroupSchema extends SchemaAbstract
 
             // Indexes
             $t->unique('group_slug');
-            $t->unique('group_created_at');
+            // An index, not a unique. group_slug is what has to be unique;
+            // uniqueness on a timestamp means two groups created in the same
+            // second collide, which a form with an "add another" button does
+            // routinely.
+            $t->index('group_created_at');
+            $t->index('group_updated_at');
         });
     }
 }
