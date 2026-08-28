@@ -87,7 +87,7 @@ class AuthStaff extends Action
         $this->log($id);
 
         (new Activity())->record(
-            'staff.login',
+            'login',
             'Signed in to the admin area.',
             Activity::STAFF,
             $id
@@ -106,7 +106,7 @@ class AuthStaff extends Action
 
         if ($staff !== null) {
             (new Activity())->record(
-                'staff.logout',
+                'logout',
                 'Signed out of the admin area.',
                 Activity::STAFF,
                 (int) ($staff['sid'] ?? 0) ?: null

@@ -63,7 +63,7 @@ use Laika\Route\Contracts\PipelineInterface;
 class ModuleManager
 {
     /** @var string The Generated Cache Of Enabled Module Uids */
-    public const CACHE = '/lf-cache/lbm-modules.php';
+    public const CACHE = '/lf-storage/cache/lbm-modules.php';
 
     /** @var string Where Modules Live, Below The App Root */
     public const ROOT = '/modules';
@@ -205,9 +205,9 @@ class ModuleManager
         return strtolower($type . '-' . preg_replace('/[^a-zA-Z0-9]+/', '-', $directory));
     }
 
-    ####################################################################################
-    /*=================================== THE CACHE ==================================*/
-    ####################################################################################
+    ##########################################################################
+    /*============================== THE CACHE =============================*/
+    ##########################################################################
 
     /**
      * The Enabled Module Uids

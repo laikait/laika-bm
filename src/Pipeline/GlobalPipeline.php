@@ -18,6 +18,7 @@ use Laika\Service\Date;
 use Laika\Service\Init;
 use Laika\Service\Local;
 use Laika\Service\Request;
+use Laika\Service\Redirect;
 use Laika\Core\Exceptions\HttpException;
 use Laika\Model\Connection;
 use Laika\Session\SessionConfig;
@@ -77,10 +78,8 @@ class GlobalPipeline implements PipelineInterface
             // `false` mean "skip the rest of the chain and call the controller"
             // - so returning $next(false) here would run the very mutation this
             // check exists to stop.
-            throw new HttpException(
-                419,
-                'Your session expired or this form was already submitted. Please go back and try again.'
-            );
+            Redirect::with('Your session/csrf expired', false)->back();
+            return $next(false);
         }
 
         return $next();
