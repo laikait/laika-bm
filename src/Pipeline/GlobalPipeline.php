@@ -23,6 +23,8 @@ use Laika\Model\Connection;
 use Laika\Session\SessionConfig;
 use Laika\Route\Contracts\PipelineInterface;
 use LBM\Support\Clock;
+use LBM\Module\ModuleManager;
+use LBM\Action\Module as ModuleAction;
 
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
@@ -139,6 +141,38 @@ class GlobalPipeline implements PipelineInterface
         //
         // Remove this once SessionModel::touch() is fixed upstream.
         SessionConfig::options(['lazy_write' => 0]);
+
+        // 4. The module loader's cache, if it has gone missing.
+        //
+        // ModuleManager::discover() ran during composer's autoload, where there
+        // is no database to ask which modules are on - so it reads a generated
+        // file. Here the database is open and option() exists, which makes this
+        // the first point in the request that can write that file.
+        //
+        // Only when it is absent: somebody cleared lf-cache, or this is the
+        // first request after an install. The cost is one glob and one small
+        // write, once, and the modules load from the next request onward -
+        // rather than a cleared cache quietly disabling every module forever.
+        $this->cacheModules();
+    }
+
+    /**
+     * Rebuild The Module Loader's Cache If It Is Missing
+     *
+     * Deliberately not allowed to break the request. A failure here means
+     * modules stay dormant for another request, which is a great deal better
+     * than a page that will not render because a directory is read-only.
+     * @return void
+     */
+    private function cacheModules(): void
+    {
+        try {
+            if (!ModuleManager::cached()) {
+                (new ModuleAction())->rebuildCache();
+            }
+        } catch (Throwable) {
+            // Nothing to do. The next request tries again.
+        }
     }
 
     /**

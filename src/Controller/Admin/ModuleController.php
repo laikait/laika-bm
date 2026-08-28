@@ -40,10 +40,22 @@ class ModuleController extends AdminController
     {
         $modules = Module::all();
 
-        // The enabled flag is an option per module rather than something on the
-        // manifest, so it is looked up here rather than being on disk.
         foreach ($modules as $uid => $module) {
-            $modules[$uid]['enabled'] = Module::isEnabled((string) $uid);
+            $uid = (string) $uid;
+
+            // Enabled and loaded are separate questions, and the screen shows
+            // both. A module switched on a moment ago is enabled but not yet
+            // loaded - discovery runs during autoload, so it takes effect from
+            // the next request. One whose manifest throws is enabled and
+            // failed, and reporting only "enabled" there would put a green tick
+            // beside something doing nothing at all.
+            $modules[$uid]['enabled']   = Module::isEnabled($uid);
+            $modules[$uid]['loaded']    = Module::isLoaded($uid);
+            $modules[$uid]['registers'] = Module::loadedResources($uid);
+
+            // A load error wins over a manifest-read error: both come from the
+            // same file, but the loader's is the one that stopped it working.
+            $modules[$uid]['error'] = Module::loadError($uid) ?? ($module['error'] ?? null);
         }
 
         return $this->screen('admin/modules', 'Modules', [

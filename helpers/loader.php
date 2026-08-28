@@ -16,6 +16,7 @@ use Laika\Cli\Contracts\CommandInterface;
 use Laika\Model\Contract\SchemaAbstract;
 use Laika\Route\Contracts\FilterInterface;
 use Laika\Route\Contracts\PipelineInterface;
+use LBM\Module\ModuleManager;
 
 ####################################################################################
 /*--------------------------------- LBM RESOURCES --------------------------------*/
@@ -43,3 +44,19 @@ Resource::register('commands',    "{$src}/Command",    'LBM\\Command',    Comman
 Resource::register('functions',   __DIR__ . '/functions');
 Resource::register('hooks',       __DIR__ . '/hooks');
 Resource::register('routes',      __DIR__ . '/routes');
+
+####################################################################################
+/*----------------------------------- MODULES ------------------------------------*/
+####################################################################################
+//
+// The operator's own code, in APP_PATH/modules. It has to be registered here and
+// not later: Dispatcher::dispatch() requires every route file before it matches a
+// route, which is before any pipeline runs - so a module's routes have to exist
+// by then, and this is the last point that is still early enough.
+//
+// Which modules are on comes from a generated file rather than the `options`
+// table, because at this point in the boot there is no database and no option()
+// helper. LBM\Module\ModuleManager explains the whole arrangement. A disabled
+// module costs one glob() and nothing else.
+
+ModuleManager::discover();

@@ -17,15 +17,19 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Throwable;
 use Laika\Model\Model;
+use LBM\Module\ModuleManager;
 
 /**
  * What is installed in the app root's `modules/` directory.
  *
  * This reads manifests and remembers which are switched on. It deliberately
- * does *not* load them: registering their namespaces, routes and schemas is the
- * module runtime, which is its own phase. Keeping the two apart means the admin
- * screen can list a broken module and let somebody disable it, rather than the
- * broken module taking the whole application down before the screen renders.
+ * does *not* load them - `LBM\Module\ModuleManager` does that, during composer's
+ * autoload, long before this class is ever constructed.
+ *
+ * Keeping the two apart is what makes the admin screen safe: it lists every
+ * module by reading manifests defensively, so a broken one shows up as broken
+ * and can be switched off, rather than taking the application down before the
+ * screen that would have fixed it can render.
  *
  * Modules live at the app root rather than inside this package because they are
  * the operator's own code: they must survive `composer update` and a
@@ -130,6 +134,10 @@ class Module extends Action
 
     /**
      * Switch a Module On Or Off
+     *
+     * The option is the source of truth; the loader's cache is rewritten in the
+     * same breath, so the change takes effect on the very next request rather
+     * than whenever something else happens to rebuild it.
      * @param string $uid Module Uid
      * @param ?bool $enabled Null flips whatever it is now
      * @return bool The state it ended up in
@@ -139,6 +147,8 @@ class Module extends Action
         $state = $enabled ?? !$this->isEnabled($uid);
 
         (new Setting())->put(self::OPTION . $uid, $state);
+
+        $this->rebuildCache();
 
         return $state;
     }
@@ -151,6 +161,90 @@ class Module extends Action
     public function count(array $where = []): int
     {
         return count($this->all());
+    }
+
+    ####################################################################################
+    /*=============================== THE LOADER'S VIEW ==============================*/
+    ####################################################################################
+    //
+    // Enabled and loaded are different questions, and the admin screen needs both.
+    // A module switched on a moment ago is enabled but not loaded until the next
+    // request; one whose manifest throws is enabled and failed. Reporting only
+    // "enabled" would show a green tick beside a module that is doing nothing.
+
+    /**
+     * Which Modules Are Switched On, According To The Options Table
+     *
+     * Only ones actually on disk. An option left behind by a module somebody
+     * deleted by hand would otherwise sit in the cache forever - the option key
+     * is the only trace such a module leaves.
+     * @return string[]
+     */
+    public function enabledUids(): array
+    {
+        $uids = [];
+
+        foreach (array_keys($this->all()) as $uid) {
+            if ($this->isEnabled((string) $uid)) {
+                $uids[] = (string) $uid;
+            }
+        }
+
+        return $uids;
+    }
+
+    /**
+     * Write The Loader's Cache From The Options Table
+     *
+     * `ModuleManager` runs during composer's autoload, where there is no
+     * database and no `option()`, so it reads a generated file instead. This is
+     * what generates it - called from here, where the database is open.
+     * @return bool Whether it was written
+     */
+    public function rebuildCache(): bool
+    {
+        $this->flush();
+
+        return ModuleManager::writeCache($this->enabledUids());
+    }
+
+    /**
+     * Whether The Loader's Cache Exists
+     * @return bool
+     */
+    public function cached(): bool
+    {
+        return ModuleManager::cached();
+    }
+
+    /**
+     * Whether a Module Is Loaded In This Request
+     * @param string $uid Module Uid
+     * @return bool
+     */
+    public function isLoaded(string $uid): bool
+    {
+        return ModuleManager::isLoaded($uid);
+    }
+
+    /**
+     * Why An Enabled Module Did Not Load
+     * @param string $uid Module Uid
+     * @return ?string
+     */
+    public function loadError(string $uid): ?string
+    {
+        return ModuleManager::failed()[$uid] ?? null;
+    }
+
+    /**
+     * What One Loaded Module Registered With The Framework
+     * @param string $uid Module Uid
+     * @return string[]
+     */
+    public function loadedResources(string $uid): array
+    {
+        return ModuleManager::loaded()[$uid]['resources'] ?? [];
     }
 
     /**
