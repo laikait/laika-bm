@@ -129,7 +129,7 @@ class AuthStaff extends Action
         Auth::logoutEverywhere(ADMIN, $staffId);
 
         (new Activity())->record(
-            'staff.sessions.revoked',
+            'sessions-revoked',
             'Signed out of every device.',
             Activity::STAFF,
             $staffId
@@ -164,7 +164,7 @@ class AuthStaff extends Action
         $passwords->put($staffId, PasswordValidator::STAFF, $new);
 
         (new Activity())->record(
-            'staff.password.changed',
+            'password-changed',
             'Changed their password.',
             Activity::STAFF,
             $staffId
