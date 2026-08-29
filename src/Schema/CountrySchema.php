@@ -31,7 +31,7 @@ class CountrySchema extends SchemaAbstract
             $t->char('iso2', 2);
             $t->char('iso3', 3);
             $t->string('country_name', 100);
-            $t->string('phone_code', 5);
+            $t->string('phone_code', 10);
 
             $t->unique('iso2');
             $t->unique('iso3');
