@@ -125,7 +125,7 @@ class AuthClient extends Action
             $id = (int) ($user['cid'] ?? $user['cc_id'] ?? 0);
 
             (new Activity())->record(
-                'logout',
+                'client.logout',
                 'Signed out of the client area.',
                 $guard === Auth::CONTACT ? Activity::CONTACT : Activity::CLIENT,
                 $id ?: null
@@ -191,7 +191,7 @@ class AuthClient extends Action
         $id = $clients->store($input, $password);
 
         (new Activity())->record(
-            'registered',
+            'client.register',
             'Registered a new account.',
             Activity::CLIENT,
             $id
@@ -305,7 +305,7 @@ class AuthClient extends Action
         $this->revokeResets($relId, $relType);
 
         (new Activity())->record(
-            'password-reset',
+            'client.password.reset',
             'Reset their password with an emailed link.',
             $relType === PasswordValidator::CONTACT ? Activity::CONTACT : Activity::CLIENT,
             $relId
@@ -345,7 +345,7 @@ class AuthClient extends Action
         $passwords->put($clientId, $relType, $new);
 
         (new Activity())->record(
-            'password-changed',
+            'client.password.change',
             'Changed their password.',
             $relType === PasswordValidator::CONTACT ? Activity::CONTACT : Activity::CLIENT,
             $clientId
@@ -398,7 +398,7 @@ class AuthClient extends Action
         $this->log($id, PasswordValidator::CLIENT);
 
         (new Activity())->record(
-            'login',
+            'client.login',
             'Signed in to the client area.',
             Activity::CLIENT,
             $id
@@ -443,7 +443,7 @@ class AuthClient extends Action
         $this->log($id, PasswordValidator::CONTACT);
 
         (new Activity())->record(
-            'login',
+            'client.login',
             'Signed in to the client area as a sub-login.',
             Activity::CONTACT,
             $id

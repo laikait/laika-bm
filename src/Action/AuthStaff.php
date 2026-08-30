@@ -87,7 +87,7 @@ class AuthStaff extends Action
         $this->log($id);
 
         (new Activity())->record(
-            'login',
+            'staff.login',
             'Signed in to the admin area.',
             Activity::STAFF,
             $id
@@ -106,7 +106,7 @@ class AuthStaff extends Action
 
         if ($staff !== null) {
             (new Activity())->record(
-                'logout',
+                'staff.logout',
                 'Signed out of the admin area.',
                 Activity::STAFF,
                 (int) ($staff['sid'] ?? 0) ?: null
@@ -129,7 +129,7 @@ class AuthStaff extends Action
         Auth::logoutEverywhere(ADMIN, $staffId);
 
         (new Activity())->record(
-            'sessions-revoked',
+            'staff.sessions.revoke',
             'Signed out of every device.',
             Activity::STAFF,
             $staffId
@@ -164,7 +164,7 @@ class AuthStaff extends Action
         $passwords->put($staffId, PasswordValidator::STAFF, $new);
 
         (new Activity())->record(
-            'password-changed',
+            'staff.password.change',
             'Changed their password.',
             Activity::STAFF,
             $staffId
