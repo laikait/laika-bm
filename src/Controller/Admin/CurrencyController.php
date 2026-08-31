@@ -39,7 +39,7 @@ class CurrencyController extends AdminController
      */
     public function index(): string
     {
-        return $this->screen('admin/currencies', 'Currencies', [
+        return $this->screen('currencies', 'Currencies', [
             'currencies' =>  Currency::listing(),
             'default'    =>  Currency::default(),
         ]);

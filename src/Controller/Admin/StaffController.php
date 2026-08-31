@@ -47,7 +47,7 @@ class StaffController extends AdminController
      */
     public function index(): string
     {
-        return $this->screen('admin/staffs', 'Staff', [
+        return $this->screen('staffs', 'Staff', [
             'pager'    =>  Staff::browseWithRoles(
                 $this->conditions(['status' => 'status_relid', 'role' => 'role_relid']),
                 $this->search()
@@ -100,7 +100,7 @@ class StaffController extends AdminController
     {
         $row = $this->record(Staff::find($staff), 'staff member');
 
-        return $this->screen('admin/staff', $row['first_name'] . ' ' . $row['last_name'], [
+        return $this->screen('staff', $row['first_name'] . ' ' . $row['last_name'], [
             'member'  =>  $row,
             'role'    =>  Staff::role((int) $row['role_relid']),
             'history' =>  AuthStaff::history((int) $row['sid'], 10),
@@ -196,7 +196,7 @@ class StaffController extends AdminController
             $roles[$i]['holders'] = Staff::count(['role_relid' => (int) $role['role_id']]);
         }
 
-        return $this->screen('admin/roles', 'Roles', [
+        return $this->screen('roles', 'Roles', [
             'roles'   =>  $roles,
             'groups'  =>  Staff::permissionGroups(),
             'actions' =>  Staff::permissionActions(),
@@ -286,7 +286,7 @@ class StaffController extends AdminController
      */
     private function form(?array $member, string $title): string
     {
-        return $this->screen('admin/staff-form', $title, [
+        return $this->screen('staff-form', $title, [
             'member'   =>  $member,
             'statuses' =>  $this->statusChoices(Staff::statuses()),
             'roles'    =>  $this->roleChoices(),
@@ -301,7 +301,7 @@ class StaffController extends AdminController
      */
     private function roleForm(?array $role, string $title): string
     {
-        return $this->screen('admin/role-form', $title, [
+        return $this->screen('role-form', $title, [
             'role'    =>  $role,
             'groups'  =>  Staff::permissionGroups(),
             'actions' =>  Staff::permissionActions(),

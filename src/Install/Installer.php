@@ -757,18 +757,32 @@ class Installer
 
     /**
      * Clear Compiled Templates and Cached Config
+     *
+     * Both trees: laika-core compiles templates under TEMPLATE_CACHE_PATH,
+     * which is not below lf-cache, so emptying that one alone would leave a
+     * compiled view from a previous install in place.
      * @return void
      */
     private function clearCache(): void
     {
-        $cache = APP_PATH . '/lf-cache';
+        foreach ([APP_PATH . '/lf-cache', TEMPLATE_CACHE_PATH] as $cache) {
+            $this->emptyDirectory($cache);
+        }
+    }
 
-        if (!is_dir($cache)) {
+    /**
+     * Delete Everything Below a Directory, Keeping The Directory
+     * @param string $directory Directory Path
+     * @return void
+     */
+    private function emptyDirectory(string $directory): void
+    {
+        if (!is_dir($directory)) {
             return;
         }
 
         $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($cache, \FilesystemIterator::SKIP_DOTS),
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST
         );
 

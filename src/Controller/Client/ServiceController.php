@@ -46,7 +46,7 @@ class ServiceController extends ClientController
     {
         $this->allow('service');
 
-        return $this->screen('client/services', 'My services', [
+        return $this->screen('services', 'My services', [
             'pager'    =>  ClientService::browseForClient(
                 $this->owner(),
                 $this->conditions(['status' => 'status_relid'])
@@ -73,7 +73,7 @@ class ServiceController extends ClientController
 
         $product = ClientService::product($row);
 
-        return $this->screen('client/service', ClientService::label($row), [
+        return $this->screen('service', ClientService::label($row), [
             'service'    =>  $row,
             'product'    =>  $product,
             'addons'     =>  ClientService::addons((int) $row['service_id']),

@@ -54,7 +54,7 @@ class ActivityController extends AdminController
             $where['author_type'] = $author;
         }
 
-        return $this->screen('admin/activities', 'Activity', [
+        return $this->screen('activities', 'Activity', [
             'pager'   =>  Activity::browseTrail($where, $this->search()),
             'events'  =>  Activity::events(),
             'authors' =>  Activity::authorTypes(),

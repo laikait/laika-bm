@@ -58,7 +58,7 @@ class ClientController extends AdminController
             $this->search()
         );
 
-        return $this->screen('admin/clients', 'Clients', [
+        return $this->screen('clients', 'Clients', [
             'pager'      =>  $page,
             'statuses'   =>  Client::statuses(),
             'countries'  =>  Country::choices(),
@@ -100,7 +100,7 @@ class ClientController extends AdminController
         $row = $this->record(Client::find($client), 'client');
         $id = (int) $row['cid'];
 
-        return $this->screen('admin/client', client_name($row), [
+        return $this->screen('client', client_name($row), [
             'client'       =>  $row,
             'country'      =>  Country::name($row['country_relid'] ?? null, '—'),
             'contacts'     =>  ClientContact::forClient($id),
@@ -189,7 +189,7 @@ class ClientController extends AdminController
     {
         $row = $this->record(Client::find($client), 'client');
 
-        return $this->screen('admin/client-contacts', client_name($row) . ' — contacts', [
+        return $this->screen('client-contacts', client_name($row) . ' — contacts', [
             'client'   =>  $row,
             'contacts' =>  ClientContact::forClient((int) $row['cid']),
         ]);
@@ -325,7 +325,7 @@ class ClientController extends AdminController
     {
         $row = $this->record(Client::find($client), 'client');
 
-        return $this->screen('admin/client-notes', client_name($row) . ' — notes', [
+        return $this->screen('client-notes', client_name($row) . ' — notes', [
             'client' =>  $row,
             'notes'  =>  ClientNote::forClient((int) $row['cid'], 50),
         ]);
@@ -386,7 +386,7 @@ class ClientController extends AdminController
      */
     private function form(?array $client, string $title): string
     {
-        return $this->screen('admin/client-form', $title, [
+        return $this->screen('client-form', $title, [
             'client'      =>  $client,
             'statuses'    =>  $this->statusChoices(Client::statuses()),
             'countries'   =>  Country::choices(),
@@ -403,7 +403,7 @@ class ClientController extends AdminController
     private function contactForm(array $client, ?array $contact): string
     {
         return $this->screen(
-            'admin/client-contact-form',
+            'client-contact-form',
             $contact === null ? 'Add contact' : 'Edit contact',
             [
                 'client'    =>  $client,

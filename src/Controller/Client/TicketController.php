@@ -50,7 +50,7 @@ class TicketController extends ClientController
 
         $clientId = $this->owner();
 
-        return $this->screen('client/tickets', 'Support', [
+        return $this->screen('tickets', 'Support', [
             'pager'    =>  Support::browseForClient($clientId),
             'statuses' =>  Support::statuses(),
             'open'     =>  Support::openCount($clientId),
@@ -109,7 +109,7 @@ class TicketController extends ClientController
             }
         }
 
-        return $this->screen('client/ticket-form', 'Open a ticket', [
+        return $this->screen('ticket-form', 'Open a ticket', [
             'departments' =>  $this->departmentChoices(),
             'priorities'  =>  $this->priorityChoices(),
             'services'    =>  $this->serviceChoices($clientId),
@@ -127,7 +127,7 @@ class TicketController extends ClientController
 
         $row = $this->ticket($ticket);
 
-        return $this->screen('client/ticket', 'Ticket ' . $row['ticket_number'], [
+        return $this->screen('ticket', 'Ticket ' . $row['ticket_number'], [
             'ticket'     =>  $row,
             // Never the internal notes. The default is false and this call
             // deliberately does not override it.

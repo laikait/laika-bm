@@ -42,12 +42,15 @@ use LBM\Service\Country;
 class AuthController extends Controller
 {
     /**
-     * The Theme, From The Operator's Settings
-     * @return string
+     * The Client Area Template, From The Operator's Settings
+     *
+     * Pinned to PANEL rather than left to the current request: this controller
+     * only ever renders client screens, and current_template() reads the URL.
+     * @return string Example: 'panel/bootstrap'
      */
     protected function theme(): string
     {
-        return panel_template();
+        return template_dir(PANEL);
     }
 
     ####################################################################################
@@ -97,7 +100,7 @@ class AuthController extends Controller
             }
         }
 
-        return $this->render('client/login', [
+        return $this->render('login', [
             'page_title'   =>  'Sign in',
             'registration' =>  option_bool('allow_registration'),
         ]);
@@ -156,7 +159,7 @@ class AuthController extends Controller
             }
         }
 
-        return $this->render('client/forgot', [
+        return $this->render('forgot', [
             'page_title' =>  'Reset your password',
         ]);
     }
@@ -197,7 +200,7 @@ class AuthController extends Controller
             }
         }
 
-        return $this->render('client/reset', [
+        return $this->render('reset', [
             'page_title' =>  'Choose a new password',
             'token'      =>  $token,
         ]);
@@ -245,7 +248,7 @@ class AuthController extends Controller
             }
         }
 
-        return $this->render('client/register', [
+        return $this->render('register', [
             'page_title' =>  'Create an account',
             'countries'  =>  Country::choices(),
         ]);

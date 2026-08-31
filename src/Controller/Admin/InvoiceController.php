@@ -61,7 +61,7 @@ class InvoiceController extends AdminController
             $page['rows'][$i]['balance'] = Invoice::balance($row);
         }
 
-        return $this->screen('admin/invoices', 'Invoices', [
+        return $this->screen('invoices', 'Invoices', [
             'pager'    =>  $page,
             'statuses' =>  Invoice::statuses(),
         ]);
@@ -106,7 +106,7 @@ class InvoiceController extends AdminController
         $row = $this->record(Invoice::find($invoice), 'invoice');
         $id = (int) $row['invoice_id'];
 
-        return $this->screen('admin/invoice', 'Invoice ' . $row['invoice_number'], [
+        return $this->screen('invoice', 'Invoice ' . $row['invoice_number'], [
             'invoice'      =>  $row,
             'client'       =>  Client::find((int) $row['client_relid']),
             'items'        =>  Invoice::items($id),
@@ -158,7 +158,7 @@ class InvoiceController extends AdminController
     {
         $row = $this->record(Invoice::find($invoice), 'invoice');
 
-        return $this->render('admin/invoice-print', [
+        return $this->render('invoice-print', [
             'page_title' =>  'Invoice ' . $row['invoice_number'],
             'invoice'    =>  $row,
             'client'     =>  Client::find((int) $row['client_relid']),
@@ -292,7 +292,7 @@ class InvoiceController extends AdminController
      */
     private function form(?array $invoice, string $title): string
     {
-        return $this->screen('admin/invoice-form', $title, [
+        return $this->screen('invoice-form', $title, [
             'invoice'    =>  $invoice,
             'items'      =>  $invoice === null ? [] : Invoice::items((int) $invoice['invoice_id']),
             'clients'    =>  $this->clientChoices(),

@@ -52,7 +52,7 @@ class TransactionController extends AdminController
             $where['type'] = $type;
         }
 
-        return $this->screen('admin/transactions', 'Transactions', [
+        return $this->screen('transactions', 'Transactions', [
             'pager'    =>  Transaction::browseWithClients($where, $this->search()),
             'statuses' =>  Transaction::statuses(),
             'types'    =>  Transaction::types(),
@@ -94,7 +94,7 @@ class TransactionController extends AdminController
             }
         }
 
-        return $this->screen('admin/transaction-form', 'Record a payment', [
+        return $this->screen('transaction-form', 'Record a payment', [
             'clients'    =>  $this->clientChoices(),
             'currencies' =>  $this->currencyChoices(),
             'invoices'   =>  $this->invoiceChoices(),
@@ -110,7 +110,7 @@ class TransactionController extends AdminController
     {
         $row = $this->record(Transaction::find($transaction), 'transaction');
 
-        return $this->screen('admin/transaction', 'Transaction #' . $row['tx_id'], [
+        return $this->screen('transaction', 'Transaction #' . $row['tx_id'], [
             'transaction' =>  $row,
             'client'      =>  Client::find((int) $row['client_relid']),
             'invoice'     =>  $row['invoice_relid'] ? Invoice::find((int) $row['invoice_relid']) : null,

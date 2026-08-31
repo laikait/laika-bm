@@ -58,7 +58,8 @@ class SettingsController extends AdminController
         }
 
         return $this->tab('general', 'Settings', [
-            'templates' =>  $this->templateChoices(),
+            'admin_templates' =>  $this->templateChoices(ADMIN),
+            'panel_templates' =>  $this->templateChoices(PANEL),
         ]);
     }
 
@@ -168,7 +169,7 @@ class SettingsController extends AdminController
     {
         $model = new EmailTemplateModel();
 
-        return $this->screen('admin/settings/email-templates', 'Email templates', [
+        return $this->screen('settings-email-templates', 'Email templates', [
             'tab'       =>  'templates',
             'templates' =>  $model->order('name', 'ASC')->get(),
         ]);
@@ -216,7 +217,7 @@ class SettingsController extends AdminController
             }
         }
 
-        return $this->screen('admin/settings/email-template', $row['name'], [
+        return $this->screen('settings-email-template', $row['name'], [
             'tab'      =>  'templates',
             'template' =>  $row,
         ]);
@@ -240,7 +241,7 @@ class SettingsController extends AdminController
             return $this->saveStatuses();
         }
 
-        return $this->screen('admin/settings/statuses', 'Statuses', [
+        return $this->screen('settings-statuses', 'Statuses', [
             'tab'    =>  'statuses',
             'tables' =>  $this->statusTables(),
         ]);
@@ -259,7 +260,7 @@ class SettingsController extends AdminController
      */
     private function tab(string $group, string $title, array $vars = []): string
     {
-        return $this->screen('admin/settings/' . $group, $title, array_merge([
+        return $this->screen('settings-' . $group, $title, array_merge([
             'tab'      =>  $group,
             'settings' =>  Setting::group($group),
         ], $vars));
@@ -411,21 +412,20 @@ class SettingsController extends AdminController
     }
 
     /**
-     * Installed Template Choices
+     * Installed Template Choices For One Area
+     *
+     * Each area has its own directory of templates, so the admin select must
+     * not offer a client template - picking one would render nothing and fall
+     * back to bootstrap without saying why.
+     * @param string $area ADMIN or PANEL
      * @return array<string,string>
      */
-    private function templateChoices(): array
+    private function templateChoices(string $area): array
     {
         $choices = [];
 
-        foreach (glob(APP_PATH . '/template/*', GLOB_ONLYDIR) ?: [] as $path) {
+        foreach (glob(APP_PATH . '/template/' . $area . '/*', GLOB_ONLYDIR) ?: [] as $path) {
             $name = basename($path);
-
-            // `assets` is where theme CSS and JS are served from, not a theme.
-            if ($name === 'assets') {
-                continue;
-            }
-
             $choices[$name] = ucfirst($name);
         }
 

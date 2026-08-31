@@ -50,7 +50,7 @@ class ReportController extends AdminController
      */
     public function index(): string
     {
-        return $this->screen('admin/reports', 'Reports', [
+        return $this->screen('reports', 'Reports', [
             'range' =>  $this->range(),
         ]);
     }
@@ -64,7 +64,7 @@ class ReportController extends AdminController
         $range = $this->range();
         $months = $this->monthly();
 
-        return $this->screen('admin/report-income', 'Income', [
+        return $this->screen('report-income', 'Income', [
             'range'   =>  $range,
             'total'   =>  Transaction::income($range['from'], $range['to']),
             'months'  =>  $months,
@@ -86,7 +86,7 @@ class ReportController extends AdminController
     {
         $range = $this->range();
 
-        return $this->screen('admin/report-orders', 'Orders', [
+        return $this->screen('report-orders', 'Orders', [
             'range'    =>  $range,
             'total'    =>  Order::count(),
             'statuses' =>  $this->countByStatus(Order::statuses(), static fn(int $id): int => Order::count(['status_relid' => $id])),
@@ -101,7 +101,7 @@ class ReportController extends AdminController
     {
         $range = $this->range();
 
-        return $this->screen('admin/report-tickets', 'Support', [
+        return $this->screen('report-tickets', 'Support', [
             'range'       =>  $range,
             'total'       =>  Support::count(),
             'open'        =>  Support::openCount(),

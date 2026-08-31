@@ -48,7 +48,7 @@ class OrderController extends AdminController
             $this->search()
         );
 
-        return $this->screen('admin/orders', 'Orders', [
+        return $this->screen('orders', 'Orders', [
             'pager'    =>  $page,
             'statuses' =>  Order::statuses(),
         ]);
@@ -92,7 +92,7 @@ class OrderController extends AdminController
     {
         $row = $this->record(Order::find($order), 'order');
 
-        return $this->screen('admin/order', 'Order ' . $row['order_number'], [
+        return $this->screen('order', 'Order ' . $row['order_number'], [
             'order'   =>  $row,
             'client'  =>  Client::find((int) $row['client_relid']),
             'items'   =>  Order::items((int) $row['oid']),
@@ -202,7 +202,7 @@ class OrderController extends AdminController
      */
     private function form(?array $order, string $title): string
     {
-        return $this->screen('admin/order-form', $title, [
+        return $this->screen('order-form', $title, [
             'order'      =>  $order,
             'items'      =>  $order === null ? [] : Order::items((int) $order['oid']),
             'clients'    =>  $this->clientChoices(),

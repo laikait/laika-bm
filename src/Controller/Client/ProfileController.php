@@ -78,7 +78,7 @@ class ProfileController extends ClientController
     {
         $this->allow('profile');
 
-        return $this->screen('client/profile', 'My details', [
+        return $this->screen('profile', 'My details', [
             'countries'  =>  Country::choices(),
             'currencies' =>  $this->currencyChoices(),
             'contacts'   =>  ClientContact::forClient($this->owner()),
@@ -217,7 +217,7 @@ class ProfileController extends ClientController
     {
         $this->allow('profile');
 
-        return $this->screen('client/contacts', 'Sub-logins', [
+        return $this->screen('contacts', 'Sub-logins', [
             'contacts' =>  ClientContact::forClient($this->owner()),
             'groups'   =>  ClientContact::groups(),
         ]);
@@ -274,7 +274,7 @@ class ProfileController extends ClientController
             }
         }
 
-        return $this->screen('client/contact-form', 'Add a sub-login', [
+        return $this->screen('contact-form', 'Add a sub-login', [
             'contact'   =>  null,
             'countries' =>  Country::choices(),
             'groups'    =>  ClientContact::groups(),
@@ -338,7 +338,7 @@ class ProfileController extends ClientController
             }
         }
 
-        return $this->screen('client/contact-form', 'Edit sub-login', [
+        return $this->screen('contact-form', 'Edit sub-login', [
             'contact'   =>  $row,
             'countries' =>  Country::choices(),
             'groups'    =>  ClientContact::groups(),

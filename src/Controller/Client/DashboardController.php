@@ -58,7 +58,7 @@ class DashboardController extends ClientController
         $domains  = client_can('domain.read');
         $tickets  = client_can('ticket.read');
 
-        return $this->screen('client/dashboard', 'Dashboard', [
+        return $this->screen('dashboard', 'Dashboard', [
             'may'          =>  [
                 'invoices' =>  $invoices,
                 'services' =>  $services,

@@ -56,7 +56,7 @@ class TicketController extends AdminController
             $this->search()
         );
 
-        return $this->screen('admin/tickets', 'Support', [
+        return $this->screen('tickets', 'Support', [
             'pager'       =>  $page,
             'statuses'    =>  Support::statuses(),
             'priorities'  =>  Support::priorities(),
@@ -99,7 +99,7 @@ class TicketController extends AdminController
             }
         }
 
-        return $this->screen('admin/ticket-form', 'New ticket', [
+        return $this->screen('ticket-form', 'New ticket', [
             'clients'     =>  $this->clientChoices(),
             'departments' =>  $this->departmentChoices(),
             'priorities'  =>  $this->statusChoices(Support::priorities()),
@@ -115,7 +115,7 @@ class TicketController extends AdminController
     {
         $row = $this->record(Support::find($ticket), 'ticket');
 
-        return $this->screen('admin/ticket', 'Ticket ' . $row['ticket_number'], [
+        return $this->screen('ticket', 'Ticket ' . $row['ticket_number'], [
             'ticket'      =>  $row,
             'client'      =>  Client::find((int) $row['client_relid']),
             // Internal notes included - this is the staff view.
@@ -216,7 +216,7 @@ class TicketController extends AdminController
      */
     public function departments(): string
     {
-        return $this->screen('admin/ticket-departments', 'Support departments', [
+        return $this->screen('ticket-departments', 'Support departments', [
             'departments' =>  Support::departments(),
             'counts'      =>  $this->departmentCounts(),
         ]);

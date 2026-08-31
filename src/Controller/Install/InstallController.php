@@ -63,11 +63,15 @@ class InstallController extends Controller
 
     /**
      * The Installer Ships With The Package, Not With The Operator's Settings
+     *
+     * template/install/ has no template-name level, unlike the two areas: there
+     * is no database to read an option out of while the wizard runs, which is
+     * precisely the state this controller exists to resolve.
      * @return string
      */
     protected function theme(): string
     {
-        return 'bootstrap';
+        return 'install';
     }
 
     ####################################################################################
@@ -80,7 +84,7 @@ class InstallController extends Controller
      */
     public function requirements(): string
     {
-        return $this->view('requirements', 'install/requirements', [
+        return $this->view('requirements', 'requirements', [
             'requirements' =>  (new Requirements())->all(),
         ], 'Check this server can run the app');
     }
@@ -113,14 +117,14 @@ class InstallController extends Controller
                     return null;
                 }
 
-                return $this->view('database', 'install/database', [
+                return $this->view('database', 'database', [
                     'drivers'          =>  $requirements->drivers(),
                     'connection_error' =>  $error,
                 ], 'Connect to your database');
             }
         }
 
-        return $this->view('database', 'install/database', [
+        return $this->view('database', 'database', [
             'drivers'          =>  $requirements->drivers(),
             'connection_error' =>  null,
         ], 'Connect to your database');
@@ -144,7 +148,7 @@ class InstallController extends Controller
             }
         }
 
-        return $this->view('migrate', 'install/migrate', [
+        return $this->view('migrate', 'migrate', [
             'schema_count' =>  $this->installer->schemaCount(),
             'results'      =>  $results,
             'failed'       =>  $failed,
@@ -180,7 +184,7 @@ class InstallController extends Controller
             }
         }
 
-        return $this->view('settings', 'install/settings', [
+        return $this->view('settings', 'settings', [
             'defaults'         =>  $this->settingDefaults(),
             'timezones'        =>  $this->timezones(),
             'currencies'       =>  $this->currencies(),
@@ -223,7 +227,7 @@ class InstallController extends Controller
             }
         }
 
-        return $this->view('admin', 'install/admin', [
+        return $this->view('admin', 'admin', [
             'password_min' =>  max(6, (int) (option_int('password_min_length', 8))),
         ], 'Create your administrator account');
     }
@@ -254,7 +258,7 @@ class InstallController extends Controller
             return null;
         }
 
-        return $this->view('finish', 'install/finish', [
+        return $this->view('finish', 'finish', [
             'locked' =>  $locked,
         ], $locked ? 'All done' : 'Finish the installation');
     }

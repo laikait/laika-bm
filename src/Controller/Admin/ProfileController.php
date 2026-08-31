@@ -47,7 +47,7 @@ class ProfileController extends AdminController
     {
         $me = $this->me();
 
-        return $this->screen('admin/account', 'My account', [
+        return $this->screen('account', 'My account', [
             'member'  =>  $me,
             'role'    =>  Staff::role((int) $me['role_relid']),
             'history' =>  AuthStaff::history((int) $me['sid'], 10),

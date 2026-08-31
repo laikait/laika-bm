@@ -52,12 +52,15 @@ abstract class AdminController extends Controller
     private ?array $staff = null;
 
     /**
-     * The Theme, From The Operator's Settings
-     * @return string
+     * The Admin Template, From The Operator's Settings
+     *
+     * Pinned to ADMIN rather than left to the current request: this controller
+     * only ever renders admin screens, and current_template() reads the URL.
+     * @return string Example: 'admin/bootstrap'
      */
     protected function theme(): string
     {
-        return admin_template();
+        return template_dir(ADMIN);
     }
 
     ####################################################################################
@@ -76,7 +79,7 @@ abstract class AdminController extends Controller
 
     /**
      * Render an Admin Screen
-     * @param string $view View Path Below The Theme. Example: 'admin/clients'
+     * @param string $view View Name Below The Template. Example: 'clients'
      * @param string $title Page Title
      * @param array<string,mixed> $vars Variables
      * @return string

@@ -52,7 +52,7 @@ class ProductController extends AdminController
             $this->search()
         );
 
-        return $this->screen('admin/products', 'Products', [
+        return $this->screen('products', 'Products', [
             'pager'    =>  $page,
             'statuses' =>  Product::statuses(),
             'groups'   =>  $this->groupChoices(),
@@ -90,7 +90,7 @@ class ProductController extends AdminController
     {
         $row = $this->record(Product::find($product), 'product');
 
-        return $this->screen('admin/product', $row['product_name'], [
+        return $this->screen('product', $row['product_name'], [
             'product'    =>  $row,
             'group'      =>  Product::group((int) $row['group_relid']),
             'pricing'    =>  $this->pricingGrid((int) $row['pid']),
@@ -168,7 +168,7 @@ class ProductController extends AdminController
      */
     public function groups(): string
     {
-        return $this->screen('admin/product-groups', 'Product groups', [
+        return $this->screen('product-groups', 'Product groups', [
             'groups' =>  Product::groups(),
             'counts' =>  $this->groupCounts(),
         ]);
@@ -235,7 +235,7 @@ class ProductController extends AdminController
      */
     private function form(?array $product, string $title): string
     {
-        return $this->screen('admin/product-form', $title, [
+        return $this->screen('product-form', $title, [
             'product'  =>  $product,
             'statuses' =>  $this->statusChoices(Product::statuses()),
             'groups'   =>  $this->groupChoices(),

@@ -61,7 +61,10 @@ add_hook('admin_template', 'admin_template', 1000);
 /** Client area template name */
 add_hook('panel_template', 'panel_template', 1000);
 
-/** Template name for the current area */
+/** Template directory for an area, below template/ */
+add_hook('template_dir', 'template_dir', 1000);
+
+/** Template directory for the current area */
 add_hook('current_template', 'current_template', 1000);
 
 /*================================ FORMATTING =================================*/

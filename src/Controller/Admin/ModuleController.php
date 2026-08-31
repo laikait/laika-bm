@@ -58,7 +58,7 @@ class ModuleController extends AdminController
             $modules[$uid]['error'] = Module::loadError($uid) ?? ($module['error'] ?? null);
         }
 
-        return $this->screen('admin/modules', 'Modules', [
+        return $this->screen('modules', 'Modules', [
             'modules' =>  $modules,
             'types'   =>  Module::types(),
             'path'    =>  Module::path(),

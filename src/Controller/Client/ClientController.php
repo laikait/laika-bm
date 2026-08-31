@@ -59,12 +59,15 @@ abstract class ClientController extends Controller
     protected const DELETE = 'delete';
 
     /**
-     * The Theme, From The Operator's Settings
-     * @return string
+     * The Client Area Template, From The Operator's Settings
+     *
+     * Pinned to PANEL rather than left to the current request: this controller
+     * only ever renders client screens, and current_template() reads the URL.
+     * @return string Example: 'panel/bootstrap'
      */
     protected function theme(): string
     {
-        return panel_template();
+        return template_dir(PANEL);
     }
 
     ####################################################################################
@@ -79,7 +82,7 @@ abstract class ClientController extends Controller
 
     /**
      * Render a Client-Area Screen
-     * @param string $view View Path Below The Theme. Example: 'client/invoices'
+     * @param string $view View Name Below The Template. Example: 'invoices'
      * @param string $title Page Title
      * @param array<string,mixed> $vars Variables
      * @return string

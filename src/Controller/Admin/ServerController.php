@@ -50,7 +50,7 @@ class ServerController extends AdminController
             $page['rows'][$i]['usage'] = Server::usage($row);
         }
 
-        return $this->screen('admin/servers', 'Servers', [
+        return $this->screen('servers', 'Servers', [
             'pager'    =>  $page,
             'statuses' =>  Server::statuses(),
             'groups'   =>  $this->groupChoices(),
@@ -155,7 +155,7 @@ class ServerController extends AdminController
      */
     private function form(?array $server, string $title): string
     {
-        return $this->screen('admin/server-form', $title, [
+        return $this->screen('server-form', $title, [
             'server'   =>  $server,
             'statuses' =>  $this->statusChoices(Server::statuses()),
             'groups'   =>  $this->groupChoices(),

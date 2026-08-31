@@ -64,7 +64,7 @@ class DomainController extends ClientController
             $page['rows'][$index]['expired'] = Domain::isExpired($row);
         }
 
-        return $this->screen('client/domains', 'My domains', [
+        return $this->screen('domains', 'My domains', [
             'pager'    =>  $page,
             'statuses' =>  Domain::statuses(),
         ]);
@@ -81,7 +81,7 @@ class DomainController extends ClientController
 
         $row = $this->domain($domain);
 
-        return $this->screen('client/domain', (string) $row['domain'], [
+        return $this->screen('domain', (string) $row['domain'], [
             'domain'      =>  $row,
             'nameservers' =>  Domain::nameservers((int) $row['domain_id']),
             'expired'     =>  Domain::isExpired($row),

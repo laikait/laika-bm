@@ -42,7 +42,7 @@ class DomainController extends AdminController
      */
     public function index(): string
     {
-        return $this->screen('admin/domains', 'Domains', [
+        return $this->screen('domains', 'Domains', [
             'pager'     =>  Domain::browseWithClients(
                 $this->conditions(['status' => 'status_relid', 'registrar' => 'registrar_relid']),
                 $this->search()
@@ -62,7 +62,7 @@ class DomainController extends AdminController
     {
         $row = $this->record(Domain::find($domain), 'domain');
 
-        return $this->screen('admin/domain', $row['domain'], [
+        return $this->screen('domain', $row['domain'], [
             'domain'      =>  $row,
             'client'      =>  Client::find((int) $row['client_relid']),
             'nameservers' =>  Domain::nameservers((int) $row['domain_id']),
@@ -104,7 +104,7 @@ class DomainController extends AdminController
             return $this->done('staff.domain', 'Domain updated.', true, ['domain' => $row['uid']]);
         }
 
-        return $this->screen('admin/domain-form', 'Edit ' . $row['domain'], [
+        return $this->screen('domain-form', 'Edit ' . $row['domain'], [
             'domain'      =>  $row,
             'nameservers' =>  Domain::nameservers($id),
             'statuses'    =>  $this->statusChoices(Domain::statuses()),

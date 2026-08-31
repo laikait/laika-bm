@@ -99,15 +99,22 @@ function lbm_asset(string $path): string
 /*----------------------------------- TEMPLATES ----------------------------------*/
 ####################################################################################
 //
-// A template is one directory holding every area: template/<theme>/admin/,
-// /client/, /install/ and /partials/. So these return the theme NAME, and the
-// area is part of the view path:
+// A template is one directory per AREA: template/admin/<name>/ and
+// template/panel/<name>/, each holding its own layouts, partials, views,
+// loader.php and assets. The two areas are themed independently - that is the
+// whole point, since admin_template and panel_template are separate options -
+// so a template is self contained and shares nothing with its neighbours.
 //
-//     (new Template(admin_template()))->view('admin/dashboard')
+// The installer is template/install/ with no name level: it runs before there
+// is a database to read an option out of.
 //
-// Keeping partials in the theme rather than splitting the theme across
-// template/admin/<theme>/ and template/panel/<theme>/ is what lets the admin and
-// client areas share one header, one alert block and one pagination control.
+// laika-core carries the directory in the view NAME rather than a constructor
+// argument, so the composed path is what a controller renders:
+//
+//     (new Template())->view(template_dir(ADMIN) . '/dashboard')
+//
+// admin_template() and panel_template() stay NAME-only: the settings form binds
+// its two selects to them, and they are registered hooks.
 
 /**
  * Admin Template Name
@@ -128,12 +135,34 @@ function panel_template(): string
 }
 
 /**
- * The Template Name For The Current Area
+ * The Template Directory For An Area, Below template/
+ *
+ * The single place the layout is encoded. Falls back to `bootstrap` when the
+ * selected directory is not there: an operator can pick a template and later
+ * delete it, and Twig would then fail to load every view - a blank page with no
+ * hint of the cause, rather than the stock theme.
+ * @param ?string $area ADMIN or PANEL. Null uses the current request
+ * @return string Example: 'admin/bootstrap'
+ */
+function template_dir(?string $area = null): string
+{
+    $area = ($area ?? Url::segment(1)) === PANEL ? PANEL : ADMIN;
+    $name = $area === PANEL ? panel_template() : admin_template();
+
+    if (!is_dir(APP_PATH . DS . 'template' . DS . $area . DS . $name)) {
+        $name = 'bootstrap';
+    }
+
+    return $area . '/' . $name;
+}
+
+/**
+ * The Template Directory For The Current Area
  * @return string
  */
 function current_template(): string
 {
-    return Url::segment(1) === PANEL ? panel_template() : admin_template();
+    return template_dir();
 }
 
 ####################################################################################

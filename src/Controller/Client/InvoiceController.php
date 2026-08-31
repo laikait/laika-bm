@@ -56,7 +56,7 @@ class InvoiceController extends ClientController
             $page['rows'][$index]['overdue'] = Invoice::isOverdue($row);
         }
 
-        return $this->screen('client/invoices', 'My invoices', [
+        return $this->screen('invoices', 'My invoices', [
             'pager'       =>  $page,
             'statuses'    =>  Invoice::statuses(),
             'outstanding' =>  Invoice::outstandingFor($clientId),
@@ -75,7 +75,7 @@ class InvoiceController extends ClientController
         $row = $this->invoice($invoice);
         $id = (int) $row['invoice_id'];
 
-        return $this->screen('client/invoice', 'Invoice ' . $row['invoice_number'], [
+        return $this->screen('invoice', 'Invoice ' . $row['invoice_number'], [
             'invoice'      =>  $row,
             'items'        =>  Invoice::items($id),
             'transactions' =>  Transaction::forInvoice($id),
@@ -104,7 +104,7 @@ class InvoiceController extends ClientController
         $row = $this->invoice($invoice);
         $id = (int) $row['invoice_id'];
 
-        return $this->render('client/invoice-print', [
+        return $this->render('invoice-print', [
             'page_title'   =>  'Invoice ' . $row['invoice_number'],
             'client'       =>  $this->client(),
             'invoice'      =>  $row,

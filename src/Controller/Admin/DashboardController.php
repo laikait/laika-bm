@@ -47,7 +47,7 @@ class DashboardController extends AdminController
      */
     public function index(): string
     {
-        return $this->screen('admin/dashboard', 'Dashboard', [
+        return $this->screen('dashboard', 'Dashboard', [
             'stats'       =>  $this->stats(),
             'revenue'     =>  $this->revenue(),
             'invoices'    =>  $this->invoiceMix(),

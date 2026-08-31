@@ -36,9 +36,9 @@ use LBM\Service\Money;
  * entirely and lands ahead of the whole page. capture() buffers that output and
  * hands it to the template as a string instead.
  *
- * Second, the framework's `|asset` filter maps to asset(), which also echoes and
- * returns void - so it renders nothing where it is used. LBM registers its own
- * `asset` filter over the top, returning an absolute URL.
+ * Second, a template owns its own assets and links them from its own
+ * partials/header.twig, using the `template_path` variable assigned below so a
+ * template copied to a new name keeps pointing at its own files.
  */
 abstract class Controller
 {
@@ -48,13 +48,19 @@ abstract class Controller
     /** @var array<string,mixed> Variables Assigned So Far */
     private array $vars = [];
 
-    ####################################################################################
-    /*================================= EXTERNAL API =================================*/
-    ####################################################################################
+    ############################################################################
+    /*============================= EXTERNAL API =============================*/
+    ############################################################################
 
     /**
      * Render a View
-     * @param string $view View Path Below The Theme. Example: 'admin/dashboard'
+     *
+     * The view name is relative to the template, and the template directory is
+     * prefixed here - the one place it happens. laika-core carries the
+     * directory in the view name, so this composes 'admin/bootstrap/dashboard'
+     * and Template::view() re-points its loader and its cache at that directory
+     * before rendering.
+     * @param string $view View Name Below The Template. Example: 'dashboard'
      * @param array<string,mixed> $vars Variables
      * @return string
      */
@@ -62,11 +68,13 @@ abstract class Controller
     {
         $template = $this->template();
 
+        $this->enqueue();
+
         $template->assign($this->shared());
         $template->assign($this->vars);
         $template->assign($vars);
 
-        return $template->view($view);
+        return $template->view($this->theme() . '/' . $view);
     }
 
     /**
@@ -82,16 +90,18 @@ abstract class Controller
         return $this;
     }
 
-    ####################################################################################
-    /*================================= INTERNAL API =================================*/
-    ####################################################################################
+    ############################################################################
+    /*============================= INTERNAL API =============================*/
+    ############################################################################
 
     /**
-     * The Theme This Controller Renders Through
+     * The Template Directory This Controller Renders Through
      *
-     * Overridden by the installer, which has no database and therefore cannot
-     * read the option that names the theme.
-     * @return string
+     * A directory below template/, not a bare name: the admin and client areas
+     * are themed separately, so the area is part of the path. Overridden by the
+     * installer, which has no database and therefore cannot read the option
+     * that names a template.
+     * @return string Example: 'admin/bootstrap'
      */
     protected function theme(): string
     {
@@ -100,6 +110,10 @@ abstract class Controller
 
     /**
      * Build The Template, Once
+     *
+     * Memoising is safe even though a template is per area: Template::view()
+     * re-points its loader and cache on every call, so the instance is not
+     * bound to a directory.
      * @return Template
      */
     protected function template(): Template
@@ -108,19 +122,33 @@ abstract class Controller
             return $this->template;
         }
 
-        // No cache subdirectory. Template::ensureCachePath() resolves its
-        // argument as `is_dir($subdir) ? $subdir : APP_PATH/lf-cache/$subdir`,
-        // so passing "template/{$theme}" - a directory that exists - makes the
-        // theme its own cache and writes compiled PHP in among the .twig files.
-        //
-        // Per-theme caching is unnecessary anyway: Twig keys the cache off the
-        // resolved template path, so two themes never collide on a view of the
-        // same name.
-        $template = new Template($this->theme());
+        $template = new Template();
 
         $this->filters($template);
 
         return $this->template = $template;
+    }
+
+    /**
+     * Load The Template's Own loader.php, Before The Header Is Captured
+     *
+     * Template::view() loads it too, but only once it begins rendering - and by
+     * then shared() has already captured what lf_header() echoes, so every
+     * style and script the template enqueued would be registered too late to
+     * reach the page head. The symptom is a page that renders correctly with no
+     * stylesheet at all.
+     *
+     * require_once, so view() loading it again a moment later is a no-op.
+     * @return void
+     */
+    private function enqueue(): void
+    {
+        $loader = APP_PATH . DS . 'template' . DS
+            . str_replace('/', DS, $this->theme()) . DS . 'loader.php';
+
+        if (is_file($loader)) {
+            require_once $loader;
+        }
     }
 
     /**
@@ -155,14 +183,10 @@ abstract class Controller
         /** {{ 1234.5|number }} - grouped, but no currency symbol */
         $template->addFilter('number', static fn($amount): string => decimal($amount ?? 0));
 
-        /**
-         * {{ 'assets/css/x.css'|asset_url }}
-         *
-         * Not named `asset`: the framework already registers that name, Twig
-         * refuses to redefine a filter, and its version echoes and returns void
-         * so it renders nothing where it is used. Views want this one.
-         */
-        $template->addFilter('asset_url', static fn(string $path): string => lbm_asset($path));
+        // No `asset` filter here. laika-core registers one, and as of v4.5.10 its
+        // asset() returns the URL rather than echoing it, so `|asset` works in a
+        // view as written. LBM's own `asset_url` was a workaround for the old
+        // behaviour and is gone.
     }
 
     /**
@@ -181,6 +205,10 @@ abstract class Controller
             'app_host'  =>  $this->safe(static fn() => apply_hook('app_host'), rtrim(Url::base(), '/')),
             'app_logo'  =>  $this->safe(static fn() => app_logo(), ''),
             'app_icon'  =>  $this->safe(static fn() => app_icon(), ''),
+            // This template's own directory, for the asset links in its header
+            // and footer. A literal path would survive until somebody copied the
+            // template to a new name, and then quietly load the original's CSS.
+            'template_path' =>  'template/' . $this->theme(),
             'head'      =>  $this->capture('lf_header'),
             'foot'      =>  $this->capture('lf_footer'),
             'alert'     =>  $this->alert(),

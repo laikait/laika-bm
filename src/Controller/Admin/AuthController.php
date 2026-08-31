@@ -34,12 +34,15 @@ use LBM\Service\AuthStaff;
 class AuthController extends Controller
 {
     /**
-     * The Theme, From The Operator's Settings
-     * @return string
+     * The Admin Template, From The Operator's Settings
+     *
+     * Pinned to ADMIN rather than left to the current request: this controller
+     * only ever renders admin screens, and current_template() reads the URL.
+     * @return string Example: 'admin/bootstrap'
      */
     protected function theme(): string
     {
-        return admin_template();
+        return template_dir(ADMIN);
     }
 
     ####################################################################################
@@ -91,7 +94,7 @@ class AuthController extends Controller
             }
         }
 
-        return $this->render('admin/login', [
+        return $this->render('login', [
             'page_title' =>  'Sign in',
         ]);
     }
