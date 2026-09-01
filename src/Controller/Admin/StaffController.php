@@ -70,7 +70,7 @@ class StaffController extends AdminController
             $this->validate($input);
 
             if ($password === '') {
-                Request::addError('password', 'A password is required.');
+                Request::addError('password', local('password_required'));
             } else {
                 foreach (Password::validate($password, $input['password_confirm'] ?? null) as $error) {
                     Request::addError('password', $error);
@@ -84,11 +84,11 @@ class StaffController extends AdminController
 
                 $this->log('staff.created', 'Added staff member ' . $row['first_name'] . ' ' . $row['last_name']);
 
-                return $this->done('staff.staff', 'Staff member added.', true, ['staff' => $row['uid']]);
+                return $this->done('staff.staff', local('staff_member_added'), true, ['staff' => $row['uid']]);
             }
         }
 
-        return $this->form(null, 'Add staff member');
+        return $this->form(null, local('add_staff_member'));
     }
 
     /**
@@ -146,11 +146,11 @@ class StaffController extends AdminController
                     $changes
                 );
 
-                return $this->done('staff.staff', 'Staff member updated.', true, ['staff' => $row['uid']]);
+                return $this->done('staff.staff', local('staff_member_updated'), true, ['staff' => $row['uid']]);
             }
         }
 
-        return $this->form($row, 'Edit ' . $row['first_name'] . ' ' . $row['last_name']);
+        return $this->form($row, local('edit_named', $row['first_name'] . ' ' . $row['last_name']));
     }
 
     /**
@@ -166,7 +166,7 @@ class StaffController extends AdminController
         // Deleting yourself would end your own session mid-request and leave
         // you looking at a login form with no explanation.
         if ((int) $row['sid'] === $this->staffId()) {
-            return $this->done('staff.staffs', 'You cannot delete your own account.', false);
+            return $this->done('staff.staffs', local('cannot_delete_own_account'), false);
         }
 
         return $this->attempt(
@@ -176,7 +176,7 @@ class StaffController extends AdminController
                 $this->log('staff.deleted', "Deleted staff member {$name}.");
             },
             'staff.staffs',
-            "Deleted {$name}."
+            local('deleted_named', $name)
         );
     }
 
@@ -214,7 +214,7 @@ class StaffController extends AdminController
             $name = trim((string) ($input['role_name'] ?? ''));
 
             if ($name === '') {
-                Request::addError('role_name', 'A role needs a name.');
+                Request::addError('role_name', local('role_needs_name'));
             }
 
             if (Request::errors() === []) {
@@ -223,11 +223,11 @@ class StaffController extends AdminController
 
                 $this->log('role.created', "Added role {$name}.");
 
-                return $this->done('staff.role.edit', 'Role added.', true, ['role' => $role['uid']]);
+                return $this->done('staff.role.edit', local('role_added'), true, ['role' => $role['uid']]);
             }
         }
 
-        return $this->roleForm(null, 'Add role');
+        return $this->roleForm(null, local('add_role'));
     }
 
     /**
@@ -247,10 +247,10 @@ class StaffController extends AdminController
 
             $this->log('role.updated', "Updated permissions for role {$name}.");
 
-            return $this->done('staff.role.edit', 'Role updated.', true, ['role' => $row['uid']]);
+            return $this->done('staff.role.edit', local('role_updated'), true, ['role' => $row['uid']]);
         }
 
-        return $this->roleForm($row, 'Edit ' . $row['role_name']);
+        return $this->roleForm($row, local('edit_named', $row['role_name']));
     }
 
     /**
@@ -270,7 +270,7 @@ class StaffController extends AdminController
                 $this->log('role.deleted', "Deleted role {$name}.");
             },
             'staff.roles',
-            "Deleted {$name}."
+            local('deleted_named', $name)
         );
     }
 
@@ -318,10 +318,10 @@ class StaffController extends AdminController
     private function validate(array $input, ?int $ignore = null): void
     {
         $this->require([
-            'first_name' =>  'A first name is required.',
-            'last_name'  =>  'A last name is required.',
-            'email'      =>  'An email address is required.',
-            'role_relid' =>  'Choose a role.',
+            'first_name' =>  local('first_name_required'),
+            'last_name'  =>  local('last_name_required'),
+            'email'      =>  local('email_required'),
+            'role_relid' =>  local('choose_a_role_msg'),
         ], $input);
 
         $this->requireEmail('email', $input);
@@ -329,13 +329,13 @@ class StaffController extends AdminController
         $email = trim((string) ($input['email'] ?? ''));
 
         if ($email !== '' && Staff::emailTaken($email, $ignore)) {
-            Request::addError('email', 'Another staff member already uses that email address.');
+            Request::addError('email', local('staff_email_taken'));
         }
 
         $username = trim((string) ($input['username'] ?? ''));
 
         if ($username !== '' && Staff::usernameTaken($username, $ignore)) {
-            Request::addError('username', 'That username is taken.');
+            Request::addError('username', local('username_taken'));
         }
     }
 

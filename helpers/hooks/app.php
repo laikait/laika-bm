@@ -95,3 +95,7 @@ add_hook('total_pages', 'total_pages', 1000);
 
 /** Generate a UID */
 add_hook('lbm_uid', 'lbm_uid', 1000);
+
+/*================================= LANGUAGE ==================================*/
+/** Language codes that are fully translated */
+add_hook('language_choices', 'language_choices', 1000);

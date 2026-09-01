@@ -47,7 +47,7 @@ class ProfileController extends AdminController
     {
         $me = $this->me();
 
-        return $this->screen('account', 'My account', [
+        return $this->screen('account', local('my_account'), [
             'member'  =>  $me,
             'role'    =>  Staff::role((int) $me['role_relid']),
             'history' =>  AuthStaff::history((int) $me['sid'], 10),
@@ -70,9 +70,9 @@ class ProfileController extends AdminController
         $input = array_intersect_key(Request::inputs(), array_flip(self::FIELDS));
 
         $this->require([
-            'first_name' =>  'A first name is required.',
-            'last_name'  =>  'A last name is required.',
-            'email'      =>  'An email address is required.',
+            'first_name' =>  local('first_name_required'),
+            'last_name'  =>  local('last_name_required'),
+            'email'      =>  local('email_required'),
         ], $input);
 
         $this->requireEmail('email', $input);
@@ -80,13 +80,13 @@ class ProfileController extends AdminController
         $email = trim((string) ($input['email'] ?? ''));
 
         if ($email !== '' && Staff::emailTaken($email, $id)) {
-            Request::addError('email', 'Another staff member already uses that email address.');
+            Request::addError('email', local('staff_email_taken'));
         }
 
         $username = trim((string) ($input['username'] ?? ''));
 
         if ($username !== '' && Staff::usernameTaken($username, $id)) {
-            Request::addError('username', 'That username is taken.');
+            Request::addError('username', local('username_taken'));
         }
 
         if (Request::errors() !== []) {
@@ -99,7 +99,7 @@ class ProfileController extends AdminController
 
         $this->log('staff.profile.updated', 'Updated their own details.', $changes);
 
-        return $this->done('staff.account', 'Your details were saved.');
+        return $this->done('staff.account', local('your_details_saved'));
     }
 
     /**
@@ -122,7 +122,7 @@ class ProfileController extends AdminController
             return $this->done('staff.account', $result['errors'][0], false);
         }
 
-        return $this->done('staff.account', 'Your password was changed.');
+        return $this->done('staff.account', local('your_password_changed'));
     }
 
     /**
@@ -139,7 +139,7 @@ class ProfileController extends AdminController
 
         AuthStaff::logoutEverywhere((int) $me['sid']);
 
-        return $this->done('staff.login', 'Signed out of every device. Sign in again to continue.');
+        return $this->done('staff.login', local('signed_out_everywhere_msg'));
     }
 
     ####################################################################################

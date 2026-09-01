@@ -36,14 +36,9 @@ use LBM\Model\CurrencyModel;
  */
 class InstallController extends Controller
 {
-    /** @var array<string,string> Step Key => Label */
+    /** @var string[] Step Keys, In Order */
     public const STEPS = [
-        'requirements' =>  'Requirements',
-        'database'     =>  'Database',
-        'migrate'      =>  'Tables',
-        'settings'     =>  'Settings',
-        'admin'        =>  'Administrator',
-        'finish'       =>  'Finish',
+        'requirements', 'database', 'migrate', 'settings', 'admin', 'finish',
     ];
 
     /** @var Installer */
@@ -86,7 +81,7 @@ class InstallController extends Controller
     {
         return $this->view('requirements', 'requirements', [
             'requirements' =>  (new Requirements())->all(),
-        ], 'Check this server can run the app');
+        ], local('caption_requirements'));
     }
 
     /**
@@ -101,7 +96,7 @@ class InstallController extends Controller
             $config = $this->installer->databaseConfig(Request::inputs());
 
             if ($config['database'] === '') {
-                Request::addError('db_name', 'A database name is required.');
+                Request::addError('db_name', local('database_name_required'));
             } else {
                 $error = $this->installer->testConnection($config);
 
@@ -113,21 +108,21 @@ class InstallController extends Controller
 
                     // to() calls exit(), so nothing after it runs. The return
                     // keeps the declared ?string signature honest.
-                    Redirect::with('Database connected.', true)->to('install.migrate');
+                    Redirect::with(local('database_connected'), true)->to('install.migrate');
                     return null;
                 }
 
                 return $this->view('database', 'database', [
                     'drivers'          =>  $requirements->drivers(),
                     'connection_error' =>  $error,
-                ], 'Connect to your database');
+                ], local('caption_database'));
             }
         }
 
         return $this->view('database', 'database', [
             'drivers'          =>  $requirements->drivers(),
             'connection_error' =>  null,
-        ], 'Connect to your database');
+        ], local('caption_database'));
     }
 
     /**
@@ -152,7 +147,7 @@ class InstallController extends Controller
             'schema_count' =>  $this->installer->schemaCount(),
             'results'      =>  $results,
             'failed'       =>  $failed,
-        ], 'Create the database tables');
+        ], local('caption_migrate'));
     }
 
     /**
@@ -164,22 +159,22 @@ class InstallController extends Controller
         if (Request::isPost()) {
             $input = Request::inputs();
 
-            foreach (['app_name' => 'A company name is required.',
-                      'app_host' => 'An application URL is required.',
-                      'app_email' => 'A billing email address is required.'] as $field => $message) {
+            foreach (['app_name' => local('company_name_required'),
+                      'app_host' => local('application_url_required'),
+                      'app_email' => local('billing_email_required')] as $field => $message) {
                 if (trim((string) ($input[$field] ?? '')) === '') {
                     Request::addError($field, $message);
                 }
             }
 
             if (filter_var($input['app_email'] ?? '', FILTER_VALIDATE_EMAIL) === false) {
-                Request::addError('app_email', 'That does not look like an email address.');
+                Request::addError('app_email', local('not_an_email_address'));
             }
 
             if (Request::errors() === []) {
                 $this->installer->saveSettings($input);
 
-                Redirect::with('Settings saved.', true)->to('install.admin');
+                Redirect::with(local('settings_saved'), true)->to('install.admin');
                 return null;
             }
         }
@@ -190,7 +185,7 @@ class InstallController extends Controller
             'currencies'       =>  $this->currencies(),
             'date_formats'     =>  $this->dateFormats(),
             'datetime_formats' =>  $this->dateTimeFormats(),
-        ], 'Tell us about your business');
+        ], local('caption_settings'));
     }
 
     /**
@@ -202,24 +197,24 @@ class InstallController extends Controller
         if (Request::isPost()) {
             $input = Request::inputs();
 
-            foreach (['first_name' => 'A first name is required.',
-                      'last_name'  => 'A last name is required.',
-                      'username'   => 'A username is required.',
-                      'email'      => 'An email address is required.'] as $field => $message) {
+            foreach (['first_name' => local('first_name_required'),
+                      'last_name'  => local('last_name_required'),
+                      'username'   => local('username_required'),
+                      'email'      => local('email_required')] as $field => $message) {
                 if (trim((string) ($input[$field] ?? '')) === '') {
                     Request::addError($field, $message);
                 }
             }
 
             if (filter_var($input['email'] ?? '', FILTER_VALIDATE_EMAIL) === false) {
-                Request::addError('email', 'That does not look like an email address.');
+                Request::addError('email', local('not_an_email_address'));
             }
 
             if (Request::errors() === []) {
                 try {
                     $this->installer->createAdmin($input);
 
-                    Redirect::with('Administrator created.', true)->to('install.finish');
+                    Redirect::with(local('administrator_created'), true)->to('install.finish');
                     return null;
                 } catch (Throwable $e) {
                     Request::addError('password', $e->getMessage());
@@ -229,7 +224,7 @@ class InstallController extends Controller
 
         return $this->view('admin', 'admin', [
             'password_min' =>  max(6, (int) (option_int('password_min_length', 8))),
-        ], 'Create your administrator account');
+        ], local('caption_admin'));
     }
 
     /**
@@ -245,7 +240,7 @@ class InstallController extends Controller
             // lock is what closes the wizard - locking with no account to sign
             // in with would strand the operator.
             if (!$this->installer->hasAdmin()) {
-                Redirect::with('Create an administrator account first.', false)->to('install.admin');
+                Redirect::with(local('create_admin_first'), false)->to('install.admin');
                 return null;
             }
 
@@ -254,13 +249,13 @@ class InstallController extends Controller
             // Redirect rather than render: the lock is what LBM\Pipeline\Install
             // reads, and a straight render would still be inside the request
             // that wrote it.
-            Redirect::with('Installation complete.', true)->to('install.finish');
+            Redirect::with(local('installation_complete'), true)->to('install.finish');
             return null;
         }
 
         return $this->view('finish', 'finish', [
             'locked' =>  $locked,
-        ], $locked ? 'All done' : 'Finish the installation');
+        ], local($locked ? 'caption_done' : 'caption_finish'));
     }
 
     ####################################################################################
@@ -278,12 +273,31 @@ class InstallController extends Controller
     private function view(string $step, string $view, array $vars, string $caption): string
     {
         return $this->render($view, array_merge([
-            'steps'        =>  self::STEPS,
+            'steps'        =>  $this->stepNames(),
             'current_step' =>  $step,
             'done_steps'   =>  $this->installer->completed(),
             'step_caption' =>  $caption,
-            'page_title'   =>  self::STEPS[$step] ?? 'Install',
+            'page_title'   =>  $this->stepNames()[$step] ?? local('install'),
         ], $vars));
+    }
+
+    /**
+     * Step Key => Translated Label, In Order
+     *
+     * Built here rather than held in the STEPS constant: a constant expression
+     * cannot call local(), and these are the labels on the visible step rail.
+     * @return array<string,string>
+     */
+    private function stepNames(): array
+    {
+        return [
+            'requirements' =>  local('requirements'),
+            'database'     =>  local('database'),
+            'migrate'      =>  local('tables'),
+            'settings'     =>  local('settings'),
+            'admin'        =>  local('administrator'),
+            'finish'       =>  local('finish'),
+        ];
     }
 
     /**

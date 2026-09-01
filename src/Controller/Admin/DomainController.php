@@ -101,10 +101,10 @@ class DomainController extends AdminController
 
             $this->log('domain.updated', 'Updated domain ' . $row['domain']);
 
-            return $this->done('staff.domain', 'Domain updated.', true, ['domain' => $row['uid']]);
+            return $this->done('staff.domain', local('domain_updated'), true, ['domain' => $row['uid']]);
         }
 
-        return $this->screen('domain-form', 'Edit ' . $row['domain'], [
+        return $this->screen('domain-form', local('edit_named', $row['domain']), [
             'domain'      =>  $row,
             'nameservers' =>  Domain::nameservers($id),
             'statuses'    =>  $this->statusChoices(Domain::statuses()),
@@ -152,7 +152,7 @@ class DomainController extends AdminController
                 continue;
             }
 
-            $choices[$id] = (string) ($row['registrar_name'] ?? $row['name'] ?? ('Registrar ' . $id));
+            $choices[$id] = (string) ($row['registrar_name'] ?? $row['name'] ?? local('registrar_numbered', $id));
         }
 
         return $choices;

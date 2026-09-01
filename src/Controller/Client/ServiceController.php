@@ -46,7 +46,7 @@ class ServiceController extends ClientController
     {
         $this->allow('service');
 
-        return $this->screen('services', 'My services', [
+        return $this->screen('services', local('my_services'), [
             'pager'    =>  ClientService::browseForClient(
                 $this->owner(),
                 $this->conditions(['status' => 'status_relid'])
@@ -129,7 +129,7 @@ class ServiceController extends ClientController
                 );
             },
             'client.service',
-            'Your cancellation request has been raised with support.',
+            local('cancellation_raised'),
             ['service' => $row['uid']]
         );
     }

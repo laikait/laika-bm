@@ -15,6 +15,7 @@ namespace LBM\Pipeline;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use LANG;
 use Laika\Service\Url;
 use Laika\Service\Redirect;
 use Laika\Auth\AuthManager;
@@ -85,7 +86,7 @@ class Auth implements PipelineInterface
 
             // A route NAME, not a path: Handler::namedUrl() throws on anything
             // it has not seen declared.
-            Redirect::to(self::loginRoute($area));
+            Redirect::with(LANG::$require_sign_in, false)->to(self::loginRoute($area));
         }
 
         // Threaded to the controller and to ActivityFilter, so neither has to

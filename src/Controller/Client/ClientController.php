@@ -142,7 +142,7 @@ abstract class ClientController extends Controller
         $id = $this->clientId();
 
         if ($id === null) {
-            throw new HttpException(401, 'You are not signed in.');
+            throw new HttpException(401, local('not_signed_in'));
         }
 
         return $id;
@@ -193,7 +193,7 @@ abstract class ClientController extends Controller
         $row = $finder($key, $this->owner());
 
         if (!is_array($row) || $row === []) {
-            throw new HttpException(404, "That {$what} does not exist.");
+            throw new HttpException(404, local('record_not_found', $what));
         }
 
         return $row;
@@ -222,7 +222,7 @@ abstract class ClientController extends Controller
         }
 
         if (!ClientContact::allows($contact, $group . '.' . $action)) {
-            throw new HttpException(403, 'Your account does not have access to that.');
+            throw new HttpException(403, local('no_access_to_that'));
         }
     }
 
@@ -376,7 +376,7 @@ abstract class ClientController extends Controller
         $value = trim((string) ($input[$field] ?? ''));
 
         if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-            Request::addError($field, 'That does not look like an email address.');
+            Request::addError($field, local('not_an_email_address'));
         }
     }
 }

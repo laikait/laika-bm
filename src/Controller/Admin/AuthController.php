@@ -72,18 +72,18 @@ class AuthController extends Controller
             $password = (string) ($input['password'] ?? '');
 
             if ($identifier === '') {
-                Request::addError('username', 'Enter your username or email address.');
+                Request::addError('username', local('enter_username_or_email'));
             }
 
             if ($password === '') {
-                Request::addError('password', 'Enter your password.');
+                Request::addError('password', local('enter_password'));
             }
 
             if (Request::errors() === []) {
                 $result = AuthStaff::attempt($identifier, $password);
 
                 if ($result['ok']) {
-                    Redirect::with('Signed in.', true)->to('staff.dashboard');
+                    Redirect::with(local('signed_in'), true)->to('staff.dashboard');
 
                     return null;
                 }
@@ -95,7 +95,7 @@ class AuthController extends Controller
         }
 
         return $this->render('login', [
-            'page_title' =>  'Sign in',
+            'page_title' =>  local('sign_in'),
         ]);
     }
 
@@ -110,7 +110,7 @@ class AuthController extends Controller
     {
         AuthStaff::logout();
 
-        Redirect::with('Signed out.', true)->to('staff.login');
+        Redirect::with(local('signed_out'), true)->to('staff.login');
 
         return null;
     }

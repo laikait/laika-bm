@@ -74,6 +74,7 @@ class SettingsController extends AdminController
         }
 
         return $this->tab('localisation', 'Localisation', [
+            'languages'   =>  language_choices(),
             'timezones'   =>  $this->timezoneChoices(),
             'currencies'  =>  $this->currencyChoices(),
             'dates'       =>  $this->dateFormats(),
@@ -123,7 +124,7 @@ class SettingsController extends AdminController
         }
 
         return $this->tab('mail', 'Mail', [
-            'drivers'     =>  ['smtp' => 'SMTP', 'sendmail' => 'Sendmail', 'mail' => 'PHP mail()', 'qmail' => 'qmail'],
+            'drivers'     =>  ['smtp' => 'SMTP', 'sendmail' => 'Sendmail', 'mail' => local('php_mail'), 'qmail' => 'qmail'],
             'encryptions' =>  ['tls' => 'TLS', 'ssl' => 'SSL', '' => 'None'],
             'queued'      =>  count(Mail::pending()),
         ]);
@@ -143,7 +144,7 @@ class SettingsController extends AdminController
         $to = $to !== '' ? $to : (string) option('app_email', '');
 
         if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
-            return $this->done('staff.settings.mail', 'Enter an address to send the test to.', false);
+            return $this->done('staff.settings.mail', local('enter_test_address'), false);
         }
 
         return $this->attempt(
@@ -153,7 +154,7 @@ class SettingsController extends AdminController
                 $this->log('settings.mail.test', "Queued a test message to {$to}.");
             },
             'staff.settings.mail',
-            "Test message queued for {$to}. Run the worker to send it."
+            local('test_queued_for', $to)
         );
     }
 
@@ -169,7 +170,7 @@ class SettingsController extends AdminController
     {
         $model = new EmailTemplateModel();
 
-        return $this->screen('settings-email-templates', 'Email templates', [
+        return $this->screen('settings-email-templates', local('email_templates'), [
             'tab'       =>  'templates',
             'templates' =>  $model->order('name', 'ASC')->get(),
         ]);
@@ -192,8 +193,8 @@ class SettingsController extends AdminController
             $input = Request::inputs();
 
             $this->require([
-                'subject' =>  'A subject is required.',
-                'body'    =>  'The message cannot be empty.',
+                'subject' =>  local('subject_required'),
+                'body'    =>  local('message_cannot_be_empty'),
             ], $input);
 
             if (Request::errors() === []) {
@@ -210,7 +211,7 @@ class SettingsController extends AdminController
 
                 return $this->done(
                     'staff.settings.template',
-                    'Template saved.',
+                    local('template_saved'),
                     true,
                     ['template' => $row['uid']]
                 );
@@ -278,7 +279,7 @@ class SettingsController extends AdminController
 
         $this->log('settings.saved', "Saved {$written} {$group} setting(s).");
 
-        return $this->done($route, 'Settings saved.');
+        return $this->done($route, local('settings_saved'));
     }
 
     /**
@@ -291,7 +292,7 @@ class SettingsController extends AdminController
         $rows = $input['status'] ?? [];
 
         if (!is_array($rows)) {
-            return $this->done('staff.settings.statuses', 'Nothing to save.', false);
+            return $this->done('staff.settings.statuses', local('nothing_to_save'), false);
         }
 
         $saved = 0;
@@ -333,7 +334,7 @@ class SettingsController extends AdminController
 
         $this->log('settings.statuses.saved', "Updated {$saved} status row(s).");
 
-        return $this->done('staff.settings.statuses', 'Statuses saved.');
+        return $this->done('staff.settings.statuses', local('statuses_saved'));
     }
 
     /**
@@ -353,8 +354,8 @@ class SettingsController extends AdminController
             'server_statuses'         =>  'Servers',
             'staff_statuses'          =>  'Staff',
             'support_ticket_statuses' =>  'Tickets',
-            'support_priorities'      =>  'Ticket priorities',
-            'email_queue_statuses'    =>  'Email queue',
+            'support_priorities'      =>  local('ticket_priorities'),
+            'email_queue_statuses'    =>  local('email_queue'),
         ];
 
         $out = [];

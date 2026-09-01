@@ -104,6 +104,6 @@ class Permission implements PipelineInterface
      */
     private function deny(string $access): never
     {
-        throw new HttpException(403, "You do not have permission to {$access}.");
+        throw new HttpException(403, local('no_permission_to', $access));
     }
 }

@@ -130,7 +130,7 @@ abstract class AdminController extends Controller
     protected function record(?array $record, string $what = 'record'): array
     {
         if ($record === null) {
-            throw new HttpException(404, "That {$what} does not exist.");
+            throw new HttpException(404, local('record_not_found', $what));
         }
 
         return $record;
@@ -298,7 +298,7 @@ abstract class AdminController extends Controller
         $value = trim((string) ($input[$field] ?? ''));
 
         if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-            Request::addError($field, 'That does not look like an email address.');
+            Request::addError($field, local('not_an_email_address'));
         }
     }
 }

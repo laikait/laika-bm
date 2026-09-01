@@ -76,13 +76,13 @@ class TicketController extends AdminController
             $message = trim((string) ($input['message'] ?? ''));
 
             $this->require([
-                'client_relid'     =>  'Choose a client.',
-                'department_relid' =>  'Choose a department.',
-                'subject'          =>  'A subject is required.',
+                'client_relid'     =>  local('choose_a_client_msg'),
+                'department_relid' =>  local('choose_a_department_msg'),
+                'subject'          =>  local('subject_required'),
             ], $input);
 
             if ($message === '') {
-                Request::addError('message', 'A ticket needs a message.');
+                Request::addError('message', local('ticket_needs_message'));
             }
 
             if (Request::errors() === []) {
@@ -94,12 +94,12 @@ class TicketController extends AdminController
                         $this->log('ticket.opened', 'Opened ticket ' . $ticket['ticket_number']);
                     },
                     'staff.tickets',
-                    'Ticket opened.'
+                    local('ticket_opened')
                 );
             }
         }
 
-        return $this->screen('ticket-form', 'New ticket', [
+        return $this->screen('ticket-form', local('new_ticket'), [
             'clients'     =>  $this->clientChoices(),
             'departments' =>  $this->departmentChoices(),
             'priorities'  =>  $this->statusChoices(Support::priorities()),
@@ -115,7 +115,7 @@ class TicketController extends AdminController
     {
         $row = $this->record(Support::find($ticket), 'ticket');
 
-        return $this->screen('ticket', 'Ticket ' . $row['ticket_number'], [
+        return $this->screen('ticket', local('ticket_titled', $row['ticket_number']), [
             'ticket'      =>  $row,
             'client'      =>  Client::find((int) $row['client_relid']),
             // Internal notes included - this is the staff view.
@@ -155,7 +155,7 @@ class TicketController extends AdminController
                 );
             },
             'staff.ticket',
-            $internal ? 'Internal note added.' : 'Reply sent.',
+            local($internal ? 'internal_note_added' : 'reply_sent'),
             ['ticket' => $row['uid']]
         );
     }
@@ -186,7 +186,7 @@ class TicketController extends AdminController
 
         $this->log('ticket.updated', 'Updated ticket ' . $row['ticket_number']);
 
-        return $this->done('staff.ticket', 'Ticket updated.', true, ['ticket' => $row['uid']]);
+        return $this->done('staff.ticket', local('ticket_updated'), true, ['ticket' => $row['uid']]);
     }
 
     /**
@@ -203,7 +203,7 @@ class TicketController extends AdminController
 
         $this->log('ticket.deleted', "Deleted ticket {$number} and its replies.");
 
-        return $this->done('staff.tickets', "Deleted ticket {$number}.");
+        return $this->done('staff.tickets', local('deleted_ticket', $number));
     }
 
     ####################################################################################
@@ -216,7 +216,7 @@ class TicketController extends AdminController
      */
     public function departments(): string
     {
-        return $this->screen('ticket-departments', 'Support departments', [
+        return $this->screen('ticket-departments', local('support_departments'), [
             'departments' =>  Support::departments(),
             'counts'      =>  $this->departmentCounts(),
         ]);
@@ -232,7 +232,7 @@ class TicketController extends AdminController
         $name = trim((string) ($input['dep_name'] ?? ''));
 
         if ($name === '') {
-            return $this->done('staff.ticket.departments', 'A department needs a name.', false);
+            return $this->done('staff.ticket.departments', local('department_needs_name'), false);
         }
 
         $key = trim((string) ($input['department'] ?? ''));
@@ -247,7 +247,7 @@ class TicketController extends AdminController
                 );
             },
             'staff.ticket.departments',
-            $key !== '' ? 'Department updated.' : 'Department added.'
+            local($key !== '' ? 'department_updated' : 'department_added')
         );
     }
 

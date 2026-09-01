@@ -73,8 +73,8 @@ class TransactionController extends AdminController
             $input = Request::inputs();
 
             $this->require([
-                'client_relid' =>  'Choose a client.',
-                'amount'       =>  'How much was paid?',
+                'client_relid' =>  local('choose_a_client_msg'),
+                'amount'       =>  local('how_much_was_paid'),
             ], $input);
 
             if (Request::errors() === []) {
@@ -89,12 +89,12 @@ class TransactionController extends AdminController
                         );
                     },
                     'staff.transactions',
-                    'Payment recorded.'
+                    local('payment_recorded')
                 );
             }
         }
 
-        return $this->screen('transaction-form', 'Record a payment', [
+        return $this->screen('transaction-form', local('record_a_payment'), [
             'clients'    =>  $this->clientChoices(),
             'currencies' =>  $this->currencyChoices(),
             'invoices'   =>  $this->invoiceChoices(),
@@ -110,7 +110,7 @@ class TransactionController extends AdminController
     {
         $row = $this->record(Transaction::find($transaction), 'transaction');
 
-        return $this->screen('transaction', 'Transaction #' . $row['tx_id'], [
+        return $this->screen('transaction', local('transaction_numbered', $row['tx_id']), [
             'transaction' =>  $row,
             'client'      =>  Client::find((int) $row['client_relid']),
             'invoice'     =>  $row['invoice_relid'] ? Invoice::find((int) $row['invoice_relid']) : null,
@@ -141,7 +141,7 @@ class TransactionController extends AdminController
                 $this->log('transaction.refunded', 'Refunded transaction #' . $row['tx_id']);
             },
             'staff.transaction',
-            'Refund recorded.',
+            local('refund_recorded'),
             ['transaction' => $row['uid']]
         );
     }
@@ -162,7 +162,7 @@ class TransactionController extends AdminController
                 $this->log('transaction.deleted', 'Deleted transaction #' . $row['tx_id']);
             },
             'staff.transactions',
-            'Transaction deleted.'
+            local('transaction_deleted')
         );
     }
 

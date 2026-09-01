@@ -77,10 +77,10 @@ class InvoiceController extends AdminController
             $input = Request::inputs();
             $items = $this->items($input);
 
-            $this->require(['client_relid' => 'Choose a client.'], $input);
+            $this->require(['client_relid' => local('choose_a_client_msg')], $input);
 
             if ($items === []) {
-                Request::addError('items', 'An invoice needs at least one line.');
+                Request::addError('items', local('invoice_needs_line'));
             }
 
             if (Request::errors() === []) {
@@ -89,11 +89,11 @@ class InvoiceController extends AdminController
 
                 $this->log('invoice.created', 'Raised invoice ' . $invoice['invoice_number']);
 
-                return $this->done('staff.invoice', 'Invoice raised.', true, ['invoice' => $invoice['uid']]);
+                return $this->done('staff.invoice', local('invoice_raised_msg'), true, ['invoice' => $invoice['uid']]);
             }
         }
 
-        return $this->form(null, 'New invoice');
+        return $this->form(null, local('new_invoice'));
     }
 
     /**
@@ -106,7 +106,7 @@ class InvoiceController extends AdminController
         $row = $this->record(Invoice::find($invoice), 'invoice');
         $id = (int) $row['invoice_id'];
 
-        return $this->screen('invoice', 'Invoice ' . $row['invoice_number'], [
+        return $this->screen('invoice', local('invoice_titled', $row['invoice_number']), [
             'invoice'      =>  $row,
             'client'       =>  Client::find((int) $row['client_relid']),
             'items'        =>  Invoice::items($id),
@@ -140,10 +140,10 @@ class InvoiceController extends AdminController
 
             $this->log('invoice.updated', 'Updated invoice ' . $row['invoice_number']);
 
-            return $this->done('staff.invoice', 'Invoice updated.', true, ['invoice' => $row['uid']]);
+            return $this->done('staff.invoice', local('invoice_updated'), true, ['invoice' => $row['uid']]);
         }
 
-        return $this->form($row, 'Edit invoice ' . $row['invoice_number']);
+        return $this->form($row, local('edit_invoice_titled', $row['invoice_number']));
     }
 
     /**
@@ -159,7 +159,7 @@ class InvoiceController extends AdminController
         $row = $this->record(Invoice::find($invoice), 'invoice');
 
         return $this->render('invoice-print', [
-            'page_title' =>  'Invoice ' . $row['invoice_number'],
+            'page_title' =>  local('invoice_titled', $row['invoice_number']),
             'invoice'    =>  $row,
             'client'     =>  Client::find((int) $row['client_relid']),
             'items'      =>  Invoice::items((int) $row['invoice_id']),
@@ -182,7 +182,7 @@ class InvoiceController extends AdminController
         if ($client === null || empty($client['email'])) {
             return $this->done(
                 'staff.invoice',
-                'That client has no email address to send to.',
+                local('no_client_email'),
                 false,
                 ['invoice' => $row['uid']]
             );
@@ -200,7 +200,7 @@ class InvoiceController extends AdminController
                 $this->log('invoice.sent', 'Queued invoice ' . $row['invoice_number'] . ' to ' . $client['email']);
             },
             'staff.invoice',
-            'Invoice queued for sending.',
+            local('invoice_queued'),
             ['invoice' => $row['uid']]
         );
     }
@@ -223,7 +223,7 @@ class InvoiceController extends AdminController
         return $this->attempt(
             function () use ($row, $input, $amount): void {
                 if (!Money::isGreater($amount, '0')) {
-                    throw new RuntimeException('A payment must be greater than zero.');
+                    throw new RuntimeException(local('payment_greater_than_zero'));
                 }
 
                 Transaction::pay([
@@ -242,7 +242,7 @@ class InvoiceController extends AdminController
                 );
             },
             'staff.invoice',
-            'Payment recorded.',
+            local('payment_recorded'),
             ['invoice' => $row['uid']]
         );
     }
@@ -260,7 +260,7 @@ class InvoiceController extends AdminController
 
         $this->log('invoice.cancelled', 'Cancelled invoice ' . $row['invoice_number']);
 
-        return $this->done('staff.invoice', 'Invoice cancelled.', true, ['invoice' => $row['uid']]);
+        return $this->done('staff.invoice', local('invoice_cancelled'), true, ['invoice' => $row['uid']]);
     }
 
     /**
@@ -277,7 +277,7 @@ class InvoiceController extends AdminController
 
         $this->log('invoice.deleted', "Deleted invoice {$number} and its line items.");
 
-        return $this->done('staff.invoices', "Deleted invoice {$number}.");
+        return $this->done('staff.invoices', local('deleted_invoice', $number));
     }
 
     ####################################################################################

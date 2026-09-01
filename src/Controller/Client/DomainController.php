@@ -64,7 +64,7 @@ class DomainController extends ClientController
             $page['rows'][$index]['expired'] = Domain::isExpired($row);
         }
 
-        return $this->screen('domains', 'My domains', [
+        return $this->screen('domains', local('my_domains'), [
             'pager'    =>  $page,
             'statuses' =>  Domain::statuses(),
         ]);
@@ -139,7 +139,7 @@ class DomainController extends ClientController
                 );
             },
             'client.domain',
-            'Your nameservers have been recorded and passed to support.',
+            local('nameservers_recorded'),
             ['domain' => $row['uid']]
         );
     }

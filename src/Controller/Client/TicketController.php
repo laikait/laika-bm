@@ -73,8 +73,8 @@ class TicketController extends ClientController
             $input = Request::inputs();
 
             $required = [
-                'subject' =>  'Give your ticket a subject.',
-                'message' =>  'Describe what you need help with.',
+                'subject' =>  local('give_ticket_subject'),
+                'message' =>  local('describe_your_problem'),
             ];
 
             if ($this->require($required, $input)) {
@@ -96,7 +96,7 @@ class TicketController extends ClientController
 
                     return $this->done(
                         'client.ticket',
-                        'Your ticket has been raised.',
+                        local('ticket_raised'),
                         true,
                         ['ticket' => (string) $row['uid']]
                     );
@@ -109,7 +109,7 @@ class TicketController extends ClientController
             }
         }
 
-        return $this->screen('ticket-form', 'Open a ticket', [
+        return $this->screen('ticket-form', local('open_a_ticket'), [
             'departments' =>  $this->departmentChoices(),
             'priorities'  =>  $this->priorityChoices(),
             'services'    =>  $this->serviceChoices($clientId),
@@ -127,7 +127,7 @@ class TicketController extends ClientController
 
         $row = $this->ticket($ticket);
 
-        return $this->screen('ticket', 'Ticket ' . $row['ticket_number'], [
+        return $this->screen('ticket', local('ticket_titled', $row['ticket_number']), [
             'ticket'     =>  $row,
             // Never the internal notes. The default is false and this call
             // deliberately does not override it.
@@ -160,7 +160,7 @@ class TicketController extends ClientController
                 $this->log('ticket.replied', 'Replied to ticket ' . $row['ticket_number'] . '.');
             },
             'client.ticket',
-            'Your reply has been added.',
+            local('reply_added'),
             ['ticket' => $row['uid']]
         );
     }
@@ -187,7 +187,7 @@ class TicketController extends ClientController
                 $this->log('ticket.closed', 'Closed ticket ' . $row['ticket_number'] . '.');
             },
             'client.ticket',
-            'Ticket closed. Replying to it will open it again.',
+            local('ticket_closed'),
             ['ticket' => $row['uid']]
         );
     }

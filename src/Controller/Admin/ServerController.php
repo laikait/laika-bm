@@ -72,11 +72,11 @@ class ServerController extends AdminController
 
                 $this->log('server.created', 'Added server ' . $row['name']);
 
-                return $this->done('staff.servers', 'Server added.');
+                return $this->done('staff.servers', local('server_added'));
             }
         }
 
-        return $this->form(null, 'Add server');
+        return $this->form(null, local('add_server'));
     }
 
     /**
@@ -96,11 +96,11 @@ class ServerController extends AdminController
 
                 $this->log('server.updated', 'Updated server ' . $row['name']);
 
-                return $this->done('staff.servers', 'Server updated.');
+                return $this->done('staff.servers', local('server_updated'));
             }
         }
 
-        return $this->form($row, 'Edit ' . $row['name']);
+        return $this->form($row, local('edit_named', $row['name']));
     }
 
     /**
@@ -139,7 +139,7 @@ class ServerController extends AdminController
                 $this->log('server.deleted', "Deleted server {$name}.");
             },
             'staff.servers',
-            "Deleted {$name}."
+            local('deleted_named', $name)
         );
     }
 
@@ -170,10 +170,10 @@ class ServerController extends AdminController
     private function validate(array $input): bool
     {
         return $this->require([
-            'name'        =>  'A name is required.',
-            'hostname'    =>  'A hostname is required.',
-            'ip_address'  =>  'An IP address is required.',
-            'module_name' =>  'Which control panel does this server run?',
+            'name'        =>  local('name_required'),
+            'hostname'    =>  local('hostname_required'),
+            'ip_address'  =>  local('ip_required'),
+            'module_name' =>  local('which_control_panel'),
         ], $input);
     }
 

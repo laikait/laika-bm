@@ -78,18 +78,18 @@ class AuthController extends Controller
             $password = (string) ($input['password'] ?? '');
 
             if ($identifier === '') {
-                Request::addError('username', 'Enter your username or email address.');
+                Request::addError('username', local('enter_username_or_email'));
             }
 
             if ($password === '') {
-                Request::addError('password', 'Enter your password.');
+                Request::addError('password', local('enter_password'));
             }
 
             if (Request::errors() === []) {
                 $result = AuthClient::attempt($identifier, $password);
 
                 if ($result['ok']) {
-                    Redirect::with('Signed in.', true)->to('client.dashboard');
+                    Redirect::with(local('signed_in'), true)->to('client.dashboard');
 
                     return null;
                 }
@@ -101,7 +101,7 @@ class AuthController extends Controller
         }
 
         return $this->render('login', [
-            'page_title'   =>  'Sign in',
+            'page_title'   =>  local('sign_in'),
             'registration' =>  option_bool('allow_registration'),
         ]);
     }
@@ -117,7 +117,7 @@ class AuthController extends Controller
     {
         AuthClient::logout();
 
-        Redirect::with('Signed out.', true)->to('client.login');
+        Redirect::with(local('signed_out'), true)->to('client.login');
 
         return null;
     }
@@ -147,9 +147,9 @@ class AuthController extends Controller
             $email = trim((string) Request::input('email', ''));
 
             if ($email === '') {
-                Request::addError('email', 'Enter the email address on your account.');
+                Request::addError('email', local('enter_account_email'));
             } elseif (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-                Request::addError('email', 'That does not look like an email address.');
+                Request::addError('email', local('not_an_email_address'));
             }
 
             if (Request::errors() === []) {
@@ -160,7 +160,7 @@ class AuthController extends Controller
         }
 
         return $this->render('forgot', [
-            'page_title' =>  'Reset your password',
+            'page_title' =>  local('reset_your_password'),
         ]);
     }
 
@@ -176,7 +176,7 @@ class AuthController extends Controller
     public function reset(string $token): ?string
     {
         if (AuthClient::findReset($token) === null) {
-            throw new HttpException(410, 'That reset link has expired or has already been used.');
+            throw new HttpException(410, local('reset_link_expired'));
         }
 
         if (Request::isPost()) {
@@ -189,7 +189,7 @@ class AuthController extends Controller
             );
 
             if ($result['ok']) {
-                Redirect::with('Your password has been changed. Sign in with it.', true)
+                Redirect::with(local('password_changed_sign_in'), true)
                     ->to('client.login');
 
                 return null;
@@ -201,7 +201,7 @@ class AuthController extends Controller
         }
 
         return $this->render('reset', [
-            'page_title' =>  'Choose a new password',
+            'page_title' =>  local('choose_a_new_password'),
             'token'      =>  $token,
         ]);
     }
@@ -222,7 +222,7 @@ class AuthController extends Controller
     public function register(): ?string
     {
         if (!option_bool('allow_registration')) {
-            throw new HttpException(404, 'Registration is not open.');
+            throw new HttpException(404, local('registration_not_open'));
         }
 
         if (Auth::check(PANEL)) {
@@ -237,7 +237,7 @@ class AuthController extends Controller
             $result = AuthClient::register($input, (string) ($input['password'] ?? ''));
 
             if ($result['ok']) {
-                Redirect::with('Your account is ready. Sign in to continue.', true)
+                Redirect::with(local('account_ready'), true)
                     ->to('client.login');
 
                 return null;
@@ -249,7 +249,7 @@ class AuthController extends Controller
         }
 
         return $this->render('register', [
-            'page_title' =>  'Create an account',
+            'page_title' =>  local('create_an_account'),
             'countries'  =>  Country::choices(),
         ]);
     }

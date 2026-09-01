@@ -75,25 +75,25 @@ class DashboardController extends AdminController
 
         return [
             'clients'  =>  [
-                'label' =>  'Active clients',
+                'label' =>  local('active_clients'),
                 'value' =>  $active === null ? Client::count() : Client::count(['status_relid' => $active]),
                 'icon'  =>  'clients',
                 'route' =>  'staff.clients',
             ],
             'orders'   =>  [
-                'label' =>  'Orders awaiting review',
+                'label' =>  local('orders_awaiting_review'),
                 'value' =>  $pending === null ? 0 : Order::count(['status_relid' => $pending]),
                 'icon'  =>  'orders',
                 'route' =>  'staff.orders',
             ],
             'tickets'  =>  [
-                'label' =>  'Open tickets',
+                'label' =>  local('open_tickets_stat'),
                 'value' =>  Support::openCount(),
                 'icon'  =>  'tickets',
                 'route' =>  'staff.tickets',
             ],
             'overdue'  =>  [
-                'label' =>  'Overdue invoices',
+                'label' =>  local('overdue_invoices'),
                 'value' =>  $this->overdueCount(),
                 'icon'  =>  'invoices',
                 'route' =>  'staff.invoices',

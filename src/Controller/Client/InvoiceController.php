@@ -56,7 +56,7 @@ class InvoiceController extends ClientController
             $page['rows'][$index]['overdue'] = Invoice::isOverdue($row);
         }
 
-        return $this->screen('invoices', 'My invoices', [
+        return $this->screen('invoices', local('my_invoices'), [
             'pager'       =>  $page,
             'statuses'    =>  Invoice::statuses(),
             'outstanding' =>  Invoice::outstandingFor($clientId),
@@ -75,7 +75,7 @@ class InvoiceController extends ClientController
         $row = $this->invoice($invoice);
         $id = (int) $row['invoice_id'];
 
-        return $this->screen('invoice', 'Invoice ' . $row['invoice_number'], [
+        return $this->screen('invoice', local('invoice_titled', $row['invoice_number']), [
             'invoice'      =>  $row,
             'items'        =>  Invoice::items($id),
             'transactions' =>  Transaction::forInvoice($id),
@@ -105,7 +105,7 @@ class InvoiceController extends ClientController
         $id = (int) $row['invoice_id'];
 
         return $this->render('invoice-print', [
-            'page_title'   =>  'Invoice ' . $row['invoice_number'],
+            'page_title'   =>  local('invoice_titled', $row['invoice_number']),
             'client'       =>  $this->client(),
             'invoice'      =>  $row,
             'items'        =>  Invoice::items($id),
@@ -142,14 +142,14 @@ class InvoiceController extends ClientController
         return $this->attempt(
             function () use ($row, $id): void {
                 if (Invoice::isSettled($row)) {
-                    throw new RuntimeException('That invoice is already settled.');
+                    throw new RuntimeException(local('invoice_already_settled'));
                 }
 
                 $applied = Invoice::applyCredit($id);
 
                 if (Money::isZero($applied)) {
                     throw new RuntimeException(
-                        'There is no credit on your account to put towards this invoice.'
+                        local('no_credit_available')
                     );
                 }
 
@@ -160,7 +160,7 @@ class InvoiceController extends ClientController
                 );
             },
             'client.invoice',
-            'Your account credit has been put towards this invoice.',
+            local('credit_applied_to_invoice'),
             ['invoice' => $row['uid']]
         );
     }

@@ -183,6 +183,21 @@ abstract class Controller
         /** {{ 1234.5|number }} - grouped, but no currency symbol */
         $template->addFilter('number', static fn($amount): string => decimal($amount ?? 0));
 
+        /**
+         * {{ 'add_client'|local }} or {{ 'showing_n_of_m'|local(shown, total) }}
+         *
+         * Bound to the function by name, the way laika-core binds its own `hook`
+         * and `asset` filters. local() is sprintf() over a static property on the
+         * global LANG class, so a value's placeholders are %s / %d / %1$s and a
+         * literal percent has to be written %%.
+         *
+         * It throws on a key that is not in LANG rather than returning anything,
+         * and that is deliberate: a missing key is a bug to be found now, not an
+         * empty region to be shipped. GlobalPipeline::language() loads the
+         * catalogue for whichever area is rendering.
+         */
+        $template->addFilter('local', 'local');
+
         // No `asset` filter here. laika-core registers one, and as of v4.5.10 its
         // asset() returns the URL rather than echoing it, so `|asset` works in a
         // view as written. LBM's own `asset_url` was a workaround for the old

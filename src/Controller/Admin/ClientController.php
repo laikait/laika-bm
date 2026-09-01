@@ -83,11 +83,11 @@ class ClientController extends AdminController
 
                 $this->log('client.created', 'Added client ' . client_name($client));
 
-                return $this->done('staff.client', 'Client added.', true, ['client' => $client['cuid']]);
+                return $this->done('staff.client', local('client_added'), true, ['client' => $client['cuid']]);
             }
         }
 
-        return $this->form(null, 'Add client');
+        return $this->form(null, local('add_client'));
     }
 
     /**
@@ -140,7 +140,7 @@ class ClientController extends AdminController
                     if ($errors !== []) {
                         Request::addError('password', $errors[0]);
 
-                        return $this->form($row, 'Edit ' . client_name($row));
+                        return $this->form($row, local('edit_named', client_name($row)));
                     }
 
                     Client::setPassword($id, $password);
@@ -148,11 +148,11 @@ class ClientController extends AdminController
 
                 $this->log('client.updated', 'Updated client ' . client_name($row), $changes);
 
-                return $this->done('staff.client', 'Client updated.', true, ['client' => $row['cuid']]);
+                return $this->done('staff.client', local('client_updated'), true, ['client' => $row['cuid']]);
             }
         }
 
-        return $this->form($row, 'Edit ' . client_name($row));
+        return $this->form($row, local('edit_named', client_name($row)));
     }
 
     /**
@@ -172,7 +172,7 @@ class ClientController extends AdminController
                 $this->log('client.deleted', "Deleted client {$name} and their contacts and notes.");
             },
             'staff.clients',
-            "Deleted {$name}."
+            local('deleted_named', $name)
         );
     }
 
@@ -208,9 +208,9 @@ class ClientController extends AdminController
             $input = Request::inputs();
 
             $this->require([
-                'first_name' =>  'A first name is required.',
-                'last_name'  =>  'A last name is required.',
-                'email'      =>  'An email address is required.',
+                'first_name' =>  local('first_name_required'),
+                'last_name'  =>  local('last_name_required'),
+                'email'      =>  local('email_required'),
             ], $input);
 
             $this->requireEmail('email', $input);
@@ -228,7 +228,7 @@ class ClientController extends AdminController
 
                 return $this->done(
                     'staff.client.contacts',
-                    'Contact added.',
+                    local('contact_added'),
                     true,
                     ['client' => $row['cuid']]
                 );
@@ -256,9 +256,9 @@ class ClientController extends AdminController
             $input = Request::inputs();
 
             $this->require([
-                'first_name' =>  'A first name is required.',
-                'last_name'  =>  'A last name is required.',
-                'email'      =>  'An email address is required.',
+                'first_name' =>  local('first_name_required'),
+                'last_name'  =>  local('last_name_required'),
+                'email'      =>  local('email_required'),
             ], $input);
 
             $this->requireEmail('email', $input);
@@ -276,7 +276,7 @@ class ClientController extends AdminController
 
                 return $this->done(
                     'staff.client.contacts',
-                    'Contact updated.',
+                    local('contact_updated'),
                     true,
                     ['client' => $row['cuid']]
                 );
@@ -306,7 +306,7 @@ class ClientController extends AdminController
 
         return $this->done(
             'staff.client.contacts',
-            'Contact removed.',
+            local('contact_removed'),
             true,
             ['client' => $row['cuid']]
         );
@@ -344,7 +344,7 @@ class ClientController extends AdminController
         if ($note === '') {
             return $this->done(
                 'staff.client.notes',
-                'A note cannot be empty.',
+                local('note_cannot_be_empty'),
                 false,
                 ['client' => $row['cuid']]
             );
@@ -354,7 +354,7 @@ class ClientController extends AdminController
 
         $this->log('note.created', 'Left a note on ' . client_name($row));
 
-        return $this->done('staff.client.notes', 'Note added.', true, ['client' => $row['cuid']]);
+        return $this->done('staff.client.notes', local('note_added'), true, ['client' => $row['cuid']]);
     }
 
     /**
@@ -371,7 +371,7 @@ class ClientController extends AdminController
 
         $this->log('note.deleted', 'Deleted a note on ' . client_name($row));
 
-        return $this->done('staff.client.notes', 'Note deleted.', true, ['client' => $row['cuid']]);
+        return $this->done('staff.client.notes', local('note_deleted'), true, ['client' => $row['cuid']]);
     }
 
     ####################################################################################
@@ -404,7 +404,7 @@ class ClientController extends AdminController
     {
         return $this->screen(
             'client-contact-form',
-            $contact === null ? 'Add contact' : 'Edit contact',
+            local($contact === null ? 'add_contact' : 'edit_contact'),
             [
                 'client'    =>  $client,
                 'contact'   =>  $contact,
@@ -424,9 +424,9 @@ class ClientController extends AdminController
     private function validate(array $input, ?int $ignore = null): bool
     {
         $this->require([
-            'first_name' =>  'A first name is required.',
-            'last_name'  =>  'A last name is required.',
-            'email'      =>  'An email address is required.',
+            'first_name' =>  local('first_name_required'),
+            'last_name'  =>  local('last_name_required'),
+            'email'      =>  local('email_required'),
         ], $input);
 
         $this->requireEmail('email', $input);
@@ -434,13 +434,13 @@ class ClientController extends AdminController
         $email = trim((string) ($input['email'] ?? ''));
 
         if ($email !== '' && Client::emailTaken($email, $ignore)) {
-            Request::addError('email', 'Another client already uses that email address.');
+            Request::addError('email', local('client_email_taken'));
         }
 
         $username = trim((string) ($input['username'] ?? ''));
 
         if ($username !== '' && Client::usernameTaken($username, $ignore)) {
-            Request::addError('username', 'That username is taken.');
+            Request::addError('username', local('username_taken'));
         }
 
         // Only checked when one was typed. On the add form a blank password is

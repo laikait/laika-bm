@@ -74,11 +74,11 @@ class ProductController extends AdminController
 
                 $this->log('product.created', 'Added product ' . $product['product_name']);
 
-                return $this->done('staff.product', 'Product added.', true, ['product' => $product['uid']]);
+                return $this->done('staff.product', local('product_added'), true, ['product' => $product['uid']]);
             }
         }
 
-        return $this->form(null, 'Add product');
+        return $this->form(null, local('add_product'));
     }
 
     /**
@@ -120,7 +120,7 @@ class ProductController extends AdminController
 
                 $this->log('product.priced', 'Updated pricing for ' . $row['product_name']);
 
-                return $this->done('staff.product', 'Pricing updated.', true, ['product' => $row['uid']]);
+                return $this->done('staff.product', local('pricing_updated'), true, ['product' => $row['uid']]);
             }
 
             if ($this->validate($input, (int) $row['pid'])) {
@@ -130,11 +130,11 @@ class ProductController extends AdminController
 
                 $this->log('product.updated', 'Updated product ' . $row['product_name'], $changes);
 
-                return $this->done('staff.product', 'Product updated.', true, ['product' => $row['uid']]);
+                return $this->done('staff.product', local('product_updated'), true, ['product' => $row['uid']]);
             }
         }
 
-        return $this->form($row, 'Edit ' . $row['product_name']);
+        return $this->form($row, local('edit_named', $row['product_name']));
     }
 
     /**
@@ -154,7 +154,7 @@ class ProductController extends AdminController
                 $this->log('product.deleted', "Deleted product {$name}.");
             },
             'staff.products',
-            "Deleted {$name}."
+            local('deleted_named', $name)
         );
     }
 
@@ -168,7 +168,7 @@ class ProductController extends AdminController
      */
     public function groups(): string
     {
-        return $this->screen('product-groups', 'Product groups', [
+        return $this->screen('product-groups', local('product_groups'), [
             'groups' =>  Product::groups(),
             'counts' =>  $this->groupCounts(),
         ]);
@@ -187,7 +187,7 @@ class ProductController extends AdminController
         $name = trim((string) ($input['group_name'] ?? ''));
 
         if ($name === '') {
-            return $this->done('staff.product.groups', 'A group needs a name.', false);
+            return $this->done('staff.product.groups', local('group_needs_name'), false);
         }
 
         $key = trim((string) ($input['group'] ?? ''));
@@ -198,7 +198,7 @@ class ProductController extends AdminController
 
         return $this->done(
             'staff.product.groups',
-            $key !== '' ? 'Group updated.' : 'Group added.'
+            local($key !== '' ? 'group_updated' : 'group_added')
         );
     }
 
@@ -219,7 +219,7 @@ class ProductController extends AdminController
                 $this->log('product.group.deleted', "Deleted product group {$name}.");
             },
             'staff.product.groups',
-            "Deleted {$name}."
+            local('deleted_named', $name)
         );
     }
 
@@ -253,9 +253,9 @@ class ProductController extends AdminController
     private function validate(array $input, ?int $ignore = null): bool
     {
         return $this->require([
-            'product_name' =>  'A product name is required.',
-            'group_relid'  =>  'Choose a group for this product.',
-            'type_relid'   =>  'Choose a product type.',
+            'product_name' =>  local('product_name_required'),
+            'group_relid'  =>  local('choose_group_for_product'),
+            'type_relid'   =>  local('choose_product_type'),
         ], $input);
     }
 
@@ -413,7 +413,7 @@ class ProductController extends AdminController
         $labels = [
             'recurring' =>  'Recurring',
             'one_time'  =>  'One-off',
-            'usage'     =>  'Usage based',
+            'usage'     =>  local('usage_based'),
             'free'      =>  'Free',
         ];
 

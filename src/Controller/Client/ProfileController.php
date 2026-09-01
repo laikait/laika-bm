@@ -78,7 +78,7 @@ class ProfileController extends ClientController
     {
         $this->allow('profile');
 
-        return $this->screen('profile', 'My details', [
+        return $this->screen('profile', local('my_details'), [
             'countries'  =>  Country::choices(),
             'currencies' =>  $this->currencyChoices(),
             'contacts'   =>  ClientContact::forClient($this->owner()),
@@ -104,12 +104,12 @@ class ProfileController extends ClientController
         $existing = $this->client() ?? [];
 
         $required = [
-            'first_name' =>  'Your first name is required.',
-            'last_name'  =>  'Your last name is required.',
+            'first_name' =>  local('your_first_name_required'),
+            'last_name'  =>  local('your_last_name_required'),
         ];
 
         if (!$this->require($required, $input)) {
-            return $this->done('client.profile', 'Please check the form and try again.', false);
+            return $this->done('client.profile', local('check_the_form'), false);
         }
 
         $data = array_intersect_key($input, array_flip(self::WRITABLE));
@@ -125,7 +125,7 @@ class ProfileController extends ClientController
                 );
             },
             'client.profile',
-            'Your details have been saved.'
+            local('details_saved')
         );
     }
 
@@ -163,7 +163,7 @@ class ProfileController extends ClientController
                 }
             },
             'client.profile',
-            'Your password has been changed.'
+            local('password_changed')
         );
     }
 
@@ -190,7 +190,7 @@ class ProfileController extends ClientController
                 $currency = $this->activeCurrency($wanted);
 
                 if ($currency === null) {
-                    throw new RuntimeException('That is not a currency this site bills in.');
+                    throw new RuntimeException(local('currency_not_billed_in'));
                 }
 
                 Client::modify($clientId, ['currency_relid' => $wanted]);
@@ -201,7 +201,7 @@ class ProfileController extends ClientController
                 );
             },
             'client.profile',
-            'Your billing currency has been changed. Invoices already raised keep the currency they were issued in.'
+            local('currency_changed')
         );
     }
 
@@ -237,9 +237,9 @@ class ProfileController extends ClientController
             $input = Request::inputs();
 
             $required = [
-                'first_name' =>  'A first name is required.',
-                'last_name'  =>  'A last name is required.',
-                'email'      =>  'An email address is required.',
+                'first_name' =>  local('first_name_required'),
+                'last_name'  =>  local('last_name_required'),
+                'email'      =>  local('email_required'),
             ];
 
             $this->require($required, $input);
@@ -248,7 +248,7 @@ class ProfileController extends ClientController
             $email = strtolower(trim((string) ($input['email'] ?? '')));
 
             if ($email !== '' && ClientContact::emailTaken($email)) {
-                Request::addError('email', 'A contact already uses that email address.');
+                Request::addError('email', local('contact_email_taken'));
             }
 
             if (Request::errors() === []) {
@@ -269,12 +269,12 @@ class ProfileController extends ClientController
                         );
                     },
                     'client.contacts',
-                    'The sub-login has been added.'
+                    local('sub_login_added')
                 );
             }
         }
 
-        return $this->screen('contact-form', 'Add a sub-login', [
+        return $this->screen('contact-form', local('add_a_sub_login'), [
             'contact'   =>  null,
             'countries' =>  Country::choices(),
             'groups'    =>  ClientContact::groups(),
@@ -297,9 +297,9 @@ class ProfileController extends ClientController
             $input = Request::inputs();
 
             $this->require([
-                'first_name' =>  'A first name is required.',
-                'last_name'  =>  'A last name is required.',
-                'email'      =>  'An email address is required.',
+                'first_name' =>  local('first_name_required'),
+                'last_name'  =>  local('last_name_required'),
+                'email'      =>  local('email_required'),
             ], $input);
 
             $this->requireEmail('email', $input);
@@ -307,7 +307,7 @@ class ProfileController extends ClientController
             $email = strtolower(trim((string) ($input['email'] ?? '')));
 
             if ($email !== '' && ClientContact::emailTaken($email, $id)) {
-                Request::addError('email', 'Another contact already uses that email address.');
+                Request::addError('email', local('other_contact_email_taken'));
             }
 
             if (Request::errors() === []) {
@@ -333,12 +333,12 @@ class ProfileController extends ClientController
                         );
                     },
                     'client.contacts',
-                    'The sub-login has been saved.'
+                    local('sub_login_saved')
                 );
             }
         }
 
-        return $this->screen('contact-form', 'Edit sub-login', [
+        return $this->screen('contact-form', local('edit_sub_login'), [
             'contact'   =>  $row,
             'countries' =>  Country::choices(),
             'groups'    =>  ClientContact::groups(),
@@ -363,7 +363,7 @@ class ProfileController extends ClientController
                 $this->log('contact.deleted', 'Removed the sub-login for ' . $row['email'] . '.');
             },
             'client.contacts',
-            'The sub-login has been removed.'
+            local('sub_login_removed')
         );
     }
 
@@ -386,7 +386,7 @@ class ProfileController extends ClientController
         if ($this->isContact()) {
             throw new HttpException(
                 403,
-                'Only the account holder can manage sub-logins.'
+                local('only_holder_manages_sub_logins')
             );
         }
     }

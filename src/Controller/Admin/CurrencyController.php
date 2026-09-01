@@ -58,7 +58,7 @@ class CurrencyController extends AdminController
         $code = strtoupper(trim((string) ($input['currency_code'] ?? '')));
 
         if ($code === '') {
-            return $this->done('staff.currencies', 'A currency needs an ISO code.', false);
+            return $this->done('staff.currencies', local('currency_needs_iso'), false);
         }
 
         $key = trim((string) ($input['currency'] ?? ''));
@@ -73,7 +73,7 @@ class CurrencyController extends AdminController
                 );
             },
             'staff.currencies',
-            $key !== '' ? "Updated {$code}." : "Added {$code}."
+            local($key !== '' ? 'currency_updated' : 'currency_added', $code)
         );
     }
 
@@ -115,7 +115,7 @@ class CurrencyController extends AdminController
                 $this->log('currency.deleted', "Deleted currency {$code}.");
             },
             'staff.currencies',
-            "Deleted {$code}."
+            local('deleted_named', $code)
         );
     }
 }

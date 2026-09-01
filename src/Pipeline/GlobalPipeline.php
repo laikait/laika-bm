@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace LBM\Pipeline;
 
 use Throwable;
+use Laika\Service\Url;
 use Laika\Service\CSRF;
 use Laika\Service\Date;
 use Laika\Service\Init;
@@ -191,14 +192,64 @@ class GlobalPipeline implements PipelineInterface
     }
 
     /**
-     * Load The Language Files For The Current Area
+     * Load The Language File For The Current Area
+     *
+     * Catalogues are per area - lf-lang/admin/en.local.php, lf-lang/panel/…,
+     * lf-lang/install/… - because a language file declares a global `class LANG`
+     * and require_once'ing a second one in the same request is a fatal. Only one
+     * area renders per request, so one file is ever loaded and the constraint
+     * costs nothing. The price is that strings shared between areas are copied
+     * into each file; there is no way to share them.
+     *
+     * Local::setPath() takes a name relative to LANG_PATH, which is exactly this
+     * shape.
      * @return void
      */
     private function language(): void
     {
-        Local::set($this->languageCode());
-        Local::setPath(APP_PATH . '/lf-lang');
-        Local::load();
+        // The installer renders before there is an area to be in, and before
+        // there is a database to read default_language from.
+        $area = Install::isInstalled()
+            ? (Url::segment(1) === PANEL ? PANEL : ADMIN)
+            : 'install';
+
+        $code = $this->languageCode();
+
+        // Local::load() writes an empty LANG stub for a file that is not there,
+        // and that stub then looks like a real catalogue for ever after - the
+        // area renders, every string is missing, and nothing says why. Fall back
+        // before it can, rather than cleaning up after it.
+        if (!$this->catalogue($area, $code)) {
+            $code = self::LANGUAGE;
+        }
+
+        // English is missing too, so this area has no catalogue at all yet.
+        // Loading would create exactly the stub the guard above exists to
+        // prevent. Load nothing instead and let local() fail loudly.
+        if (!$this->catalogue($area, $code)) {
+            return;
+        }
+
+        // setPath() throws when the directory is absent. A checkout whose
+        // lf-lang/ has not been populated should render untranslated, not 500.
+        try {
+            Local::set($code);
+            Local::setPath($area);
+            Local::load();
+        } catch (Throwable) {
+            return;
+        }
+    }
+
+    /**
+     * Does a Catalogue File Exist For This Area And Language
+     * @param string $area Area Directory Below lf-lang
+     * @param string $code Language Code
+     * @return bool
+     */
+    private function catalogue(string $area, string $code): bool
+    {
+        return is_file(LANG_PATH . DS . $area . DS . $code . '.local.php');
     }
 
     /**

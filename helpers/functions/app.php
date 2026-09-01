@@ -166,6 +166,43 @@ function current_template(): string
 }
 
 ####################################################################################
+/*----------------------------------- LANGUAGE -----------------------------------*/
+####################################################################################
+
+/**
+ * Language Codes That Are Fully Translated
+ *
+ * A catalogue is per area, so a language is only offered once every area has one.
+ * Half a translation is not a cosmetic gap here - local() throws on a key it
+ * cannot find, so an area with no catalogue is a white screen, and the Settings
+ * dropdown is the only thing standing between an operator and that.
+ *
+ * Keyed code => label, ready for a select. The label is the bare code upper-cased:
+ * naming the language in its own tongue would mean shipping a name table that goes
+ * stale the moment somebody adds a locale we have never heard of.
+ * @return array<string,string>
+ */
+function language_choices(): array
+{
+    $areas = [ADMIN, PANEL, 'install'];
+    $choices = [];
+
+    foreach (glob(LANG_PATH . DS . ADMIN . DS . '*.local.php') ?: [] as $path) {
+        $code = basename($path, '.local.php');
+
+        foreach ($areas as $area) {
+            if (!is_file(LANG_PATH . DS . $area . DS . $code . '.local.php')) {
+                continue 2;
+            }
+        }
+
+        $choices[$code] = strtoupper($code);
+    }
+
+    return $choices !== [] ? $choices : ['en' => 'EN'];
+}
+
+####################################################################################
 /*----------------------------------- FORMATTING ---------------------------------*/
 ####################################################################################
 

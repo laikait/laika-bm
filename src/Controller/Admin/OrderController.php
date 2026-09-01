@@ -64,10 +64,10 @@ class OrderController extends AdminController
             $input = Request::inputs();
             $items = $this->items($input);
 
-            $this->require(['client_relid' => 'Choose a client.'], $input);
+            $this->require(['client_relid' => local('choose_a_client_msg')], $input);
 
             if ($items === []) {
-                Request::addError('items', 'An order needs at least one line.');
+                Request::addError('items', local('order_needs_line'));
             }
 
             if (Request::errors() === []) {
@@ -76,11 +76,11 @@ class OrderController extends AdminController
 
                 $this->log('order.created', 'Placed order ' . $order['order_number']);
 
-                return $this->done('staff.order', 'Order placed.', true, ['order' => $order['uid']]);
+                return $this->done('staff.order', local('order_placed'), true, ['order' => $order['uid']]);
             }
         }
 
-        return $this->form(null, 'New order');
+        return $this->form(null, local('new_order'));
     }
 
     /**
@@ -92,7 +92,7 @@ class OrderController extends AdminController
     {
         $row = $this->record(Order::find($order), 'order');
 
-        return $this->screen('order', 'Order ' . $row['order_number'], [
+        return $this->screen('order', local('order_titled', $row['order_number']), [
             'order'   =>  $row,
             'client'  =>  Client::find((int) $row['client_relid']),
             'items'   =>  Order::items((int) $row['oid']),
@@ -123,10 +123,10 @@ class OrderController extends AdminController
 
             $this->log('order.updated', 'Updated order ' . $row['order_number']);
 
-            return $this->done('staff.order', 'Order updated.', true, ['order' => $row['uid']]);
+            return $this->done('staff.order', local('order_updated'), true, ['order' => $row['uid']]);
         }
 
-        return $this->form($row, 'Edit order ' . $row['order_number']);
+        return $this->form($row, local('edit_order_titled', $row['order_number']));
     }
 
     /**
@@ -148,7 +148,7 @@ class OrderController extends AdminController
                 );
             },
             'staff.order',
-            'Order accepted and invoiced.',
+            local('order_accepted'),
             ['order' => $row['uid']]
         );
     }
@@ -166,7 +166,7 @@ class OrderController extends AdminController
 
         $this->log('order.cancelled', 'Cancelled order ' . $row['order_number']);
 
-        return $this->done('staff.order', 'Order cancelled.', true, ['order' => $row['uid']]);
+        return $this->done('staff.order', local('order_cancelled'), true, ['order' => $row['uid']]);
     }
 
     /**
@@ -186,7 +186,7 @@ class OrderController extends AdminController
                 $this->log('order.deleted', "Deleted order {$number}.");
             },
             'staff.orders',
-            "Deleted order {$number}."
+            local('deleted_order', $number)
         );
     }
 
