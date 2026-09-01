@@ -627,6 +627,7 @@ class Installer
             'time_zone'           =>  'UTC',
 
             // Template
+            'front_template'      =>  'bootstrap',
             'admin_template'      =>  'bootstrap',
             'panel_template'      =>  'bootstrap',
 

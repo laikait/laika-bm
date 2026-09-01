@@ -19,6 +19,23 @@ use Laika\Route\Contracts\PipelineInterface;
 use LBM\Module\ModuleManager;
 
 ####################################################################################
+/*----------------------------------- AREAS --------------------------------------*/
+####################################################################################
+//
+// ADMIN and PANEL come from lf-inc/const.php and are both an area name AND a URL
+// prefix. FRONT is deliberately not defined there beside them, for two reasons:
+//
+//   1. The app root stays a thin host - LBM owns its own vocabulary.
+//   2. FRONT is ONLY an area name. It names a template directory and a language
+//      catalogue; there is no /front URL and there must never be one. Defining it
+//      next to two constants that are route prefixes would imply otherwise.
+//
+// The front area is whatever is not /admin and not /panel, the root included -
+// see area() in helpers/functions/app.php.
+
+defined('FRONT') || define('FRONT', 'front');
+
+####################################################################################
 /*--------------------------------- LBM RESOURCES --------------------------------*/
 ####################################################################################
 //

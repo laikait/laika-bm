@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace LBM\Pipeline;
 
 use Throwable;
-use Laika\Service\Url;
 use Laika\Service\CSRF;
 use Laika\Service\Date;
 use Laika\Service\Init;
@@ -194,8 +193,8 @@ class GlobalPipeline implements PipelineInterface
     /**
      * Load The Language File For The Current Area
      *
-     * Catalogues are per area - lf-lang/admin/en.local.php, lf-lang/panel/…,
-     * lf-lang/install/… - because a language file declares a global `class LANG`
+     * Catalogues are per area - lf-lang/front/en.local.php, lf-lang/admin/…,
+     * lf-lang/panel/…, lf-lang/install/… - because a file declares `class LANG`
      * and require_once'ing a second one in the same request is a fatal. Only one
      * area renders per request, so one file is ever loaded and the constraint
      * costs nothing. The price is that strings shared between areas are copied
@@ -209,9 +208,11 @@ class GlobalPipeline implements PipelineInterface
     {
         // The installer renders before there is an area to be in, and before
         // there is a database to read default_language from.
-        $area = Install::isInstalled()
-            ? (Url::segment(1) === PANEL ? PANEL : ADMIN)
-            : 'install';
+        //
+        // area() is a three-way match, not "not panel means admin": the front
+        // area owns no URL prefix, so it is everything that is not /admin and
+        // not /panel - the bare root included.
+        $area = Install::isInstalled() ? area() : 'install';
 
         $code = $this->languageCode();
 

@@ -36,8 +36,18 @@ class Permission
     public const GROUPS = [
         'staff', 'role', 'client', 'product', 'order', 'invoice',
         'transaction', 'ticket', 'note', 'domain', 'server', 'currency',
-        'report', 'module', 'settings', 'activity',
+        'report', 'module', 'settings', 'activity', 'content',
     ];
+
+    // `content` covers announcements and the knowledgebase together. One group
+    // rather than two because they are one job to an operator - both are things
+    // written here and read on the public site - and because every group adds a
+    // row of four checkboxes to the role matrix, which is already long.
+    //
+    // A role created BEFORE this group existed does not carry it, and
+    // allows() answers false for a permission it has never seen. So an existing
+    // install has to tick the new boxes once; a fresh install gets them from the
+    // installer, which grants the superadmin role every pair in this list.
 
     /** @var string[] Recognised Actions */
     public const ACTIONS = ['create', 'read', 'update', 'delete'];

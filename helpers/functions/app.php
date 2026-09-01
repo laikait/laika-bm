@@ -99,11 +99,12 @@ function lbm_asset(string $path): string
 /*----------------------------------- TEMPLATES ----------------------------------*/
 ####################################################################################
 //
-// A template is one directory per AREA: template/admin/<name>/ and
-// template/panel/<name>/, each holding its own layouts, partials, views,
-// loader.php and assets. The two areas are themed independently - that is the
-// whole point, since admin_template and panel_template are separate options -
-// so a template is self contained and shares nothing with its neighbours.
+// A template is one directory per AREA: template/front/<name>/,
+// template/admin/<name>/ and template/panel/<name>/, each holding its own
+// layouts, partials, views and assets. The three are themed independently -
+// that is the whole point, since front_template, admin_template and
+// panel_template are separate options - so a template is self contained and
+// shares nothing with its neighbours.
 //
 // The installer is template/install/ with no name level: it runs before there
 // is a database to read an option out of.
@@ -135,19 +136,66 @@ function panel_template(): string
 }
 
 /**
+ * Public Site Template Name
+ * @return string
+ */
+function front_template(): string
+{
+    return option('front_template', 'bootstrap') ?: 'bootstrap';
+}
+
+/**
+ * Which Area This Request Is In
+ *
+ * The single place the area rule lives, and it is a THREE-way match, not a
+ * binary. It reads as "not panel means admin" everywhere else in this codebase's
+ * history, and that was true until the front area existed.
+ *
+ * ADMIN and PANEL own a URL prefix. FRONT owns no prefix at all - it is the
+ * public site and it answers on `/`, so it is defined by exclusion: anything
+ * that is not /admin and not /panel, the empty root segment included.
+ *
+ * The installer is not an area in this sense. It is a whole-app state rather
+ * than a place in the URL, so GlobalPipeline::language() checks
+ * Install::isInstalled() before it ever asks this.
+ * @return string ADMIN, PANEL or FRONT
+ */
+function area(): string
+{
+    return match (Url::segment(1)) {
+        PANEL   => PANEL,
+        ADMIN   => ADMIN,
+        default => FRONT,
+    };
+}
+
+/**
  * The Template Directory For An Area, Below template/
  *
  * The single place the layout is encoded. Falls back to `bootstrap` when the
  * selected directory is not there: an operator can pick a template and later
  * delete it, and Twig would then fail to load every view - a blank page with no
  * hint of the cause, rather than the stock theme.
- * @param ?string $area ADMIN or PANEL. Null uses the current request
+ * @param ?string $area ADMIN, PANEL or FRONT. Null uses the current request
  * @return string Example: 'admin/bootstrap'
  */
 function template_dir(?string $area = null): string
 {
-    $area = ($area ?? Url::segment(1)) === PANEL ? PANEL : ADMIN;
-    $name = $area === PANEL ? panel_template() : admin_template();
+    $area = $area ?? area();
+
+    $name = match ($area) {
+        PANEL   => panel_template(),
+        FRONT   => front_template(),
+        default => admin_template(),
+    };
+
+    // Not $area directly: an unrecognised value would compose a path that cannot
+    // exist and fall through to bootstrap under a directory nothing renders from.
+    $area = match ($area) {
+        PANEL   => PANEL,
+        FRONT   => FRONT,
+        default => ADMIN,
+    };
 
     if (!is_dir(APP_PATH . DS . 'template' . DS . $area . DS . $name)) {
         $name = 'bootstrap';
@@ -172,7 +220,8 @@ function current_template(): string
 /**
  * Language Codes That Are Fully Translated
  *
- * A catalogue is per area, so a language is only offered once every area has one.
+ * A catalogue is per area, so a language is only offered once ALL FOUR have one -
+ * admin, panel, front and install.
  * Half a translation is not a cosmetic gap here - local() throws on a key it
  * cannot find, so an area with no catalogue is a white screen, and the Settings
  * dropdown is the only thing standing between an operator and that.
@@ -184,7 +233,7 @@ function current_template(): string
  */
 function language_choices(): array
 {
-    $areas = [ADMIN, PANEL, 'install'];
+    $areas = [ADMIN, PANEL, FRONT, 'install'];
     $choices = [];
 
     foreach (glob(LANG_PATH . DS . ADMIN . DS . '*.local.php') ?: [] as $path) {

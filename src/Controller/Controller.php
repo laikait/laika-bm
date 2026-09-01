@@ -227,7 +227,11 @@ abstract class Controller
             'head'      =>  $this->capture('lf_header'),
             'foot'      =>  $this->capture('lf_footer'),
             'alert'     =>  $this->alert(),
-            'area'      =>  Url::segment(1) === PANEL ? PANEL : ADMIN,
+            // area() rather than the inline "not panel means admin" that used to
+            // be here. That read correctly while there were two areas; with the
+            // public front area answering on `/`, every front page would have
+            // told its template it was the admin panel.
+            'area'      =>  area(),
         ];
     }
 

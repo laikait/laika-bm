@@ -58,6 +58,7 @@ class SettingsController extends AdminController
         }
 
         return $this->tab('general', 'Settings', [
+            'front_templates' =>  $this->templateChoices(FRONT),
             'admin_templates' =>  $this->templateChoices(ADMIN),
             'panel_templates' =>  $this->templateChoices(PANEL),
         ]);
@@ -418,7 +419,7 @@ class SettingsController extends AdminController
      * Each area has its own directory of templates, so the admin select must
      * not offer a client template - picking one would render nothing and fall
      * back to bootstrap without saying why.
-     * @param string $area ADMIN or PANEL
+     * @param string $area FRONT, ADMIN or PANEL
      * @return array<string,string>
      */
     private function templateChoices(string $area): array

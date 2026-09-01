@@ -60,7 +60,7 @@ class Setting extends Action
     public const GROUPS = [
         'general' => [
             'app_name', 'app_host', 'app_email', 'app_logo', 'app_icon',
-            'admin_template', 'panel_template',
+            'front_template', 'admin_template', 'panel_template',
         ],
         'localisation' => [
             'time_zone', 'date_format', 'datetime_format', 'time_format',

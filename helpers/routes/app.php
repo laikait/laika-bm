@@ -14,8 +14,6 @@ declare(strict_types=1);
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Route\Url;
-use Laika\Service\Redirect;
-use LBM\Pipeline\Auth;
 use LBM\Pipeline\Install;
 use LBM\Pipeline\GlobalPipeline;
 
@@ -40,11 +38,19 @@ Url::globalPipeline([
 /*------------------------------------- ROOT -------------------------------------*/
 ####################################################################################
 //
-// `/` has to be a real route, not a fallback. Global pipelines only run once a
-// route has matched, so an unmatched `/` would 404 on a fresh checkout instead
-// of reaching Install and being redirected into the wizard.
+// `/` is declared in helpers/routes/front.php, not here.
 //
-// Signed-in staff land in the admin area, everybody else in the client area.
-Url::get('/', function (): void {
-    Redirect::to(Auth::check(ADMIN) ? 'staff.dashboard' : 'client.dashboard');
-})->name('home');
+// It used to be a redirect - staff to the admin dashboard, everybody else to the
+// client area - which was right while the application had no public face. The
+// front area answers on `/` now, so the root is its home page and the two
+// dashboards are a click away in its nav.
+//
+// It is still a real route rather than a fallback, and for the reason this
+// comment originally gave: global pipelines only run once a route has matched,
+// so an unmatched `/` would 404 on a fresh checkout instead of reaching Install
+// and being redirected into the wizard.
+//
+// Load order makes the move safe. Route files are read in filename order -
+// admin, app, client, front, install - and matching is first-match-wins, so a
+// `/` left here would have beaten front.php's and silently kept the old
+// redirect.

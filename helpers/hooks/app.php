@@ -99,3 +99,10 @@ add_hook('lbm_uid', 'lbm_uid', 1000);
 /*================================= LANGUAGE ==================================*/
 /** Language codes that are fully translated */
 add_hook('language_choices', 'language_choices', 1000);
+
+/*=================================== AREAS ===================================*/
+/** Which area this request is in: ADMIN, PANEL or FRONT */
+add_hook('area', 'area', 1000);
+
+/** Public site template name */
+add_hook('front_template', 'front_template', 1000);

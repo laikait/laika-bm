@@ -29,6 +29,8 @@ use LBM\Controller\Admin\TicketController;
 use LBM\Controller\Admin\InvoiceController;
 use LBM\Controller\Admin\ProductController;
 use LBM\Controller\Admin\ProfileController;
+use LBM\Controller\Admin\AnnouncementController;
+use LBM\Controller\Admin\KnowledgeBaseController;
 use LBM\Controller\Admin\ActivityController;
 use LBM\Controller\Admin\CurrencyController;
 use LBM\Controller\Admin\SettingsController;
@@ -400,6 +402,73 @@ Url::group(ADMIN, function () use ($uid): void {
     /** Revokes every auth_tokens row for this staff member, not just this one. */
     Url::post('/my-account/sessions/revoke', [ProfileController::class, 'revokeSessions'])
         ->name('staff.account.sessions.revoke');
+
+
+    /*============================ SITE CONTENT =============================*/
+    //
+    // Announcements and the knowledgebase - written here, read on the public
+    // front area. Both sit under one `content` permission group: they are one
+    // job to an operator, and every group adds four checkboxes to the role
+    // matrix.
+
+    Url::get('/announcements', [AnnouncementController::class, 'index'])
+        ->name('staff.announcements')->pipeline([Permission::class . '|perm=content.read']);
+
+    Url::get('/announcements/new', [AnnouncementController::class, 'create'])
+        ->name('staff.announcement.new')->pipeline([Permission::class . '|perm=content.create']);
+    Url::post('/announcements/new', [AnnouncementController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=content.create']);
+
+    Url::get("/announcement/{announcement:{$uid}}/edit", [AnnouncementController::class, 'edit'])
+        ->name('staff.announcement.edit')->pipeline([Permission::class . '|perm=content.update']);
+    Url::post("/announcement/{announcement:{$uid}}/edit", [AnnouncementController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=content.update']);
+
+    Url::post("/announcement/{announcement:{$uid}}/delete", [AnnouncementController::class, 'delete'])
+        ->name('staff.announcement.delete')->pipeline([Permission::class . '|perm=content.delete']);
+
+    /*=========================== KNOWLEDGEBASE =============================*/
+    //
+    // Articles and their categories on one controller, for the same reason they
+    // share a permission group: nobody manages categories except in order to
+    // file articles.
+
+    Url::get('/knowledgebase', [KnowledgeBaseController::class, 'index'])
+        ->name('staff.kb')->pipeline([Permission::class . '|perm=content.read']);
+
+    Url::get('/knowledgebase/new', [KnowledgeBaseController::class, 'create'])
+        ->name('staff.kb.new')->pipeline([Permission::class . '|perm=content.create']);
+    Url::post('/knowledgebase/new', [KnowledgeBaseController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=content.create']);
+
+    /*
+     * Declared BEFORE the /article/{uid} routes below. Matching is first-match
+     * -wins in registration order, and `categories` would otherwise be read as
+     * a uid by the article routes if their patterns ever loosened.
+     */
+    Url::get('/knowledgebase/categories', [KnowledgeBaseController::class, 'categories'])
+        ->name('staff.kb.categories')->pipeline([Permission::class . '|perm=content.read']);
+
+    Url::get('/knowledgebase/categories/new', [KnowledgeBaseController::class, 'categoryCreate'])
+        ->name('staff.kb.category.new')->pipeline([Permission::class . '|perm=content.create']);
+    Url::post('/knowledgebase/categories/new', [KnowledgeBaseController::class, 'categoryCreate'])
+        ->pipeline([Permission::class . '|perm=content.create']);
+
+    Url::get("/knowledgebase/category/{category:{$uid}}/edit", [KnowledgeBaseController::class, 'categoryEdit'])
+        ->name('staff.kb.category.edit')->pipeline([Permission::class . '|perm=content.update']);
+    Url::post("/knowledgebase/category/{category:{$uid}}/edit", [KnowledgeBaseController::class, 'categoryEdit'])
+        ->pipeline([Permission::class . '|perm=content.update']);
+
+    Url::post("/knowledgebase/category/{category:{$uid}}/delete", [KnowledgeBaseController::class, 'categoryDelete'])
+        ->name('staff.kb.category.delete')->pipeline([Permission::class . '|perm=content.delete']);
+
+    Url::get("/article/{article:{$uid}}/edit", [KnowledgeBaseController::class, 'edit'])
+        ->name('staff.kb.edit')->pipeline([Permission::class . '|perm=content.update']);
+    Url::post("/article/{article:{$uid}}/edit", [KnowledgeBaseController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=content.update']);
+
+    Url::post("/article/{article:{$uid}}/delete", [KnowledgeBaseController::class, 'delete'])
+        ->name('staff.kb.delete')->pipeline([Permission::class . '|perm=content.delete']);
 
 })->pipeline([Auth::class])->filter([ActivityFilter::class]);
 
