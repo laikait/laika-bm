@@ -46,15 +46,23 @@ class SupportDepartmentSchema extends SchemaAbstract
     }
 
     /**
-     * Seed One Department
+     * Seed The Two Departments An Install Cannot Work Without
      *
      * Not decoration: support_tickets.department_relid is NOT NULL, so with an
      * empty table nobody can open a ticket at all and the client area's "new
      * ticket" form has an empty dropdown with nothing to pick.
      *
+     * There are two of them because the public contact form now opens tickets
+     * as well, and it offers only departments with dep_requires_login = 'no'.
+     * Seeded with General Support alone, a fresh install renders that form with
+     * no department field at all - the feature would look broken to anyone who
+     * had not first gone and created a public department by hand.
+     *
      * Seeds re-run on every app:migrate, not only on table creation, so this
      * guards on the row count - a bare insert would collide with itself on the
-     * second run.
+     * second run. Which also means an install made before this second row
+     * existed will not receive it: an operator upgrading either adds one, or
+     * clears dep_requires_login on a department they already have.
      * @return void
      */
     public function seed(): void
@@ -71,6 +79,19 @@ class SupportDepartmentSchema extends SchemaAbstract
                 'dep_email'           =>  null,
                 'dep_description'     =>  'Questions about your account, services or invoices.',
                 'dep_requires_login'  =>  'yes',
+                'dep_hidden'          =>  'no',
+                'dep_auto_close_days' =>  7,
+                'dep_is_active'       =>  'yes',
+            ],
+            [
+                // The one department a stranger may write to. It requires no
+                // login precisely because the people using it do not have one -
+                // that is what makes the public contact form able to raise a
+                // ticket rather than only send mail.
+                'dep_name'            =>  'Sales and General Enquiries',
+                'dep_email'           =>  null,
+                'dep_description'     =>  'Questions from visitors who do not have an account yet.',
+                'dep_requires_login'  =>  'no',
                 'dep_hidden'          =>  'no',
                 'dep_auto_close_days' =>  7,
                 'dep_is_active'       =>  'yes',

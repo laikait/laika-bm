@@ -15,6 +15,7 @@ namespace LBM\Action;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use Throwable;
 use Laika\Model\Model;
 use LBM\Model\ClientModel;
 use LBM\Model\ClientContactModel;
@@ -34,6 +35,22 @@ class Client extends Action
 {
     /** @var string Status Lookup Table */
     public const STATUSES = 'client_statuses';
+
+    /**
+     * @var string The Address The Website-Enquiry Account Is Filed Under
+     *
+     * `.invalid` is reserved by RFC 2606 and can never be registered by anyone,
+     * which is the whole point: this address is a unique key, not a mailbox.
+     * Nobody can own it, so nobody can claim the account by proving they do;
+     * `clients.email` is UNIQUE, so nobody can register a second account on it;
+     * and a password-reset request for it delivers nowhere.
+     *
+     * Deliberately fixed rather than derived from `app_host`. An operator who
+     * changes their URL would otherwise silently acquire a second enquiry
+     * account, and every ticket filed before the change would be filed under
+     * an account nobody looks at any more.
+     */
+    public const ENQUIRY_EMAIL = 'website-enquiries@lbm.invalid';
 
     /** @var string[] Columns a Form May Write */
     public const FIELDS = [
@@ -324,6 +341,70 @@ class Client extends Action
     public function statuses(): array
     {
         return Status::all(self::STATUSES);
+    }
+
+    ####################################################################################
+    /*============================== WEBSITE ENQUIRIES ===============================*/
+    ####################################################################################
+
+    /**
+     * The Account Anonymous Website Enquiries Are Filed Under
+     *
+     * ------------------------------------------------------------------------
+     * Why a stand-in account exists at all
+     * ------------------------------------------------------------------------
+     * The public contact form opens a real ticket, and
+     * `support_tickets.client_relid` is NOT NULL - every ticket belongs to an
+     * account, and a stranger has none. Three ways out were available:
+     *
+     *   1. Make the column nullable. Rejected: `SchemaAbstract::up()` only ever
+     *      runs createIfNotExists, so no existing install would ever receive the
+     *      change, and sqlite cannot drop NOT NULL from a column without
+     *      rebuilding the table. Worse, `Support::browseWithClients()` joins
+     *      clients to list tickets - a null-client ticket would vanish from the
+     *      admin listing entirely. An enquiry the operator never sees is worse
+     *      than no enquiry at all.
+     *   2. Create a client per sender. Rejected: `clients.email` is UNIQUE, so
+     *      the first stranger to write in would be unable to register later -
+     *      their address is already taken by a record they never made. It is
+     *      also an unbounded row for anyone who can POST a form.
+     *   3. One shared stand-in account. Taken.
+     *
+     * So every anonymous enquiry lands on one account, created the first time
+     * somebody uses the form and reused forever after. A signed-in client who
+     * uses the same form gets the ticket on their own account instead - that
+     * identity is proven, and the ticket then shows in their own area.
+     *
+     * The account cannot be signed into: `is_restricted` is 'yes', which
+     * `canSignIn()` refuses outright, the status is inactive, and `store()` is
+     * called with no password so there is no credential row to match against.
+     * @return int The client ID, or 0 when the account could not be created
+     */
+    public function enquiryAccountId(): int
+    {
+        $existing = $this->first(['email' => self::ENQUIRY_EMAIL]);
+
+        if ($existing !== null) {
+            return (int) $existing['cid'];
+        }
+
+        try {
+            return $this->store([
+                'first_name'    =>  'Website',
+                'last_name'     =>  'Enquiries',
+                'email'         =>  self::ENQUIRY_EMAIL,
+                'status_relid'  =>  Status::idOf(self::STATUSES, 'inactive') ?? 0,
+                'is_restricted' =>  'yes',
+            ]);
+        } catch (Throwable) {
+            // Two visitors submitting at once both find no account and both
+            // insert; the UNIQUE index on email lets exactly one win. The loser
+            // wants the winner's row, not an error page - so look again rather
+            // than failing a form submission over a race with itself.
+            $existing = $this->first(['email' => self::ENQUIRY_EMAIL]);
+
+            return $existing === null ? 0 : (int) $existing['cid'];
+        }
     }
 
     ####################################################################################

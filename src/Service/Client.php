@@ -30,6 +30,7 @@ use Laika\Relay\Relay;
  * @method static int delete(int|string $key)
  * @method static int deleteWhere(array $where)
  * @method static bool emailTaken(string $email, ?int $ignore = null)
+ * @method static int enquiryAccountId()
  * @method static bool exists(array $where)
  * @method static ?array find(int|string|null $key)
  * @method static ?array findByLogin(string $identifier)

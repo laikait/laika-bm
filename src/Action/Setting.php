@@ -137,6 +137,10 @@ class Setting extends Action
      * Update first, then insert. Option::insert() tests existence with a bare
      * truthiness check on the current value, so a key stored as '' looks absent
      * to it and the insert collides with the primary key already there.
+     *
+     * Then the insert is verified, because on PostgreSQL it silently does
+     * nothing. The comment inside says why, at length; it is not obvious and it
+     * cost a phase to find.
      * @param string $key Option Key
      * @param mixed $value Value
      * @return void
@@ -145,9 +149,50 @@ class Setting extends Action
     {
         $value = $this->encode($key, $value);
 
-        if (!Option::update($key, $value)) {
-            Option::insert($key, $value);
+        if (Option::update($key, $value)) {
+            return;
         }
+
+        Option::insert($key, $value);
+
+        // ------------------------------------------------------------------
+        // Why the write is checked rather than trusted
+        // ------------------------------------------------------------------
+        // On PostgreSQL, Option::insert() reports success and stores nothing.
+        // Found by running it: cron.php wrote cron_last_run on every
+        // invocation, exited 0, and the row was never there.
+        //
+        // The chain is worth writing down, because no layer in it errors:
+        //
+        //   1. Option::insert() wraps its INSERT in a transaction.
+        //   2. Model::insert() finishes by calling PDO::lastInsertId(), which
+        //      on PostgreSQL throws for a table with no sequence it can infer.
+        //      `options` is keyed on op_key, so there is no sequence. That
+        //      exception is caught and '' returned, deliberately: a successful
+        //      write should not become an error just because there is no id.
+        //   3. But PostgreSQL aborts the entire transaction on ANY error inside
+        //      it. Everything after answers "current transaction is aborted",
+        //      and the COMMIT is carried out as a ROLLBACK.
+        //
+        // So the row is discarded, silently, while every layer reports success.
+        // Outside a transaction the same lastInsertId() failure is harmless -
+        // the INSERT has already committed on its own - which is exactly why a
+        // plain insert works here and Option::insert() does not.
+        //
+        // Latent since the beginning, and only cron could surface it: every
+        // other option key is seeded by the installer, so every other write
+        // takes the UPDATE path above, and UPDATE never calls lastInsertId().
+        // The first key written that nobody seeded is the first one to vanish.
+        //
+        // The repair is the same shape as the fault - write it again, without a
+        // transaction - and it stays here rather than in the framework. It
+        // costs one SELECT on the path that has already failed to UPDATE, which
+        // happens once per key in the life of an install.
+        if ($this->model()->where(['op_key' => $key])->exists()) {
+            return;
+        }
+
+        $this->model()->insert(['op_key' => $key, 'op_value' => $value]);
     }
 
     /**

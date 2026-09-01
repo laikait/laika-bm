@@ -36,6 +36,9 @@ use LBM\Service\Transaction;
  */
 class DashboardController extends AdminController
 {
+    /** @var int Minutes Without a Cron Run After Which Something Is Wrong */
+    private const CRON_STALE_MINUTES = 60;
+
     protected function nav(): string
     {
         return 'dashboard';
@@ -48,6 +51,7 @@ class DashboardController extends AdminController
     public function index(): string
     {
         return $this->screen('dashboard', 'Dashboard', [
+            'cron'        =>  $this->cron(),
             'stats'       =>  $this->stats(),
             'revenue'     =>  $this->revenue(),
             'invoices'    =>  $this->invoiceMix(),
@@ -218,6 +222,48 @@ class DashboardController extends AdminController
     private function recentTickets(): array
     {
         return Support::browseWithClients([], null, 6)['rows'];
+    }
+
+    /**
+     * Whether Scheduled Tasks Are Actually Running
+     *
+     * "Cron was never set up" is the most common way a self-hosted billing
+     * install quietly stops billing anybody, and it is invisible from every
+     * other screen: nothing errors, invoices simply never appear and queued
+     * email never leaves. So the dashboard says so, because the dashboard is
+     * the screen an operator opens without being asked to.
+     *
+     * `cron_last_run` is written by LBM\Support\Cron on every invocation,
+     * including one where a task failed - a run that happened and went wrong is
+     * a different problem from a run that never happened, and conflating them
+     * would send somebody to fix the wrong thing.
+     * @return array
+     */
+    private function cron(): array
+    {
+        $last = trim((string) option('cron_last_run', ''));
+        $minutes = option_int('cron_stale_minutes', self::CRON_STALE_MINUTES);
+        $minutes = $minutes > 0 ? $minutes : self::CRON_STALE_MINUTES;
+
+        // The exact command for *this* install, not a documentation example an
+        // operator has to adapt. The path is the single detail they get wrong.
+        $command = APP_PATH . DS . 'cron.php';
+
+        if ($last === '') {
+            return ['last' => null, 'never' => true, 'stale' => true, 'command' => $command];
+        }
+
+        // An unparseable value reads as ancient rather than as fine. A stamp
+        // nobody can read is not evidence that anything ran.
+        $age = time() - (int) strtotime($last);
+
+        return [
+            'last'    =>  $last,
+            'never'   =>  false,
+            'stale'   =>  $age > $minutes * 60,
+            'hours'   =>  (int) floor($age / 3600),
+            'command' =>  $command,
+        ];
     }
 
     /**
