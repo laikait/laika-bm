@@ -307,8 +307,16 @@ class InvoiceGenerateJob extends Job
                 ],
                 (int) $client['cid']
             );
-        } catch (Throwable) {
-            // No such template, or it is switched off. The invoice still stands.
+        } catch (Throwable $e) {
+            // The invoice still stands - it is a financial record and does not
+            // depend on the customer being told about it. But an invoice that
+            // was raised and never announced is a payment that will not arrive,
+            // so this is written down rather than discarded.
+            (new Activity())->record(
+                'invoice.notify.failed',
+                'Raised invoice ' . ($invoice['invoice_number'] ?? '?')
+                . ' but could not email it to ' . ($client['email'] ?? '?') . ': ' . $e->getMessage()
+            );
         }
     }
 }

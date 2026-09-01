@@ -381,10 +381,24 @@ Url::group(ADMIN, function () use ($uid): void {
 
     Url::get('/settings/email-templates', [SettingsController::class, 'emailTemplates'])
         ->name('staff.settings.templates')->pipeline([Permission::class . '|perm=settings.read']);
+
+    /**
+     * Before the {template} routes, and it has to stay there. Matching is
+     * first-match-wins in registration order with no specificity ranking, and
+     * $uid is [a-zA-Z0-9\-]+ - which matches "new". Registered after, this route
+     * would never be reached and the create form would 404 as a missing record.
+     */
+    Url::get('/settings/email-template/new', [SettingsController::class, 'emailTemplateCreate'])
+        ->name('staff.settings.template.new')->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post('/settings/email-template/new', [SettingsController::class, 'emailTemplateCreate'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+
     Url::get("/settings/email-template/{template:{$uid}}", [SettingsController::class, 'emailTemplate'])
         ->name('staff.settings.template')->pipeline([Permission::class . '|perm=settings.read']);
     Url::post("/settings/email-template/{template:{$uid}}", [SettingsController::class, 'emailTemplate'])
         ->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post("/settings/email-template/{template:{$uid}}/delete", [SettingsController::class, 'emailTemplateDelete'])
+        ->name('staff.settings.template.delete')->pipeline([Permission::class . '|perm=settings.update']);
 
     Url::get('/settings/statuses', [SettingsController::class, 'statuses'])
         ->name('staff.settings.statuses')->pipeline([Permission::class . '|perm=settings.read']);

@@ -253,8 +253,17 @@ class InvoiceReminderJob extends Job
                 'days'           =>  (string) abs($offset),
                 'subject'        =>  $subject,
             ], (int) $client['cid']);
-        } catch (Throwable) {
-            // No such template, or it is switched off. Nothing to chase with.
+        } catch (Throwable $e) {
+            // Nothing to chase with, so this invoice is left for the next run -
+            // but recorded, because "reminders are switched on and none are
+            // going out" is otherwise invisible. Written once per invoice per
+            // day, which is the same cadence the reminder itself would have had.
+            (new Activity())->record(
+                'invoice.reminder.failed',
+                'Could not chase invoice ' . ($row['invoice_number'] ?? '?') . ': ' . $e->getMessage(),
+                Activity::SYSTEM
+            );
+
             return;
         }
 

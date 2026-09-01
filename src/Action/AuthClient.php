@@ -525,8 +525,20 @@ class AuthClient extends Action
     {
         try {
             (new Mail())->queueTemplate($slug, $to, $variables, $clientId);
-        } catch (RuntimeException) {
-            // No such template, or it is switched off. Nothing to do.
+        } catch (RuntimeException $e) {
+            // Still swallowed - a missing template must not stop somebody
+            // registering or resetting their password, because the account work
+            // has already succeeded by the time this runs.
+            //
+            // But no longer silent. Discarding the exception outright hid the
+            // worst failure in the application: a visitor is told "a reset link
+            // is on its way", the queue stays empty, and nothing anywhere says
+            // why. The operator finds out from a customer who cannot get back
+            // into their account.
+            (new Activity())->record(
+                'mail.template.missing',
+                'Could not send the [' . $slug . '] email to ' . $to . ': ' . $e->getMessage()
+            );
         }
     }
 

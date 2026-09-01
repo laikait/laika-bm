@@ -178,6 +178,122 @@ class SettingsController extends AdminController
     }
 
     /**
+     * Write a New Template
+     *
+     * The screen was list-and-edit only until now, so the set of templates was
+     * whatever the seed had put there and nothing else. An operator who deleted
+     * one could not get it back, and a module wanting its own message had
+     * nowhere to put it.
+     *
+     * The slug is the only part that is not cosmetic: it is the name the code
+     * asks for, so `Mail::queueTemplate('invoice-created')` finds a row only if
+     * some row carries exactly that slug. Normalised here rather than trusted,
+     * because an operator typing "Invoice Created" would otherwise create a
+     * template that can never be found.
+     * @return ?string
+     */
+    public function emailTemplateCreate(): ?string
+    {
+        if (Request::isPost()) {
+            $input = Request::inputs();
+
+            $slug = $this->templateSlug((string) ($input['slug'] ?? ''));
+            $name = trim((string) ($input['name'] ?? ''));
+
+            $this->require([
+                'slug'    =>  local('slug_required'),
+                'name'    =>  local('name_required'),
+                'subject' =>  local('subject_required'),
+                'body'    =>  local('message_cannot_be_empty'),
+            ], $input);
+
+            // Both columns are UNIQUE, so a duplicate would surface as a driver
+            // error rather than something the operator can act on.
+            if ($slug !== '' && (new EmailTemplateModel())->where(['slug' => $slug])->exists()) {
+                Request::addError('slug', local('slug_taken', $slug));
+            }
+
+            if ($name !== '' && (new EmailTemplateModel())->where(['name' => $name])->exists()) {
+                Request::addError('name', local('template_name_taken', $name));
+            }
+
+            if (Request::errors() === []) {
+                $uid = lbm_uid();
+
+                (new EmailTemplateModel())->insert([
+                    'uid'        =>  $uid,
+                    'slug'       =>  $slug,
+                    'name'       =>  $name,
+                    'subject'    =>  trim((string) $input['subject']),
+                    'body'       =>  (string) $input['body'],
+                    'variables'  =>  json_encode(new \stdClass(), JSON_PRETTY_PRINT),
+                    'is_active'  =>  empty($input['is_active']) || $input['is_active'] === 'false' ? 'no' : 'yes',
+                    'created_at' =>  date('Y-m-d H:i:s'),
+                    'updated_at' =>  date('Y-m-d H:i:s'),
+                ]);
+
+                $this->log('settings.template.created', 'Added the ' . $name . ' email template.');
+
+                return $this->done(
+                    'staff.settings.template',
+                    local('template_added'),
+                    true,
+                    ['template' => $uid]
+                );
+            }
+        }
+
+        return $this->screen('settings-email-template-new', local('add_template'), [
+            'tab' =>  'templates',
+        ]);
+    }
+
+    /**
+     * Delete One Template
+     *
+     * No guard on whether the application still sends this slug. A template the
+     * code asks for and cannot find is already a handled case - it is recorded
+     * on the activity log and the surrounding work carries on - and the seed
+     * puts a missing core template back on the next app:migrate. Refusing the
+     * delete would leave an operator stuck with a row they cannot remove.
+     * @param string $template Template Uid
+     * @return ?string
+     */
+    public function emailTemplateDelete(string $template): ?string
+    {
+        $model = new EmailTemplateModel();
+        $row = $this->record(
+            is_array($found = $model->where([$model->uid => $template])->first()) ? $found : null,
+            'email template'
+        );
+
+        (new EmailTemplateModel())->where(['et_id' => (int) $row['et_id']])->delete();
+
+        $this->log('settings.template.deleted', 'Deleted the ' . $row['name'] . ' email template.');
+
+        return $this->done('staff.settings.templates', local('template_deleted'));
+    }
+
+    /**
+     * Reduce a Typed Slug To What The Code Can Look Up
+     *
+     * Lowercase, hyphen-separated, nothing else. The slug is an identifier the
+     * application matches exactly, never something a customer reads, so it is
+     * normalised rather than validated - rejecting "Invoice Created" would be
+     * correct but unhelpful when turning it into `invoice-created` is what the
+     * operator meant.
+     * @param string $slug Typed Slug
+     * @return string
+     */
+    private function templateSlug(string $slug): string
+    {
+        $slug = strtolower(trim($slug));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+
+        return trim($slug, '-');
+    }
+
+    /**
      * Edit One Template
      * @param string $template Template Uid
      * @return ?string
