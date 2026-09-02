@@ -48,7 +48,7 @@ class Module extends Action
     public const MANIFEST = 'module.php';
 
     /** @var string[] The Kinds Of Module, Which Are Also The Subdirectories */
-    public const TYPES = ['plugins', 'addons', 'gateways', 'servers', 'registrars'];
+    public const TYPES = ['fraud', 'addons', 'gateways', 'servers', 'registrars', 'widgets'];
 
     /** @var string Option Key Prefix For The Enabled Flag */
     public const OPTION = 'module_enabled_';
@@ -163,9 +163,9 @@ class Module extends Action
         return count($this->all());
     }
 
-    ####################################################################################
-    /*=============================== THE LOADER'S VIEW ==============================*/
-    ####################################################################################
+    ################################################################################
+    /*============================= THE LOADER'S VIEW ============================*/
+    ################################################################################
     //
     // Enabled and loaded are different questions, and the admin screen needs both.
     // A module switched on a moment ago is enabled but not loaded until the next
