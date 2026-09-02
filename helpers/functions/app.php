@@ -15,6 +15,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Url;
 use Laika\Service\Date;
+use LBM\Support\Version;
 
 ####################################################################################
 /*----------------------------------- IDENTITY -----------------------------------*/
@@ -75,6 +76,31 @@ function app_logo(): string
 function app_icon(): string
 {
     return lbm_asset('assets/img/' . (option('app_icon', 'icon.png') ?: 'icon.png'));
+}
+
+/**
+ * Product Version
+ *
+ * Not an option, and deliberately not settable by the operator: this describes
+ * the code that is running, so the code is the only thing entitled to state it.
+ * `app_name` is the operator's to change; this is not.
+ * @return string
+ */
+function app_version(): string
+{
+    return Version::CURRENT;
+}
+
+/**
+ * Product Name
+ *
+ * The software's own name, as distinct from `app_name`, which an operator
+ * routinely changes to their own company. A support conversation needs both.
+ * @return string
+ */
+function app_product(): string
+{
+    return Version::PRODUCT;
 }
 
 /**

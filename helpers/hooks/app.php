@@ -51,6 +51,12 @@ add_hook('app_logo', 'app_logo', 1000);
 /** App icon URL */
 add_hook('app_icon', 'app_icon', 1000);
 
+/** Product version - the code's own, never an option */
+add_hook('app_version', 'app_version', 1000);
+
+/** Product name - distinct from app_name, which the operator owns */
+add_hook('app_product', 'app_product', 1000);
+
 /** Absolute URL for a bundled asset */
 add_hook('lbm_asset', 'lbm_asset', 1000);
 

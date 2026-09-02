@@ -747,16 +747,37 @@ class Installer
 
         if (empty($row)) {
             $model->transaction(function (CurrencyModel $m) use ($code): void {
-            $system_currencies = system_currencies();
-            $m->where(['is_default' => 'yes'])->update(['is_default' => 'no']);
-            $m->insert([
+                $system_currencies = system_currencies();
+
+                $m->where(['is_default' => 'yes'])->update(['is_default' => 'no']);
+
+                // Every NOT NULL column with no default has to be named here.
+                // This goes through the model directly rather than through
+                // Action\Currency, so none of that class's normalisation runs -
+                // and `currencies` has no seed, so this insert is the only way
+                // the first currency is ever made.
+                //
+                // Two columns were missing, and MySQL hid both: a non-strict
+                // server silently substitutes '' for a NOT NULL column with no
+                // default, so the install "worked" while writing a currency with
+                // a blank uid. That is not benign - `uid` is UNIQUE, so the
+                // second currency written this way collides on the empty string.
+                // PostgreSQL refuses the NULL and the install stops at step 4.
+                //
+                // suffix_symbol is deliberately '' rather than null: the column
+                // is NOT NULL and a currency that only has a prefix genuinely
+                // has no suffix. Action\Currency::normalise() does the same.
+                $m->insert([
+                    'uid'           => Uid::make(),
                     'currency_code' => $code,
                     'exchange_rate' => '1.000000',
-                    'is_active'    => 'yes',
+                    'is_active'     => 'yes',
                     'is_default'    => 'yes',
                     'prefix_symbol' => $system_currencies[$code] ?? '$',
+                    'suffix_symbol' => '',
                 ]);
             });
+
             return;
         }
 
