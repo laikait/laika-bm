@@ -15,6 +15,8 @@ namespace LBM\Controller\Admin;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use Laika\Service\Request;
+use LBM\Module\ModuleInstaller;
 use LBM\Service\Module;
 
 /**
@@ -62,7 +64,52 @@ class ModuleController extends AdminController
             'modules' =>  $modules,
             'types'   =>  Module::types(),
             'path'    =>  Module::path(),
+
+            // The select is keyed by the type, so the view never has to know
+            // the list - and a value that is not in it is refused server-side
+            // by ModuleInstaller anyway.
+            'kinds'   =>  array_combine(Module::types(), Module::types()),
+            'maxsize' =>  (int) round(ModuleInstaller::MAX_BYTES / 1048576) . 'MB',
         ]);
+    }
+
+    /**
+     * Install a Module From an Uploaded Archive
+     *
+     * The kind comes from the form, never from the archive. `modules/README.md`
+     * is explicit that the directory decides a module's kind precisely so that
+     * a module cannot claim to be something it is not, and reading a `type` out
+     * of an uploaded manifest would hand that claim straight back.
+     *
+     * It arrives disabled. Nothing an operator uploads runs until they say so -
+     * the installer does not execute the manifest either, so that holds all the
+     * way through.
+     * @return ?string
+     */
+    public function upload(): ?string
+    {
+        $type = trim((string) Request::input('module_type', ''));
+        $file = Request::file('module_archive') ?? [];
+
+        return $this->attempt(
+            function () use ($file, $type): void {
+                $module = (new ModuleInstaller())->install($file, $type);
+
+                // Logged before the flash, because installing code is exactly
+                // the kind of thing somebody needs to be able to look up later.
+                $this->log(
+                    'module.installed',
+                    'Installed the ' . $module['name'] . ' ' . $module['type'] . ' module from an upload.'
+                );
+
+                // The listing is memoised per request and this changed the disk
+                // under it, so the redirect target would otherwise show the old
+                // set until the next page load.
+                Module::flush();
+            },
+            'staff.modules',
+            'Module installed. Switch it on when you are ready.'
+        );
     }
 
     /**

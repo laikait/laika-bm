@@ -41,14 +41,25 @@ use LBM\Module\ModuleManager;
  */
 class Module extends Action
 {
+    // These three describe the same directory layout ModuleManager walks, so
+    // they are aliased from it rather than restated. They had been restated,
+    // and TYPES drifted: this class listed `fraud` and `widgets` while the
+    // loader listed `plugins`. The result was silent both ways - a module in
+    // modules/fraud appeared on the admin screen and was never loaded, and one
+    // in modules/plugins was loaded and never appeared.
+    //
+    // ModuleManager is the authority because it is the half that actually loads
+    // modules, and it is already resolved by the time this class exists: it runs
+    // during composer's autoload, long before any Action is constructed.
+
     /** @var string Where Modules Live, Below The App Root */
-    public const ROOT = '/modules';
+    public const ROOT = ModuleManager::ROOT;
 
     /** @var string The File That Makes a Directory a Module */
-    public const MANIFEST = 'module.php';
+    public const MANIFEST = ModuleManager::MANIFEST;
 
     /** @var string[] The Kinds Of Module, Which Are Also The Subdirectories */
-    public const TYPES = ['fraud', 'addons', 'gateways', 'servers', 'registrars', 'widgets'];
+    public const TYPES = ModuleManager::TYPES;
 
     /** @var string Option Key Prefix For The Enabled Flag */
     public const OPTION = 'module_enabled_';

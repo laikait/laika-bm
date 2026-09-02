@@ -71,8 +71,20 @@ class ModuleManager
     /** @var string The File That Makes a Directory a Module */
     public const MANIFEST = 'module.php';
 
-    /** @var string[] The Kinds Of Module, Which Are Also The Subdirectories */
-    public const TYPES = ['plugins', 'addons', 'gateways', 'servers', 'registrars'];
+    /**
+     * @var string[] The Kinds Of Module, Which Are Also The Subdirectories
+     *
+     * **This is the single source of truth.** `LBM\Action\Module` aliases it
+     * rather than restating it, because the two lists had drifted: this one
+     * carried `plugins` and the other carried `fraud` and `widgets`, so a module
+     * in `modules/fraud` was listed by the admin screen and then never loaded,
+     * while one in `modules/plugins` loaded but was never listed. Neither
+     * failure said anything.
+     *
+     * `plugins` is gone (2026-09-03) - addons fill that role - and so is
+     * `widgets`, which was an empty directory the loader never knew about.
+     */
+    public const TYPES = ['fraud', 'addons', 'gateways', 'servers', 'registrars'];
 
     /**
      * @var array<string,?string> The Contract Each Resource Kind Must Satisfy

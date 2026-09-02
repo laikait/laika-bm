@@ -23,15 +23,24 @@ declare(strict_types=1);
  * Usage: php bin/version.php <app-root>
  */
 
-$root = $argv[1] ?? '';
-$autoload = rtrim(str_replace('\\', '/', $root), '/') . '/vendor/autoload.php';
+$root = rtrim(str_replace('\\', '/', $argv[1] ?? ''), '/');
+$boot = $root . '/lf-boot/app.php';
 
-if ($root === '' || !is_file($autoload)) {
-    fwrite(STDERR, "usage: php bin/version.php <app-root>   (needs <app-root>/vendor/autoload.php)\n");
+if ($root === '' || !is_file($boot)) {
+    fwrite(STDERR, "usage: php bin/version.php <app-root>   (needs <app-root>/lf-boot/app.php)\n");
     exit(2);
 }
 
-require_once $autoload;
+// lf-boot/app.php, not vendor/autoload.php directly. Every LBM file opens with
+// `defined('APP_PATH') || ... die('403 Direct Access Denied!')`, and composer's
+// files autoload runs helpers/loader.php, which calls ModuleManager::discover()
+// - so requiring the autoloader on its own loads ModuleManager with APP_PATH
+// still undefined and the guard kills the process.
+//
+// It dies with exit code 0 and prints the 403 text to stdout, so the caller
+// reads "403 Direct Access Denied!" as if it were the version. Booting properly
+// is the fix; this is the same sequence cron.php uses.
+require_once $boot;
 
 if (!class_exists(LBM\Support\Version::class)) {
     fwrite(STDERR, "LBM\\Support\\Version is not autoloadable from {$root}\n");
