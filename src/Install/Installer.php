@@ -697,7 +697,7 @@ class Installer
     private function superadminRole(): int
     {
         $model = new StaffRoleModel();
-        $existing = $model->select($model->id)->where(['role_name' => 'Superadmin'])->first();
+        $existing = $model->select($model->id)->where(['role_name' => 'superadmin'])->first();
 
         if (!empty($existing)) {
             return (int) $existing[$model->id];
@@ -714,13 +714,13 @@ class Installer
 
         $model->insert([
             'uid'         =>  Uid::make(),
-            'role_name'   =>  'Superadmin',
+            'role_name'   =>  'superadmin',
             'permissions' =>  $permissions,
         ]);
 
         $row = (new StaffRoleModel())
             ->select($model->id)
-            ->where(['role_name' => 'Superadmin'])
+            ->where(['role_name' => 'superadmin'])
             ->first();
 
         return (int) ($row[$model->id] ?? 0);
@@ -746,6 +746,17 @@ class Installer
         $row = $model->select($model->id)->where(['currency_code' => $code])->first();
 
         if (empty($row)) {
+            $model->transaction(function (CurrencyModel $m) use ($code): void {
+            $system_currencies = system_currencies();
+            $m->where(['is_default' => 'yes'])->update(['is_default' => 'no']);
+            $m->insert([
+                    'currency_code' => $code,
+                    'exchange_rate' => '1.000000',
+                    'is_active'    => 'yes',
+                    'is_default'    => 'yes',
+                    'prefix_symbol' => $system_currencies[$code] ?? '$',
+                ]);
+            });
             return;
         }
 

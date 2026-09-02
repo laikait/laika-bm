@@ -94,3 +94,45 @@ function money(int|float|string $amount, int|string|null $currency = null): stri
 {
     return Money::format($amount, $currency);
 }
+
+/**
+ * System Supported Currencies
+ * @return array<string,string> ISO code => symbol
+ */
+function system_currencies(): array
+{
+    return [
+        'USD' => '$',
+        'EUR' => '€',
+        'GBP' => '£',
+        'BDT' => '৳',
+        'INR' => '₹',
+        'JPY' => '¥',
+        'CNY' => '¥',
+        'AUD' => 'A$',
+        'CAD' => 'C$',
+        'CHF' => 'CHF',
+        'KRW' => '₩',
+        'SGD' => 'S$',
+        'HKD' => 'HK$',
+        'MYR' => 'RM',
+        'THB' => '฿',
+        'IDR' => 'Rp',
+        'PHP' => '₱',
+        'VND' => '₫',
+        'PKR' => '₨',
+        'NPR' => '₨',
+        'LKR' => 'Rs',
+        'AED' => 'د.إ',
+        'SAR' => '﷼',
+        'QAR' => '﷼',
+        'KWD' => 'د.ك',
+        'TRY' => '₺',
+        'RUB' => '₽',
+        'ZAR' => 'R',
+        'NGN' => '₦',
+        'GHS' => '₵',
+        'BRL' => 'R$',
+        'MXN' => 'MX$',
+    ];
+}

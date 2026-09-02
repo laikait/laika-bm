@@ -53,7 +53,6 @@ class Requirements
     /** @var string[] Directories That Must Be Writable, Relative to APP_PATH */
     public const PATHS = [
         'lf-config',
-        'lf-cache',
         'lf-logs',
         'lf-storage',
         'uploads',
@@ -192,9 +191,9 @@ class Requirements
         return array_intersect_key($supported, array_flip(\PDO::getAvailableDrivers()));
     }
 
-    ####################################################################################
-    /*================================= INTERNAL API =================================*/
-    ####################################################################################
+    ################################################################################
+    /*=============================== INTERNAL API ===============================*/
+    ################################################################################
 
     /**
      * Shape One Check For The View

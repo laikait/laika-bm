@@ -258,9 +258,9 @@ class InstallController extends Controller
         ], local($locked ? 'caption_done' : 'caption_finish'));
     }
 
-    ####################################################################################
-    /*================================= INTERNAL API =================================*/
-    ####################################################################################
+    ########################################################################
+    /*=========================== INTERNAL API ===========================*/
+    ########################################################################
 
     /**
      * Render a Step
@@ -321,10 +321,10 @@ class InstallController extends Controller
     {
         $zones = ['UTC' => 'UTC'];
 
-        foreach (\DateTimeZone::listIdentifiers() as $zone) {
+        foreach (time_zones() as $zone) {
+            if ($zone == 'UTC')  continue;
             $zones[$zone] = $zone;
         }
-
         return $zones;
     }
 
@@ -334,72 +334,11 @@ class InstallController extends Controller
      */
     private function currencies(): array
     {
-        $choices = [];
-
-        try {
-            foreach ((new CurrencyModel())->order('currency_code', 'ASC')->get() as $row) {
-                $code = (string) $row['currency_code'];
-                $choices[$code] = trim($code . ' ' . ($row['prefix_symbol'] ?? ''));
-            }
-        } catch (Throwable) {
-            // The migrate step has not run yet - offer the one the seed creates.
+        $list = [];
+        foreach (system_currencies() as $code => $symbol) {
+            $list[$code] = "{$code} {$symbol}";
         }
-
-        if ($choices !== []) return $choices;
-
-        return [
-            'USD' => 'USD $',
-            'EUR' => 'EUR €',
-            'GBP' => 'GBP £',
-            'JPY' => 'JPY ¥',
-            'CNY' => 'CNY ¥',
-            'INR' => 'INR ₹',
-            'BDT' => 'BDT ৳',
-            'AUD' => 'AUD $',
-            'CAD' => 'CAD $',
-            'NZD' => 'NZD $',
-            'SGD' => 'SGD $',
-            'HKD' => 'HKD $',
-            'CHF' => 'CHF Fr',
-            'SEK' => 'SEK kr',
-            'NOK' => 'NOK kr',
-            'DKK' => 'DKK kr',
-            'PLN' => 'PLN zł',
-            'RUB' => 'RUB ₽',
-            'UAH' => 'UAH ₴',
-            'TRY' => 'TRY ₺',
-            'KRW' => 'KRW ₩',
-            'THB' => 'THB ฿',
-            'MYR' => 'MYR RM',
-            'IDR' => 'IDR Rp',
-            'PHP' => 'PHP ₱',
-            'VND' => 'VND ₫',
-            'PKR' => 'PKR ₨',
-            'LKR' => 'LKR Rs',
-            'NPR' => 'NPR Rs',
-            'AED' => 'AED د.إ',
-            'SAR' => 'SAR ﷼',
-            'QAR' => 'QAR ﷼',
-            'KWD' => 'KWD د.ك',
-            'BHD' => 'BHD .د.ب',
-            'OMR' => 'OMR ﷼',
-            'JOD' => 'JOD د.ا',
-            'ILS' => 'ILS ₪',
-            'EGP' => 'EGP £',
-            'ZAR' => 'ZAR R',
-            'NGN' => 'NGN ₦',
-            'GHS' => 'GHS ₵',
-            'KES' => 'KES KSh',
-            'TZS' => 'TZS TSh',
-            'UGX' => 'UGX USh',
-            'MAD' => 'MAD د.م.',
-            'BRL' => 'BRL R$',
-            'MXN' => 'MXN $',
-            'ARS' => 'ARS $',
-            'CLP' => 'CLP $',
-            'COP' => 'COP $',
-            'PEN' => 'PEN S/',
-        ];
+        return $list;
     }
 
     /**
