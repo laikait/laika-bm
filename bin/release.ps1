@@ -151,9 +151,17 @@ $ExcludeDirs = @(
 # Files that never ship. The lf-app entries are the framework skeleton's demo
 # classes - nothing references the App\ namespace anywhere - but their
 # directories stay, because composer maps App\ to lf-app/.
+#
+# 'laika' and 'worker' are the CLI entrypoints, and they are developer tools.
+# The operator path is the web wizard, a scheduled cron.php, and the update
+# utility at /admin/utils/update - which runs Installer::migrate() in process
+# precisely so there is nothing to shell out to. verify-stage.php asserts both
+# are absent from the stage, so an edit here cannot quietly put them back.
 $ExcludeFiles = @(
     (Join-Path $AppRoot '.gitignore'),
     (Join-Path $AppRoot 'composer.phar'),
+    (Join-Path $AppRoot 'laika'),
+    (Join-Path $AppRoot 'worker'),
     (Join-Path $AppRoot 'lf-storage\lbm\install.lock'),
     (Join-Path $AppRoot 'lf-storage\queues\jobs.json'),
     (Join-Path $AppRoot 'lf-app\Controller\HomeController.php'),

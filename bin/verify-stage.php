@@ -72,6 +72,24 @@ function must_not_exist(string $rel, string $why): void
     }
 }
 
+/**
+ * A check that is not simply "does this path exist".
+ *
+ * The two above cover most of this file, but a few things - DEBUG's value, what
+ * a directory contains - are conditions rather than paths. They still have to be
+ * counted, or the total the build prints understates what was verified.
+ */
+function must(bool $ok, string $message): void
+{
+    global $checked;
+    $checked++;
+
+    if (!$ok) {
+        fault($message);
+    }
+}
+
+
 // ---------------------------------------------------------------------------
 // 1. Secrets and per-install state
 // ---------------------------------------------------------------------------
@@ -207,6 +225,80 @@ must_not_exist('docs', 'Documents the framework, not the product.');
 must_not_exist('.gitignore', 'Development artefact - and it lists *.htaccess, which misleads.');
 must_not_exist('.git', 'Development artefact.');
 must_not_exist('composer.phar', 'Development artefact.');
+
+// The CLI entrypoints. Developer tools: the operator path is the web wizard, a
+// scheduled cron.php, and /admin/utils/update, which runs Installer::migrate()
+// in process. Asserted rather than left to the exclude list, because that list
+// is one line in a PowerShell array and this is the only thing that would
+// notice it being edited back.
+must_not_exist('laika', 'CLI entrypoint - a developer tool. Nothing an operator does may need it.');
+must_not_exist('worker', 'Queue worker CLI - a developer tool. cron.php drains the queue.');
+
+// ---------------------------------------------------------------------------
+// 6b. DEBUG must be off
+// ---------------------------------------------------------------------------
+//
+// The single most damaging thing that could ship switched on. Handler.php puts
+// $e->getMessage() into the response when DEBUG is true, so an exception on an
+// operator's public site shows the visitor a stack trace and a file path. It
+// also decides whether Resource.php reads the compiled manifest at all, so a
+// debug build re-discovers every class on every request.
+//
+// stage-fixup.php rewrites it. This is what proves the rewrite happened, since
+// a regex that silently matched nothing looks exactly like success.
+$constFile = $stage . '/lf-inc/const.php';
+$const = is_file($constFile) ? (string) file_get_contents($constFile) : '';
+
+must(
+    $const !== '',
+    "MISSING  lf-inc/const.php\n           The framework constants. Nothing boots without it."
+);
+
+must(
+    $const === '' || preg_match("/define\('DEBUG',\s*true\s*\)/i", $const) !== 1,
+    "DEBUG    lf-inc/const.php ships with DEBUG on\n           Exception messages and stack traces would reach visitors, and the resource manifest would never be read."
+);
+
+must(
+    $const === '' || preg_match("/define\('DEBUG',\s*false\s*\)/i", $const) === 1,
+    "DEBUG    lf-inc/const.php does not define DEBUG as a literal false\n           The fixup rewrite did not take. Check bin/stage-fixup.php."
+);
+
+
+// ---------------------------------------------------------------------------
+// 6c. Exactly one template per area
+// ---------------------------------------------------------------------------
+//
+// admin/dark and admin/plain were byte-copies of admin/bootstrap that areawalk
+// made and never removed, distinguished only by a marker comment. They shipped:
+// about a megabyte and 144 twig files of nothing, offered in the admin template
+// picker as themes that were not themes, and already stale - neither carried
+// 20.2's upload card.
+//
+// The gate had no reason to catch that, because it only ever looked for files it
+// knew the names of. This looks for the opposite: anything present that should
+// not be.
+foreach (['admin', 'panel', 'front'] as $area) {
+    $dir = $stage . '/template/' . $area;
+
+    if (!is_dir($dir)) {
+        continue;
+    }
+
+    $names = array_values(array_filter(
+        scandir($dir) ?: [],
+        static fn(string $e): bool => $e !== '.' && $e !== '..' && is_dir($dir . '/' . $e)
+    ));
+
+    $extra = array_values(array_diff($names, ['bootstrap']));
+
+    must(
+        $extra === [],
+        "LITTER   template/{$area} carries " . implode(', ', $extra)
+            . "\n           A release ships one template per area. Copies made by a harness are litter, and the operator is offered them as themes."
+    );
+}
+
 
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.

@@ -39,9 +39,16 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
  * application inside it reports 1.0.0, because there is nowhere for the two to
  * disagree. Bump this constant in the same commit that tags laika-bm.
  *
- * Read it from PowerShell with:
+ * Read it with:
  *
- *     php -r "require 'vendor/autoload.php'; echo LBM\Support\Version::CURRENT;"
+ *     php bin/version.php <app-root>
+ *
+ * NOT by requiring vendor/autoload.php directly. Composer's files autoload runs
+ * helpers/loader.php, which calls ModuleManager::discover() before APP_PATH is
+ * defined - so every LBM file's guard fires and the process die()s having
+ * printed `403 Direct Access Denied!` to stdout with exit code 0. A caller
+ * reads that string as the version. bin/version.php boots lf-boot/app.php the
+ * way cron.php does, which is why it exists as a file at all.
  *
  * ------------------------------------------------------------------------
  * Not derived from Composer
@@ -59,7 +66,7 @@ final class Version
      *
      * Semantic versioning: MAJOR.MINOR.PATCH. Bumped by hand at release time.
      */
-    public const CURRENT = '1.0.0';
+    public const CURRENT = '1.1.0';
 
     /**
      * @var string Human Readable Product Name

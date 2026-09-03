@@ -103,6 +103,50 @@ if (file_put_contents($stage . '/lf-config/database.php', $skeleton) === false) 
 step('lf-config/database.php reset to a blank skeleton');
 
 // ---------------------------------------------------------------------------
+// 1b. DEBUG off
+// ---------------------------------------------------------------------------
+//
+// lf-inc/const.php ships from a development checkout, where DEBUG is true, and
+// that constant decides three things that are all wrong on somebody else's
+// server:
+//
+//   - Handler.php puts $e->getMessage() into the response. A stack trace and a
+//     file path go to whoever asked for the page, including the query that
+//     failed. That is the one that matters.
+//   - Resource.php only reads the compiled manifest when DEBUG is false, so a
+//     debug build re-discovers every controller, schema and route on every
+//     single request.
+//   - Template.php turns on Twig's debug mode and auto-reload.
+//
+// Rewritten rather than asked for as a build flag: a release is never a debug
+// build, so there is no case where the operator wants the other value.
+
+$constFile = $stage . '/lf-inc/const.php';
+$const = (string) file_get_contents($constFile);
+
+if (!str_contains($const, "define('DEBUG'")) {
+    fail('lf-inc/const.php does not define DEBUG - the rewrite below would silently do nothing');
+}
+
+$const = preg_replace(
+    "/define\('DEBUG',\s*true\s*\);/",
+    "define('DEBUG', false);",
+    $const,
+    1,
+    $replaced
+);
+
+if ($replaced === 0 && !str_contains($const, "define('DEBUG', false);")) {
+    fail('could not switch DEBUG off in lf-inc/const.php');
+}
+
+if (file_put_contents($constFile, $const) === false) {
+    fail('could not write lf-inc/const.php');
+}
+
+step('DEBUG switched off');
+
+// ---------------------------------------------------------------------------
 // 2. The root composer.json must not point at the development tree
 // ---------------------------------------------------------------------------
 
