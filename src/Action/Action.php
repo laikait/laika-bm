@@ -178,6 +178,42 @@ abstract class Action
     }
 
     /**
+     * Count Records Created In a Window
+     *
+     * Here rather than in each report, because every report that asks "how many
+     * of these appeared between two dates" was otherwise going to write the same
+     * three branches - and one of them would eventually use > where the others
+     * used >=, so the same month would total differently on two screens.
+     *
+     * An action with no createdColumn() has nothing to bound, so it answers the
+     * unbounded count rather than silently returning zero.
+     * @param ?string $from Datetime, Inclusive
+     * @param ?string $to Datetime, Inclusive
+     * @param array $where Further Conditions
+     * @return int
+     */
+    public function countBetween(?string $from = null, ?string $to = null, array $where = []): int
+    {
+        $column = $this->createdColumn();
+
+        if ($column === null) {
+            return $this->count($where);
+        }
+
+        $model = $this->conditions($this->model(), $where);
+
+        if ($from !== null && $to !== null) {
+            $model->between($column, $from, $to);
+        } elseif ($from !== null) {
+            $model->where([$column => $from], '>=');
+        } elseif ($to !== null) {
+            $model->where([$column => $to], '<=');
+        }
+
+        return $model->count();
+    }
+
+    /**
      * Whether Any Record Matches
      * @param array $where Conditions
      * @return bool

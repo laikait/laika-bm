@@ -21,6 +21,7 @@ use LBM\Model\ClientModel;
 use LBM\Model\SupportTicketModel;
 use LBM\Model\SupportTicketReplyModel;
 use LBM\Model\SupportDepartmentModel;
+use LBM\Model\TicketFeedbackModel;
 use LBM\Service\Status;
 use Laika\Service\Uid;
 
@@ -52,6 +53,12 @@ class Support extends Action
 
     /** @var string Written By The Application Itself */
     public const SYSTEM = 'system';
+
+    /** @var int Lowest Rating a Client May Give */
+    public const RATING_MIN = 1;
+
+    /** @var int Highest Rating a Client May Give */
+    public const RATING_MAX = 5;
 
     /** @var string[] Columns a Form May Write */
     public const FIELDS = [
@@ -185,6 +192,74 @@ class Support extends Action
         }
 
         return $model->order($model->id, self::ASC)->get();
+    }
+
+    /**
+     * Tickets Opened In a Window
+     *
+     * Materialised rather than a cursor, because every caller walks the rows
+     * twice - once to collect the ticket ids for firstStaffReplyAt(), then
+     * again to total them up. A cursor read twice is a second query, and the
+     * two passes could then disagree about which tickets exist.
+     * @param ?string $from Datetime, Inclusive
+     * @param ?string $to Datetime, Inclusive
+     * @return array
+     */
+    public function ticketsBetween(?string $from = null, ?string $to = null): array
+    {
+        $model = $this->model()->order('ticket_created_at', self::ASC);
+
+        if ($from !== null && $to !== null) {
+            $model->between('ticket_created_at', $from, $to);
+        } elseif ($from !== null) {
+            $model->where(['ticket_created_at' => $from], '>=');
+        } elseif ($to !== null) {
+            $model->where(['ticket_created_at' => $to], '<=');
+        }
+
+        return $model->get();
+    }
+
+    /**
+     * When Staff First Answered Each Of These Tickets
+     *
+     * One query for the whole set rather than one per ticket. A performance
+     * report over a busy month would otherwise fire hundreds of queries to
+     * build a single average, and the first version of it did.
+     *
+     * Internal notes are excluded: a staff member writing a note to a colleague
+     * has not answered the client, and counting it as a response would make the
+     * figure flatter the team.
+     * @param int[] $ticketIds Ticket IDs
+     * @return array<int,string> Ticket ID => Datetime Of The First Staff Reply
+     */
+    public function firstStaffReplyAt(array $ticketIds): array
+    {
+        $ticketIds = array_values(array_unique(array_map('intval', $ticketIds)));
+
+        if ($ticketIds === []) {
+            return [];
+        }
+
+        $model = new SupportTicketReplyModel();
+
+        $replies = $model
+            ->whereIn('ticket_relid', $ticketIds)
+            ->where(['author_type' => self::STAFF])
+            ->where(['is_internal' => 'no'])
+            ->order($model->id, self::ASC)
+            ->cursor();
+
+        $first = [];
+
+        foreach ($replies as $reply) {
+            $ticketId = (int) $reply['ticket_relid'];
+
+            // Ordered by id ascending, so the first one seen is the earliest.
+            $first[$ticketId] ??= (string) $reply['reply_created_at'];
+        }
+
+        return $first;
     }
 
     /**
@@ -330,6 +405,208 @@ class Support extends Action
         $status = Status::idOf(self::STATUSES, 'closed');
 
         return $status === null ? 0 : $this->update($key, ['status_relid' => $status]);
+    }
+
+    /**
+     * Whether a Ticket Is Closed
+     *
+     * One definition, here, because three places ask: the client's ticket
+     * screen, the feedback form it offers, and leaveFeedback() refusing to
+     * record an opinion on a conversation that is still running. Two of the
+     * three agreeing and the third not would be a quiet way to collect feedback
+     * on open tickets.
+     * @param array $ticket Ticket Row
+     * @return bool
+     */
+    public function isClosed(array $ticket): bool
+    {
+        $closed = $this->statusId('closed');
+
+        return $closed !== null && (int) ($ticket['status_relid'] ?? 0) === $closed;
+    }
+
+    ####################################################################################
+    /*==================================== FEEDBACK ==================================*/
+    ####################################################################################
+    //
+    // What the client thought of the support they got. One row per ticket,
+    // written once, and only after the ticket is closed. TicketFeedbackSchema
+    // explains why it is a table rather than a column on support_tickets.
+
+    /**
+     * The Ratings a Client May Choose From
+     *
+     * A method rather than the two constants, because a relay facade forwards
+     * method calls and not constants - LBM\Service\Support::RATING_MIN is a
+     * fatal, not a value. Same reason Action\Module::types() exists.
+     * @return int[]
+     */
+    public function ratings(): array
+    {
+        return range(self::RATING_MIN, self::RATING_MAX);
+    }
+
+    /**
+     * The Feedback On One Ticket, If Any Was Left
+     * @param int $ticketId Ticket ID
+     * @return ?array
+     */
+    public function feedback(int $ticketId): ?array
+    {
+        return (new TicketFeedbackModel())
+            ->where(['ticket_relid' => $ticketId])
+            ->limit(1)
+            ->get()[0] ?? null;
+    }
+
+    /**
+     * Record What a Client Thought
+     *
+     * Refuses rather than overwrites. `ticket_relid` is UNIQUE so a second
+     * insert would fail at the database anyway; making the refusal deliberate
+     * is what lets the screen say thank you the second time instead of showing
+     * an error.
+     *
+     * The assigned staff member is copied in as it stands now rather than
+     * looked up later: a ticket can be reassigned afterwards, and this is a
+     * record of who actually handled it.
+     * @param array $ticket Ticket Row
+     * @param int $rating 1 to 5
+     * @param string $comment Optional Words
+     * @return int Feedback ID, or 0 when it was refused
+     */
+    public function leaveFeedback(array $ticket, int $rating, string $comment = ''): int
+    {
+        $ticketId = (int) ($ticket['ticket_id'] ?? 0);
+
+        if ($ticketId === 0 || !$this->isClosed($ticket)) {
+            return 0;
+        }
+
+        if ($rating < self::RATING_MIN || $rating > self::RATING_MAX) {
+            return 0;
+        }
+
+        if ($this->feedback($ticketId) !== null) {
+            return 0;
+        }
+
+        $comment = trim($comment);
+        $staffId = (int) ($ticket['assigned_staff_relid'] ?? 0);
+
+        return (int) (new TicketFeedbackModel())->insert([
+            'uid'          =>  Uid::make(),
+            'ticket_relid' =>  $ticketId,
+            'client_relid' =>  (int) ($ticket['client_relid'] ?? 0),
+            'staff_relid'  =>  $staffId > 0 ? $staffId : null,
+            'rating'       =>  $rating,
+            'comment'      =>  $comment === '' ? null : $comment,
+        ]);
+    }
+
+    /**
+     * Every Piece Of Feedback In a Window
+     *
+     * Ordered oldest first so a caller walking it sees things in the order they
+     * happened. Bounded by date rather than paged, because every caller is a
+     * report already bounded by its own range.
+     * @param ?string $from Datetime, Inclusive
+     * @param ?string $to Datetime, Inclusive
+     * @return array
+     */
+    public function feedbackBetween(?string $from = null, ?string $to = null): array
+    {
+        return $this->feedbackQuery($from, $to)->get();
+    }
+
+    /**
+     * The Feedback Query, Shared By Everything That Reads a Window Of It
+     *
+     * One place that decides what "in this window" means, so the summary, the
+     * per-staff breakdown and the listing cannot end up counting different rows
+     * from the same range. between() when both ends are given, matching
+     * Transaction::income() - a pair of >= and <= would be the same rows, but
+     * this is the idiom the rest of the app already reads in.
+     * @param ?string $from Datetime, Inclusive
+     * @param ?string $to Datetime, Inclusive
+     * @return Model
+     */
+    private function feedbackQuery(?string $from = null, ?string $to = null): Model
+    {
+        $model = (new TicketFeedbackModel())->order('feedback_created_at', self::ASC);
+
+        if ($from !== null && $to !== null) {
+            $model->between('feedback_created_at', $from, $to);
+        } elseif ($from !== null) {
+            $model->where(['feedback_created_at' => $from], '>=');
+        } elseif ($to !== null) {
+            $model->where(['feedback_created_at' => $to], '<=');
+        }
+
+        return $model;
+    }
+
+    /**
+     * How Many Ratings, And What They Averaged
+     *
+     * Counted in PHP rather than with AVG() and GROUP BY, for the same reason
+     * ReportController::monthly() runs twelve range queries: no raw SQL, and an
+     * aggregate written per grammar is five chances for one of them to disagree
+     * with the other four.
+     * @param ?string $from Datetime, Inclusive
+     * @param ?string $to Datetime, Inclusive
+     * @return array{count:int,average:float,spread:array<int,int>}
+     */
+    public function feedbackSummary(?string $from = null, ?string $to = null): array
+    {
+        $spread = array_fill_keys(range(self::RATING_MIN, self::RATING_MAX), 0);
+        $count = 0;
+        $sum = 0;
+
+        // cursor() rather than get(): this is only ever summed, so there is
+        // no reason to hold a year of ratings in memory to add them up.
+        foreach ($this->feedbackQuery($from, $to)->cursor() as $row) {
+            $rating = (int) $row['rating'];
+
+            if (!isset($spread[$rating])) {
+                continue;
+            }
+
+            $spread[$rating]++;
+            $count++;
+            $sum += $rating;
+        }
+
+        return [
+            'count'   =>  $count,
+            'average' =>  $count > 0 ? round($sum / $count, 2) : 0.0,
+            'spread'  =>  $spread,
+        ];
+    }
+
+    /**
+     * Feedback Grouped By The Staff Member Who Handled The Ticket
+     *
+     * Rows with no staff_relid are collected under an empty key rather than
+     * dropped: a ticket nobody was assigned to still got an answer, and hiding
+     * those would make these totals disagree with feedbackSummary().
+     * @param ?string $from Datetime, Inclusive
+     * @param ?string $to Datetime, Inclusive
+     * @return array<int|string,array{count:int,sum:int}>
+     */
+    public function feedbackByStaff(?string $from = null, ?string $to = null): array
+    {
+        $rows = [];
+
+        foreach ($this->feedbackQuery($from, $to)->cursor() as $row) {
+            $key = $row['staff_relid'] === null ? '' : (int) $row['staff_relid'];
+
+            $rows[$key] ??= ['count' => 0, 'sum' => 0];
+            $rows[$key]['count']++;
+            $rows[$key]['sum'] += (int) $row['rating'];
+        }
+
+        return $rows;
     }
 
     /**

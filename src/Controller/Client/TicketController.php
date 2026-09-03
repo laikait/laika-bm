@@ -16,6 +16,7 @@ namespace LBM\Controller\Client;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use RuntimeException;
 use Laika\Service\Request;
 use LBM\Service\ClientService;
 use LBM\Service\Support;
@@ -134,6 +135,11 @@ class TicketController extends ClientController
             'replies'    =>  Support::replies((int) $row['ticket_id']),
             'department' =>  Support::department((int) $row['department_relid']),
             'closed'     =>  $this->isClosed($row),
+            // The row itself, not a boolean: once it exists the screen shows
+            // back what was said rather than the form, so somebody who rated a
+            // ticket can see what they rated it.
+            'feedback'   =>  Support::feedback((int) $row['ticket_id']),
+            'ratings'    =>  Support::ratings(),
         ]);
     }
 
@@ -192,6 +198,42 @@ class TicketController extends ClientController
         );
     }
 
+    /**
+     * Rate The Support On a Closed Ticket
+     *
+     * Asked for only once. leaveFeedback() refuses a second submission, a
+     * reopened ticket and a rating outside the scale, and it decides all three
+     * rather than this controller - so the same rules hold however the row is
+     * written, including from a module.
+     * @param string $ticket Ticket Uid
+     * @return ?string
+     */
+    public function feedback(string $ticket): ?string
+    {
+        $this->allow('ticket', self::UPDATE);
+
+        $row = $this->ticket($ticket);
+        $rating = (int) Request::input('rating', 0);
+        $comment = (string) Request::input('comment', '');
+
+        return $this->attempt(
+            function () use ($row, $rating, $comment): void {
+                // Thrown rather than returned, because attempt() fixes its
+                // success message before the work runs - so a refusal that
+                // simply returned 0 would still flash "thank you". A refusal
+                // is a failure, and this is how the rest of the app says so.
+                if (Support::leaveFeedback($row, $rating, $comment) === 0) {
+                    throw new RuntimeException(local('feedback_not_recorded'));
+                }
+
+                $this->log('ticket.rated', 'Rated the support on ticket ' . $row['ticket_number'] . '.');
+            },
+            'client.ticket',
+            local('feedback_thanks'),
+            ['ticket' => $row['uid']]
+        );
+    }
+
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
@@ -217,9 +259,7 @@ class TicketController extends ClientController
      */
     private function isClosed(array $ticket): bool
     {
-        $closed = Support::statusId('closed');
-
-        return $closed !== null && (int) $ticket['status_relid'] === $closed;
+        return Support::isClosed($ticket);
     }
 
     /**

@@ -22,6 +22,7 @@ use LBM\Service\Money;
 use LBM\Service\Order;
 use LBM\Service\Support;
 use LBM\Service\Transaction;
+use LBM\Support\Health;
 
 /**
  * The admin dashboard.
@@ -36,9 +37,6 @@ use LBM\Service\Transaction;
  */
 class DashboardController extends AdminController
 {
-    /** @var int Minutes Without a Cron Run After Which Something Is Wrong */
-    private const CRON_STALE_MINUTES = 60;
-
     protected function nav(): string
     {
         return 'dashboard';
@@ -237,33 +235,16 @@ class DashboardController extends AdminController
      * including one where a task failed - a run that happened and went wrong is
      * a different problem from a run that never happened, and conflating them
      * would send somebody to fix the wrong thing.
+     *
+     * Computed by LBM\Support\Health rather than here. This screen and the
+     * automation utility both report on cron, and while they each worked it out
+     * for themselves they could disagree - the dashboard calling it fine while
+     * the status screen called it stale. One definition, two readers.
      * @return array
      */
     private function cron(): array
     {
-        $last = trim((string) option('cron_last_run', ''));
-        $minutes = option_int('cron_stale_minutes', self::CRON_STALE_MINUTES);
-        $minutes = $minutes > 0 ? $minutes : self::CRON_STALE_MINUTES;
-
-        // The exact command for *this* install, not a documentation example an
-        // operator has to adapt. The path is the single detail they get wrong.
-        $command = APP_PATH . DS . 'cron.php';
-
-        if ($last === '') {
-            return ['last' => null, 'never' => true, 'stale' => true, 'command' => $command];
-        }
-
-        // An unparseable value reads as ancient rather than as fine. A stamp
-        // nobody can read is not evidence that anything ran.
-        $age = time() - (int) strtotime($last);
-
-        return [
-            'last'    =>  $last,
-            'never'   =>  false,
-            'stale'   =>  $age > $minutes * 60,
-            'hours'   =>  (int) floor($age / 3600),
-            'command' =>  $command,
-        ];
+        return (new Health())->cron();
     }
 
     /**

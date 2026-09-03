@@ -75,6 +75,8 @@ Url::group(PANEL, function () use ($uid): void {
         ->name('client.ticket.reply');
     Url::post("/ticket/{ticket:{$uid}}/close", [TicketController::class, 'close'])
         ->name('client.ticket.close');
+    Url::post("/ticket/{ticket:{$uid}}/feedback", [TicketController::class, 'feedback'])
+        ->name('client.ticket.feedback');
 
     /*================================ PROFILE ==============================*/
     Url::get('/profile', [ProfileController::class, 'index'])->name('client.profile');

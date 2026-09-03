@@ -109,6 +109,13 @@ function nav_admin(?string $current = null): array
     nav_item('activities', 'staff.activities', 'activity',   staff_has_access('activity.read'), $admin, 'activity');
     nav_item('settings',   'staff.settings',   'settings',   staff_has_access('settings.read'), $admin);
 
+    // Utilities share the settings permission rather than carrying one of their
+    // own. A new group in Permission::GROUPS is only ever granted when a role is
+    // created, so a `utils` group would leave these screens unreachable on every
+    // install that already exists - and unreachable in a way whose fix is a
+    // checkbox nobody knows to tick. UtilController carries the full reasoning.
+    nav_item('utils',      'staff.utils',      'database',   staff_has_access('settings.read'), $admin, 'utilities');
+
     return nav_finish('admin', $current);
 }
 

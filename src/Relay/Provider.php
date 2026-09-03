@@ -87,6 +87,7 @@ class Provider extends RelayProvider
             'action.module'         =>  Action\Module::class,
             'action.announcement'   =>  Action\Announcement::class,
             'action.knowledgebase'  =>  Action\KnowledgeBase::class,
+            'action.todo'           =>  Action\Todo::class,
         ] as $accessor => $class) {
             $this->registry->singleton($accessor, $class);
         }

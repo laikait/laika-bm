@@ -24,6 +24,7 @@ use LBM\Controller\Admin\ClientController;
 use LBM\Controller\Admin\DomainController;
 use LBM\Controller\Admin\ModuleController;
 use LBM\Controller\Admin\ReportController;
+use LBM\Controller\Admin\UtilController;
 use LBM\Controller\Admin\ServerController;
 use LBM\Controller\Admin\TicketController;
 use LBM\Controller\Admin\InvoiceController;
@@ -334,6 +335,50 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.report.orders')->pipeline([Permission::class . '|perm=report.read']);
     Url::get('/reports/tickets', [ReportController::class, 'tickets'])
         ->name('staff.report.tickets')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/annual', [ReportController::class, 'annual'])
+        ->name('staff.report.annual')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/clients', [ReportController::class, 'clients'])
+        ->name('staff.report.clients')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/performance', [ReportController::class, 'performance'])
+        ->name('staff.report.performance')->pipeline([Permission::class . '|perm=report.read']);
+    Url::get('/reports/feedback', [ReportController::class, 'feedback'])
+        ->name('staff.report.feedback')->pipeline([Permission::class . '|perm=report.read']);
+
+    /*=============================== UTILITIES =============================*/
+    //
+    // Gated on `settings` rather than a permission group of their own. A new
+    // group in Permission::GROUPS is granted to a role only when the role is
+    // created, so adding one would hide every screen below from every install
+    // that already exists. UtilController explains the reasoning in full.
+    //
+    // Reading is settings.read; anything that changes the installation is
+    // settings.update - and that split is the whole reason the migrate and the
+    // version check are separate routes rather than one screen with two buttons.
+    Url::get('/utils', [UtilController::class, 'index'])
+        ->name('staff.utils')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::get('/utils/system', [UtilController::class, 'system'])
+        ->name('staff.util.system')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::get('/utils/automation', [UtilController::class, 'automation'])
+        ->name('staff.util.automation')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::get('/utils/update', [UtilController::class, 'update'])
+        ->name('staff.util.update')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::get('/utils/todos', [UtilController::class, 'todos'])
+        ->name('staff.util.todos')->pipeline([Permission::class . '|perm=settings.read']);
+
+    Url::post('/utils/update/check', [UtilController::class, 'check'])
+        ->name('staff.util.check')->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post('/utils/update/migrate', [UtilController::class, 'migrate'])
+        ->name('staff.util.migrate')->pipeline([Permission::class . '|perm=settings.update']);
+
+    // The literal route registers before its parameterised sibling: matching is
+    // first-match-wins in registration order with no specificity ranking, and
+    // {todo} matches the literal word "add" perfectly well.
+    Url::post('/utils/todos/add', [UtilController::class, 'addTodo'])
+        ->name('staff.util.todo.add')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post("/utils/todo/{todo:{$uid}}/toggle", [UtilController::class, 'toggleTodo'])
+        ->name('staff.util.todo.toggle')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post("/utils/todo/{todo:{$uid}}/delete", [UtilController::class, 'deleteTodo'])
+        ->name('staff.util.todo.delete')->pipeline([Permission::class . '|perm=settings.read']);
 
     /*============================== ACTIVITIES =============================*/
     Url::get('/activities', [ActivityController::class, 'index'])
