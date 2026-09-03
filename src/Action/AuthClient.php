@@ -23,7 +23,7 @@ use LBM\Model\LoginLogModel;
 use LBM\Model\PasswordResetModel;
 use LBM\Pipeline\Auth;
 use LBM\Support\PasswordValidator;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Signing clients and their contacts in and out of the client area.

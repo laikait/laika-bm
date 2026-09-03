@@ -13,7 +13,7 @@ use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use LBM\Model\ServerStatusModel;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 class ServerStatusSchema extends SchemaAbstract
 {

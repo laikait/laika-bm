@@ -19,7 +19,7 @@ use LBM\Model\ProvisioningResultModel;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 use Laika\Core\Exceptions\SchemaException;
 
 class ProvisioningResultSchema extends SchemaAbstract

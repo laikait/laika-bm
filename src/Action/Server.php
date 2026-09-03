@@ -22,7 +22,7 @@ use LBM\Model\ClientServiceModel;
 use LBM\Model\ServerModel;
 use LBM\Model\ServerGroupModel;
 use LBM\Service\Status;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Provisioning servers and the groups they are allocated from.

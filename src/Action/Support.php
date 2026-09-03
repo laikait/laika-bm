@@ -22,7 +22,7 @@ use LBM\Model\SupportTicketModel;
 use LBM\Model\SupportTicketReplyModel;
 use LBM\Model\SupportDepartmentModel;
 use LBM\Service\Status;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Support tickets, their replies and the departments they land in.

@@ -19,7 +19,7 @@ use RuntimeException;
 use Laika\Model\Model;
 use LBM\Model\StaffModel;
 use LBM\Model\StaffRoleModel;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 use LBM\Service\Status;
 use LBM\Service\Permission;
 use LBM\Support\Permission as PermissionSupport;

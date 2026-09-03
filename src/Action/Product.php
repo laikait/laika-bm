@@ -23,7 +23,7 @@ use LBM\Model\ProductPricingModel;
 use LBM\Model\ClientServiceModel;
 use LBM\Service\Money;
 use LBM\Service\Status;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Products, the groups they sit in, and what they cost.

@@ -30,6 +30,9 @@ add_hook('is_client', 'is_client', 1000);
 /** Whether the person looking may reach something - the client sidebar's gate */
 add_hook('client_can', 'client_can', 1000);
 
+/** Whether the public may open an account - the front bar's sign-up gate */
+add_hook('registration_open', 'registration_open', 1000);
+
 /*=================================== NAMES ===================================*/
 /** A client's display name - company first, then the person */
 add_hook('client_name', 'client_name', 1000);

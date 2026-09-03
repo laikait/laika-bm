@@ -13,7 +13,7 @@ use LBM\Model\ProductTypeModel;
 use Laika\Model\Schema\Blueprint;
 use Laika\Model\Schema\Schema;
 use Laika\Model\Contract\SchemaAbstract;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 class ProductTypeSchema extends SchemaAbstract
 {

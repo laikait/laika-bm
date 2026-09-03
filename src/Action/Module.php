@@ -68,6 +68,27 @@ class Module extends Action
     private ?array $modules = null;
 
     /**
+     * @var array<string,bool> States Written In This Process
+     *
+     * option() memoises into a `static` inside the function itself, with nothing
+     * that can clear it, so a key read once keeps its first value for the rest
+     * of the process no matter what is written to the table underneath. This
+     * shadows that cache for the keys we ourselves have just written.
+     *
+     * Static rather than per-instance because the cache it shadows is
+     * process-wide: a second Module instance would otherwise read the stale
+     * value the first one had already invalidated.
+     *
+     * The web app never noticed - one toggle per request and then a redirect,
+     * which is the same reason every settings save redirects. It shows up the
+     * moment anything toggles twice: the second rebuildCache() re-read the key
+     * it had just written, got the previous answer, and wrote a loader cache
+     * that disagreed with the options table. Found by a harness enabling a
+     * module and then disabling it.
+     */
+    private static array $written = [];
+
+    /**
      * There Is No Modules Table
      *
      * The base class needs a model to build on; nothing here reads or writes
@@ -140,7 +161,7 @@ class Module extends Action
      */
     public function isEnabled(string $uid): bool
     {
-        return option_bool(self::OPTION . $uid);
+        return self::$written[$uid] ?? option_bool(self::OPTION . $uid);
     }
 
     /**
@@ -158,6 +179,9 @@ class Module extends Action
         $state = $enabled ?? !$this->isEnabled($uid);
 
         (new Setting())->put(self::OPTION . $uid, $state);
+
+        // Before rebuildCache(), which reads every module's state back.
+        self::$written[$uid] = $state;
 
         $this->rebuildCache();
 

@@ -413,5 +413,5 @@ function total_pages(int|string $totalRows): int
  */
 function lbm_uid(): string
 {
-    return \LBM\Support\Uid::make();
+    return \Laika\Service\Uid::make();
 }

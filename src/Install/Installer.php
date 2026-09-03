@@ -28,7 +28,7 @@ use LBM\Pipeline\Install as InstallGate;
 use LBM\Service\Password;
 use LBM\Service\Permission;
 use LBM\Support\Permission as PermissionSupport;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * The install engine.

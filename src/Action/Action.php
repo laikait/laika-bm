@@ -16,7 +16,7 @@ namespace LBM\Action;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Model\Model;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 use LBM\Support\Paginator;
 
 /**

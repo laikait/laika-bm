@@ -84,6 +84,25 @@ function is_client(): bool
 }
 
 /**
+ * Whether The Public May Open An Account
+ *
+ * Reads the same option AuthController::register() enforces, so the public site
+ * can stop offering a door that is locked.
+ *
+ * It defaults to off, and that made this the visible state of every fresh
+ * install: the front bar showed a "Get started" button, and a visitor who
+ * pressed it got an error page. An error page reading 500 rather than the 404
+ * the controller threw, because HttpException carries a status the handler
+ * ignores - so the first thing a stranger saw of a new installation was a server
+ * error. Found by walking the front bar's own links in navwalk.
+ * @return bool
+ */
+function registration_open(): bool
+{
+    return option_bool('allow_registration');
+}
+
+/**
  * Whether The Person Looking May Reach Something
  *
  * The account holder may reach everything of their own - they own the records,

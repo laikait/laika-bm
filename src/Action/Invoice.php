@@ -21,7 +21,7 @@ use LBM\Model\InvoiceModel;
 use LBM\Model\InvoiceItemModel;
 use LBM\Service\Money;
 use LBM\Service\Status;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Invoices and their line items.

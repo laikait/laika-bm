@@ -21,7 +21,7 @@ use LBM\Model\DomainModel;
 use LBM\Model\DomainNameserverModel;
 use LBM\Service\Money;
 use LBM\Service\Status;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Domain registrations.

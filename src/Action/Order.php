@@ -23,7 +23,7 @@ use LBM\Model\OrderModel;
 use LBM\Model\OrderItemModel;
 use LBM\Service\Money;
 use LBM\Service\Status;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 /**
  * Orders - what a client asked for, before it becomes something they are billed

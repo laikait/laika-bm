@@ -21,7 +21,7 @@ use Laika\Service\Url;
 use Laika\Core\App\Template;
 use Laika\Session\Session;
 use Laika\Session\SessionManager;
-use LBM\Support\Icon;
+use Laika\Service\Icon;
 use LBM\Service\Money;
 
 /**

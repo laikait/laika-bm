@@ -17,7 +17,7 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Model;
 use Laika\Service\Visitor;
-use LBM\Support\Uid;
+use Laika\Service\Uid;
 
 class LoginLogModel extends Model
 {

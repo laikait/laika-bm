@@ -14,7 +14,6 @@ namespace LBM\Relay;
 
 use LBM\Action;
 use LBM\Mail\MailerFactory;
-use LBM\Support\Uid;
 use LBM\Support\Money;
 use LBM\Support\Status;
 use LBM\Support\Permission;
@@ -31,7 +30,11 @@ class Provider extends RelayProvider
         // Singletons because each one memoises: Status holds the lookup tables,
         // Money the currency list, Permission the parsed role JSON. A second
         // instance would mean a second round of the same queries.
-        $this->registry->singleton('support.uid', Uid::class);
+        //
+        // No uid binding here any more. Uid and Icon both moved into
+        // laika-core and are reached through Laika\Service\{Uid,Icon},
+        // so a second copy in this package could only drift away from the
+        // one the framework itself uses.
         $this->registry->singleton('support.money', Money::class);
         $this->registry->singleton('support.status', Status::class);
         $this->registry->singleton('support.paginator', Paginator::class);
