@@ -21,6 +21,8 @@ use Laika\Model\Connection;
 use Laika\Service\Config;
 use Laika\Service\Infra;
 use Laika\Service\Option;
+use LBM\Contract\MigrationAbstract;
+use LBM\Model\MigrationModel;
 use LBM\Model\StaffModel;
 use LBM\Model\StaffRoleModel;
 use LBM\Model\CurrencyModel;
@@ -28,6 +30,7 @@ use LBM\Pipeline\Install as InstallGate;
 use LBM\Service\Password;
 use LBM\Service\Permission;
 use LBM\Support\Permission as PermissionSupport;
+use LBM\Support\Version;
 use Laika\Service\Uid;
 
 /**
@@ -51,6 +54,15 @@ class Installer
 
     /** @var string Credential Type For Staff Passwords */
     public const STAFF = 'staff';
+
+    /**
+     * @var array<string,array> What The Migration Pass Did In THIS Request
+     *
+     * Kept in memory as well as in the migration_report option, because a read
+     * of that option in the same request that wrote it can return the previous
+     * value - option() memoises per key for the whole request.
+     */
+    private array $lastRun = [];
 
     ####################################################################################
     /*=================================== STATE ======================================*/
@@ -276,14 +288,32 @@ class Installer
     ####################################################################################
 
     /**
-     * Create Every Table, Then Seed
+     * Create Every Table, Seed It, Then Apply Any Outstanding Change
      *
-     * The in-process equivalent of `php laika app:migrate`. Foreign key checks
-     * are disabled per schema because the tables are created in discovery order,
-     * which is not dependency order.
+     * The in-process equivalent of `php laika app:migrate`, and then some: the
+     * CLI command has no third pass and knows nothing about LBM migrations, so
+     * anything driving this feature must come through here.
      *
-     * Re-runnable: every schema uses createIfNotExists and every seed is guarded
-     * by a row count.
+     * Foreign key checks are disabled per schema in pass one because the tables
+     * are created in discovery order, which is not dependency order.
+     *
+     * Re-runnable: every schema uses createIfNotExists, every seed is guarded by
+     * a row count, and every migration is recorded in the `migrations` table so
+     * it is applied exactly once.
+     *
+     * ------------------------------------------------------------------------
+     * The return shape is load-bearing - do not widen it
+     * ------------------------------------------------------------------------
+     * Four callers index ['ok'], ['state'] and ['error'], and
+     * InstallController::migrate() does a bare !$r['ok'] with no null coalesce.
+     * The framework's error handler promotes an undefined-array-key warning to
+     * an ErrorException, so an entry missing a key is a fatal rather than a
+     * missing badge on the wizard.
+     *
+     * Migration results therefore come back from runMigrations() separately and
+     * only FAILURES are merged in here, under a key that cannot collide with a
+     * table name. Successes would otherwise add a row per migration to the
+     * wizard's table on every fresh install, all of them saying "nothing to do".
      * @return array<string,array{ok:bool,state:string,error:string}>
      */
     public function migrate(): array
@@ -312,7 +342,178 @@ class Installer
             }
         }
 
+        // Pass three: changes to tables that already existed. After the seeds
+        // and not between the two passes, because a migration may need to read
+        // or rewrite seeded data.
+        foreach ($this->runMigrations() as $id => $result) {
+            if ($result['ok']) {
+                continue;
+            }
+
+            // A space and a colon are not legal in a table identifier on any
+            // supported engine, so this cannot shadow a real schema result.
+            $results['migration: ' . $id] = [
+                'ok'    =>  false,
+                'state' =>  'failed',
+                'error' =>  $result['error'],
+            ];
+        }
+
         return $results;
+    }
+
+    /**
+     * Apply Every Outstanding Migration
+     *
+     * A migration is a change to a table that already exists - the one thing
+     * up() cannot do, because createIfNotExists sees the table is present and
+     * returns without looking inside it.
+     *
+     * For each discovered migration not already in the ledger, in id order:
+     *
+     *   applies() false  -> recorded `baselined`, run() is never called. This is
+     *                       the fresh-install path: up() already produced the
+     *                       current shape, so there is nothing to do.
+     *   applies() true   -> run(), then recorded `applied`.
+     *   either throws    -> reported, NOTHING recorded, so the next migrate
+     *                       tries again.
+     *
+     * Deliberately not routed through step(). That helper returns a fixed
+     * three-key array and, more importantly, its enableForeignKeyChecks() is not
+     * in a finally - a throwing step leaves foreign key checks off on the same
+     * PDO handle every later query in the request uses. Tolerable while creating
+     * tables during an install; not something to extend over DDL against live
+     * data. This pass does not disable them at all: a migration alters a table
+     * whose referents already exist, so there is nothing to defer.
+     *
+     * @return array<string,array{ok:bool,state:string,error:string,description:string}>
+     */
+    public function runMigrations(): array
+    {
+        $this->connect();
+
+        $results = [];
+
+        // Never attempt a migration that cannot be recorded. Without the ledger
+        // there is nothing to stop the next run applying the same change again,
+        // and "applied twice" is worse than "not applied yet".
+        if (!Schema::on('default')->hasTable('migrations')) {
+            return ['migrations table' => [
+                'ok'          =>  false,
+                'state'       =>  'failed',
+                'error'       =>  'The migrations table does not exist, so nothing can be recorded. '
+                                      . 'Run the migration again - the pass that creates it runs first.',
+                'description' =>  '',
+            ]];
+        }
+
+        try {
+            $migrations = $this->migrationClasses();
+        } catch (Throwable $e) {
+            return ['discovery' => [
+                'ok'          =>  false,
+                'state'       =>  'failed',
+                'error'       =>  $e->getMessage(),
+                'description' =>  '',
+            ]];
+        }
+
+        $applied = $this->appliedMigrations();
+
+        foreach ($migrations as $id => $migration) {
+            if (isset($applied[$id])) {
+                continue;
+            }
+
+            $results[$id] = $this->runMigration($migration);
+        }
+
+        $this->recordRun($results);
+
+        return $this->lastRun = $results;
+    }
+
+    /**
+     * What The Migration Pass In This Request Actually Did
+     *
+     * Read this rather than the migration_report option when you are still in
+     * the request that ran the migration. option() memoises per key for the
+     * whole request, so a read after a write in the same process can return the
+     * value from before it - which is why every settings save in this
+     * application ends in a redirect rather than a re-render.
+     * @return array<string,array{ok:bool,state:string,error:string,description:string}>
+     */
+    public function lastMigrationRun(): array
+    {
+        return $this->lastRun;
+    }
+
+    /**
+     * Everything Discovered That Has Not Been Recorded Yet
+     *
+     * Drives the update screen, so an operator can see what a migration will do
+     * before pressing the button rather than afterwards.
+     *
+     * When the ledger table does not exist - every installation that has not yet
+     * migrated since this feature shipped - everything is reported as pending,
+     * because that is the truth.
+     * @return array<string,string> Migration Id => Description
+     */
+    public function pendingMigrations(): array
+    {
+        $this->connect();
+
+        try {
+            $migrations = $this->migrationClasses();
+        } catch (Throwable) {
+            // Discovery is broken - a duplicate id, or a class that will not
+            // load. Returning an empty list is correct here (there is nothing
+            // this method can honestly name), but on its own it would render as
+            // "nothing pending", which is the opposite of the truth. The screen
+            // pairs this with migrationProblem() so the operator is told.
+            return [];
+        }
+
+        $applied = Schema::on('default')->hasTable('migrations')
+            ? $this->appliedMigrations()
+            : [];
+
+        $pending = [];
+
+        foreach ($migrations as $id => $migration) {
+            if (isset($applied[$id])) {
+                continue;
+            }
+
+            $pending[$id] = $migration->description();
+        }
+
+        return $pending;
+    }
+
+    /**
+     * Why Migration Discovery Cannot Run, If It Cannot
+     *
+     * Separate from pendingMigrations() on purpose. That method answers "what is
+     * outstanding" and can only honestly answer "nothing I can name" when
+     * discovery itself is broken - but a screen showing an empty pending list
+     * says "you are up to date", which is precisely the wrong thing to tell
+     * somebody whose migrations will not load. This is the other half, so the
+     * screen can say what is actually wrong.
+     *
+     * Only a packaging fault reaches here: two migrations sharing an id, one
+     * with no id at all, or a class that will not load.
+     * @return ?string
+     */
+    public function migrationProblem(): ?string
+    {
+        try {
+            $this->migrationClasses();
+
+            return null;
+        } catch (Throwable $e) {
+            return $e->getMessage();
+        }
     }
 
     /**
@@ -507,9 +708,14 @@ class Installer
             throw new \RuntimeException("Could not create [{$dir}] to write the install lock.");
         }
 
+        // Version::CURRENT, not a literal. This said "Version 1.0.0" while the
+        // product was at 1.1.0 - harmless, since nothing parses this file
+        // (isInstalled() is an is_file() check), but it is a lie in one of the
+        // few files an operator opens when they are already having a bad day.
         $written = file_put_contents($lock, sprintf(
-            "Installed %s\nVersion 1.0.0\n\nDelete this file to re-run the installer.\n",
-            gmdate('Y-m-d H:i:s') . ' UTC'
+            "Installed %s\nVersion %s\n\nDelete this file to re-run the installer.\n",
+            gmdate('Y-m-d H:i:s') . ' UTC',
+            Version::CURRENT
         ));
 
         if ($written === false) {
@@ -576,6 +782,8 @@ class Installer
      */
     private function step(string $class, string $method, string $state): array
     {
+        $on = null;
+
         try {
             $schema = new $class();
             $on = Schema::on($schema->connection);
@@ -585,12 +793,170 @@ class Installer
             // yet.
             $on->disableForeignKeyChecks();
             $schema->{$method}();
-            $on->enableForeignKeyChecks();
 
             return ['ok' => true, 'state' => $state, 'error' => ''];
         } catch (Throwable $e) {
             return ['ok' => false, 'state' => 'failed', 'error' => $e->getMessage()];
+        } finally {
+            // In a finally, because this used to sit on the happy path only - so
+            // one throwing schema left foreign key checks OFF for the rest of the
+            // request, on the same PDO handle every later query uses. A silent
+            // loss of referential integrity is a bad way to be told a schema
+            // failed, and the failure message above is a good one.
+            if ($on !== null) {
+                try {
+                    $on->enableForeignKeyChecks();
+                } catch (Throwable) {
+                    // The connection is already gone. There is nothing left to
+                    // re-enable, and throwing here would replace the real error.
+                }
+            }
         }
+    }
+
+    /**
+     * Every Migration Class, Instantiated, Keyed And Ordered By Id
+     *
+     * Discovery order is Infra::get()'s sort() over fully qualified class names,
+     * which is alphabetical by class name - a different order from the ids, and
+     * not a contract anything should lean on. So they are re-sorted here on the
+     * id itself, which is why the id format is dated: ksort on
+     * YYYYMMDD_HHMM_slug is chronological order.
+     * @return array<string,MigrationAbstract> Id => Migration
+     * @throws RuntimeException When two migrations share an id
+     */
+    private function migrationClasses(): array
+    {
+        $found = [];
+
+        foreach (Infra::get('migrations', MigrationAbstract::class) as $class) {
+            /** @var MigrationAbstract $migration */
+            $migration = new $class();
+            $id = $migration->id();
+
+            if ($id === '') {
+                throw new \RuntimeException("Migration [{$class}] does not declare an id.");
+            }
+
+            // Caught before anything runs rather than left to the unique key,
+            // which would only complain AFTER the first of the pair had already
+            // applied - leaving a database in a state no id explains. Two
+            // branches merging on the same timestamp is a real accident.
+            if (isset($found[$id])) {
+                throw new \RuntimeException(
+                    "Two migrations share the id [{$id}]: [" . get_class($found[$id]) . "] and [{$class}]."
+                );
+            }
+
+            $found[$id] = $migration;
+        }
+
+        ksort($found);
+
+        return $found;
+    }
+
+    /**
+     * Ids Already In The Ledger
+     * @return array<string,true>
+     */
+    private function appliedMigrations(): array
+    {
+        $ids = [];
+
+        foreach ((new MigrationModel())->pluck('migration_key') as $key) {
+            $ids[(string) $key] = true;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Apply One Migration And Record It
+     *
+     * Nothing is recorded when it throws, which is what makes the next migrate
+     * try again. The driver's message is passed through verbatim - a migration
+     * fails for a reason somebody has to act on, and a tidied-up message is a
+     * message that has had the actionable part removed.
+     * @param MigrationAbstract $migration
+     * @return array{ok:bool,state:string,error:string,description:string}
+     */
+    private function runMigration(MigrationAbstract $migration): array
+    {
+        $description = $migration->description();
+
+        try {
+            // False means the change is already present - a fresh install, or
+            // somebody applied it by hand. Recorded, never run.
+            $state = $migration->applies() ? 'applied' : 'baselined';
+
+            if ($state === 'applied') {
+                $migration->run();
+            }
+
+            (new MigrationModel())->insert([
+                'migration_key'   =>  $migration->id(),
+                'state'           =>  $state,
+                'description'     =>  $description,
+                'product_version' =>  Version::CURRENT,
+                'ran_at'          =>  $this->now(),
+            ]);
+
+            return ['ok' => true, 'state' => $state, 'error' => '', 'description' => $description];
+        } catch (Throwable $e) {
+            return [
+                'ok'          =>  false,
+                'state'       =>  'failed',
+                'error'       =>  $e->getMessage(),
+                'description' =>  $description,
+            ];
+        }
+    }
+
+    /**
+     * Store What The Last Run Did, For The Update Screen
+     *
+     * attempt() redirects and a flash cannot carry structure, so the report goes
+     * through the options table and is read back on the next request - the same
+     * route UtilController::check() already takes for the version it finds.
+     *
+     * schema_version is written only when nothing failed, so it can never claim
+     * a version the database did not actually reach. When it disagrees with
+     * Version::CURRENT the operator has updated the files and not yet run the
+     * migration, which is exactly the state that produces "the update said it
+     * worked and the screen is broken".
+     * @param array<string,array> $results
+     * @return void
+     */
+    private function recordRun(array $results): void
+    {
+        try {
+            $failed = 0;
+
+            foreach ($results as $result) {
+                if (!($result['ok'] ?? false)) {
+                    $failed++;
+                }
+            }
+
+            $this->put('migration_report', (string) json_encode($results));
+            $this->put('migration_ran_at', $this->now());
+
+            if ($failed === 0) {
+                $this->put('schema_version', Version::CURRENT);
+            }
+        } catch (Throwable) {
+            // A report that cannot be stored must never fail a migration that
+            // succeeded. The screen falls back to showing nothing.
+        }
+    }
+
+    /**
+     * @return string Now, As The Database Wants It
+     */
+    private function now(): string
+    {
+        return date('Y-m-d H:i:s');
     }
 
     /**
@@ -791,14 +1157,26 @@ class Installer
     /**
      * Clear Compiled Templates and Cached Config
      *
-     * Both trees: laika-core compiles templates under TEMPLATE_CACHE_PATH,
+     * Three trees: laika-core compiles templates under TEMPLATE_CACHE_PATH,
      * which is not below lf-cache, so emptying that one alone would leave a
      * compiled view from a previous install in place.
+     *
+     * lf-storage/cache is the parent of TEMPLATE_CACHE_PATH and also holds the
+     * module loader's generated file and, in principle, Resource's compiled
+     * manifest. Emptying the parent is belt-and-braces rather than a fix for
+     * anything live: the manifest cannot hide a newly shipped class from LBM,
+     * because Resource::register() unsets the resolved entry for every name
+     * helpers/loader.php registers and forces a live scan of it. Nor can a
+     * manifest reach an operator - verify-stage.php blocks a release whose
+     * lf-storage/cache has contents, and app:cache, the only thing that writes
+     * one, is not shipped. Clearing the module file is safe on the same terms:
+     * GlobalPipeline rebuilds it when it is absent, costing one request of lag,
+     * and at this point in an install there are no modules enabled anyway.
      * @return void
      */
     private function clearCache(): void
     {
-        foreach ([APP_PATH . '/lf-cache', TEMPLATE_CACHE_PATH] as $cache) {
+        foreach ([APP_PATH . '/lf-cache', STORAGE_PATH . DS . 'cache'] as $cache) {
             $this->emptyDirectory($cache);
         }
     }

@@ -16,6 +16,7 @@ use Laika\Cli\Contracts\CommandInterface;
 use Laika\Model\Contract\SchemaAbstract;
 use Laika\Route\Contracts\FilterInterface;
 use Laika\Route\Contracts\PipelineInterface;
+use LBM\Contract\MigrationAbstract;
 use LBM\Module\ModuleManager;
 
 ####################################################################################
@@ -51,6 +52,11 @@ $src = dirname(__DIR__) . '/src';
 // Class Resources
 Resource::register('models',      "{$src}/Model",      'LBM\\Model');
 Resource::register('schemas',     "{$src}/Schema",     'LBM\\Schema',     SchemaAbstract::class);
+// The other half of the same job: up() creates a table that is missing, a
+// migration changes one that is already there. Normally an empty directory, and
+// that is fine - Resource::scan() short-circuits on a missing or empty path and
+// returns no classes rather than throwing.
+Resource::register('migrations',  "{$src}/Migration",  'LBM\\Migration',  MigrationAbstract::class);
 Resource::register('controllers', "{$src}/Controller", 'LBM\\Controller');
 Resource::register('pipelines',   "{$src}/Pipeline",   'LBM\\Pipeline',   PipelineInterface::class);
 Resource::register('filters',     "{$src}/Filter",     'LBM\\Filter',     FilterInterface::class);

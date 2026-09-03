@@ -300,6 +300,90 @@ foreach (['admin', 'panel', 'front'] as $area) {
 }
 
 
+// ---------------------------------------------------------------------------
+// 6d. Raw DDL lives in src/Migration and nowhere else
+// ---------------------------------------------------------------------------
+//
+// The product's standing rule is model methods only, no raw SQL. Phase 21 opened
+// exactly one hole in it: laika-model's entire ALTER surface is ADD COLUMN, so a
+// migration that widens a column, drops one, or adds an index has no choice but
+// Schema::statement(). That is a reviewed, one-change-per-class directory. The
+// rest of the product still has no business writing SQL, and the difference
+// between "one deliberate exception" and "the rule is gone" is whether anything
+// checks.
+//
+// Comments are stripped before matching, with token_get_all rather than a
+// regex. The first draft of this check grepped the raw file and immediately
+// flagged two of its own new files, both for prose - MigrationAbstract's
+// docblock explains Schema::statement(), and MigrationSchema's explains why a
+// CREATE TABLE would fail on a long key. A check that fires on the
+// documentation of the rule it enforces gets switched off within a week.
+// Stripping comments removes that whole class of false positive instead of
+// rewording prose until the grep is happy, and it cannot be fooled the other
+// way either: string literals still count, and SQL lives in strings.
+$package = $stage . '/vendor/laikait/laika-bm';
+$exempt  = realpath($package . '/src/Migration');
+$exempt  = $exempt === false ? '' : rtrim(str_replace('\\', '/', $exempt), '/') . '/';
+$ddl     = [];
+
+if (is_dir($package . '/src')) {
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($package . '/src', FilesystemIterator::SKIP_DOTS)
+    );
+
+    foreach ($files as $file) {
+        if ($file->getExtension() !== 'php') {
+            continue;
+        }
+
+        $path = rtrim(str_replace('\\', '/', (string) $file->getRealPath()), '/');
+
+        // A directory boundary, not a substring: src/MigrationHelpers would
+        // otherwise inherit the exemption by sharing a prefix.
+        if ($exempt !== '' && str_starts_with($path, $exempt)) {
+            continue;
+        }
+
+        $code = '';
+
+        foreach (token_get_all((string) file_get_contents($path)) as $token) {
+            if (!is_array($token)) {
+                $code .= $token;
+                continue;
+            }
+
+            if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                continue;
+            }
+
+            $code .= $token[1];
+        }
+
+        if (preg_match('/(->|::)statement\s*\(|\b(ALTER|DROP|CREATE)\s+TABLE\b/i', $code) === 1) {
+            $ddl[] = str_replace(rtrim(str_replace('\\', '/', $package), '/') . '/', '', $path);
+        }
+    }
+}
+
+must(
+    $ddl === [],
+    "RAW SQL  " . implode(', ', array_slice($ddl, 0, 5))
+        . (count($ddl) > 5 ? ' and ' . (count($ddl) - 5) . ' more' : '')
+        . "\n           Raw DDL belongs in src/Migration and nowhere else in the product."
+        . "\n           Comments are already excluded, so this is executable code."
+);
+
+// The mirror. An exclusion rule that dropped this directory would not break
+// anything visibly: discovery would return an empty list, the update screen
+// would say nothing is pending, and every future migration would silently never
+// run. Shipping too little is the harder half to notice, which is why it gets
+// its own check rather than being assumed.
+must(
+    is_dir($package . '/src/Migration'),
+    "MISSING  vendor/laikait/laika-bm/src/Migration\n           Migrations are discovered from this directory. Without it every schema change would silently never reach an operator, and the update would still report success."
+);
+
+
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.
 foreach ([

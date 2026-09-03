@@ -89,6 +89,20 @@ class UtilController extends AdminController
         // an option would be an unknown-filter error at render time.
         $seen = trim((string) option('update_last_seen', ''));
 
+        $installer = new Installer();
+
+        // What the last run did. Written to an option by Installer::recordRun()
+        // rather than carried back through the redirect, because attempt()
+        // redirects and a flash cannot carry structure - the same route check()
+        // already takes for the version it finds.
+        $report = json_decode((string) option('migration_report', ''), true);
+
+        // The database's version, which is not the same question as the code's.
+        // When they differ the files were updated and the migration was not run,
+        // and that is exactly the state that produces "the update said it worked
+        // and one screen is broken".
+        $schema = trim((string) option('schema_version', ''));
+
         return $this->screen('util-update', local('update_app'), [
             'version'   =>  Version::CURRENT,
             'product'   =>  Version::PRODUCT,
@@ -96,6 +110,12 @@ class UtilController extends AdminController
             'seen'      =>  $seen === '' ? null : $seen,
             'newer'     =>  $seen !== '' && version_compare($seen, Version::CURRENT, '>'),
             'checked'   =>  trim((string) option('update_checked_at', '')) ?: null,
+            'pending'   =>  $installer->pendingMigrations(),
+            'problem'   =>  $installer->migrationProblem(),
+            'schema'    =>  $schema === '' ? null : $schema,
+            'behind'    =>  $schema !== '' && version_compare($schema, Version::CURRENT, '<'),
+            'report'    =>  is_array($report) ? $report : null,
+            'ran'       =>  trim((string) option('migration_ran_at', '')) ?: null,
         ]);
     }
 
@@ -138,13 +158,21 @@ class UtilController extends AdminController
      *
      * Runs Installer::migrate() in process. Nothing shells out - `laika` is not
      * shipped, so there is nothing to shell out to.
+     *
+     * Three passes happen inside that call: tables that do not exist are
+     * created, lookup data is re-seeded, and any outstanding migration is
+     * applied. The third is the one that can change a table that already
+     * exists, which is what the first two have never been able to do.
      * @return ?string
      */
     public function migrate(): ?string
     {
         return $this->attempt(
             function (): void {
-                $results = (new Installer())->migrate();
+                $installer = new Installer();
+
+                $before = $installer->pendingMigrations();
+                $results = $installer->migrate();
 
                 $failed = [];
 
@@ -154,10 +182,29 @@ class UtilController extends AdminController
                     }
                 }
 
+                // From the in-memory record, not the migration_report option -
+                // option() memoises per key for the whole request, so reading
+                // back what this request just wrote can return the value from
+                // before it. $results is no use either: by design it carries
+                // only the failures, so that a fresh install's wizard does not
+                // list a row per migration all saying there was nothing to do.
+                $applied = 0;
+                $baselined = 0;
+
+                foreach ($installer->lastMigrationRun() as $result) {
+                    if (($result['state'] ?? '') === 'applied') {
+                        $applied++;
+                    } elseif (($result['state'] ?? '') === 'baselined') {
+                        $baselined++;
+                    }
+                }
+
                 $this->log(
                     'app.migrated',
                     'Ran the database migration from the utilities screen. '
-                        . count($results) . ' schemas, ' . count($failed) . ' failed.'
+                        . count($results) . ' schemas, ' . count($failed) . ' failed. '
+                        . 'Migrations: ' . count($before) . ' outstanding, ' . $applied . ' applied, '
+                        . $baselined . ' already present.'
                 );
 
                 if ($failed !== []) {

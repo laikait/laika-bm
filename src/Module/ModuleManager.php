@@ -23,6 +23,7 @@ use Laika\Cli\Contracts\CommandInterface;
 use Laika\Model\Contract\SchemaAbstract;
 use Laika\Route\Contracts\FilterInterface;
 use Laika\Route\Contracts\PipelineInterface;
+use LBM\Contract\MigrationAbstract;
 
 /**
  * Loads what is installed in the app root's `modules/` directory.
@@ -96,6 +97,7 @@ class ModuleManager
     private const CONTRACTS = [
         'models'      =>  null,
         'schemas'     =>  SchemaAbstract::class,
+        'migrations'  =>  MigrationAbstract::class,
         'controllers' =>  null,
         'pipelines'   =>  PipelineInterface::class,
         'filters'     =>  FilterInterface::class,
