@@ -383,6 +383,19 @@ must(
     "MISSING  vendor/laikait/laika-bm/src/Migration\n           Migrations are discovered from this directory. Without it every schema change would silently never reach an operator, and the update would still report success."
 );
 
+// The offline gateway is the only way a fresh installation can take a payment at
+// all. If it failed to ship, the gateways screen would say "no modules enabled"
+// and the operator would have no way to be paid - a shipping-too-little failure
+// that looks exactly like an empty state rather than like a fault.
+must_exist(
+    'modules/gateways/Offline/module.php',
+    'The offline payment gateway ships with the product. Without it a fresh install has no payment method at all.'
+);
+must_exist(
+    'modules/gateways/Offline/src/Offline.php',
+    'The offline gateway manifest points at this class. A manifest without its driver configures a gateway that cannot build.'
+);
+
 
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.

@@ -59,6 +59,12 @@ Url::group(PANEL, function () use ($uid): void {
         ->name('client.invoice.print');
     Url::post("/invoice/{invoice:{$uid}}/pay", [InvoiceController::class, 'pay'])
         ->name('client.invoice.pay');
+    // Paying through a gateway, as opposed to /pay, which puts account credit
+    // towards the invoice. Two routes because they are two different acts: one
+    // spends a balance the client already holds, the other reaches a payment
+    // processor and may not settle anything at all.
+    Url::post("/invoice/{invoice:{$uid}}/checkout", [InvoiceController::class, 'checkout'])
+        ->name('client.invoice.checkout');
 
     /*================================ DOMAINS ==============================*/
     Url::get('/domains', [DomainController::class, 'index'])->name('client.domains');

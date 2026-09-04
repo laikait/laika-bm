@@ -24,6 +24,7 @@ use LBM\Controller\Admin\ClientController;
 use LBM\Controller\Admin\DomainController;
 use LBM\Controller\Admin\ModuleController;
 use LBM\Controller\Admin\ReportController;
+use LBM\Controller\Admin\GatewayController;
 use LBM\Controller\Admin\UtilController;
 use LBM\Controller\Admin\ServerController;
 use LBM\Controller\Admin\TicketController;
@@ -379,6 +380,25 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.util.todo.toggle')->pipeline([Permission::class . '|perm=settings.read']);
     Url::post("/utils/todo/{todo:{$uid}}/delete", [UtilController::class, 'deleteTodo'])
         ->name('staff.util.todo.delete')->pipeline([Permission::class . '|perm=settings.read']);
+
+    /*========================== PAYMENT GATEWAYS ===========================*/
+    //
+    // settings.read to look, settings.update to change - no new permission
+    // group, because Permission::GROUPS is granted to a role only when the role
+    // is CREATED, so a new group would be invisible on every installation that
+    // already exists. The same decision the utilities screens above took.
+    Url::get('/gateways', [GatewayController::class, 'index'])
+        ->name('staff.gateways')->pipeline([Permission::class . '|perm=settings.read']);
+    // Literal before parameterised: matching is first-match-wins in registration
+    // order, and {gateway} matches the word "configure" perfectly well.
+    Url::post('/gateways/configure', [GatewayController::class, 'configure'])
+        ->name('staff.gateway.configure')->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post("/gateway/{gateway:{$uid}}/settings", [GatewayController::class, 'settings'])
+        ->name('staff.gateway.settings')->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post("/gateway/{gateway:{$uid}}/toggle", [GatewayController::class, 'toggle'])
+        ->name('staff.gateway.toggle')->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post("/gateway/{gateway:{$uid}}/delete", [GatewayController::class, 'delete'])
+        ->name('staff.gateway.delete')->pipeline([Permission::class . '|perm=settings.update']);
 
     /*============================== ACTIVITIES =============================*/
     Url::get('/activities', [ActivityController::class, 'index'])

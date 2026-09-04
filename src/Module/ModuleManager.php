@@ -384,6 +384,15 @@ class ModuleManager
                 'version'   =>  (string) ($manifest['version'] ?? ''),
                 'path'      =>  $directory,
                 'resources' =>  $registered,
+
+                // The class implementing this kind's contract - GatewayInterface,
+                // ServerInterface or RegistrarInterface. modules/README.md has
+                // documented this key since Phase 9 and nothing read it until
+                // Phase 22 needed to find a gateway driver, so a module could
+                // declare one and be quietly ignored. Recorded raw: whether it
+                // exists and implements the right contract is the caller's
+                // question, and the answer differs per kind.
+                'class'     =>  trim((string) ($manifest['class'] ?? '')),
             ];
         } catch (Throwable $e) {
             self::$failed[$uid] = $e->getMessage();

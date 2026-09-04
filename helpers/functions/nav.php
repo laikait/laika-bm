@@ -115,6 +115,8 @@ function nav_admin(?string $current = null): array
     // install that already exists - and unreachable in a way whose fix is a
     // checkbox nobody knows to tick. UtilController carries the full reasoning.
     nav_item('utils',      'staff.utils',      'database',   staff_has_access('settings.read'), $admin, 'utilities');
+    // Gateways sit on the same permission, for the same reason.
+    nav_item('gateways',   'staff.gateways',   'currency',   staff_has_access('settings.read'), $admin, 'payment_gateways');
 
     return nav_finish('admin', $current);
 }
