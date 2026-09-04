@@ -39,6 +39,8 @@ class ClientServiceSchema extends SchemaAbstract
             $t->timestamp('termination_date')->nullable()->default(NULL);
             $t->unsignedInteger('status_relid')->default(1)->comment('client_service_statuses -> status_id');
             $t->string('suspension_reason')->nullable()->default(NULL);
+            $t->timestamp('cancel_at')->nullable()->default(NULL)->comment('When a scheduled cancellation takes effect');
+            $t->string('cancel_reason')->nullable()->default(NULL);
             $t->serialize('module_data')->nullable()->default(NULL)->comment('Serialized Module Data');
             $t->timestamps();
 
@@ -51,6 +53,12 @@ class ClientServiceSchema extends SchemaAbstract
             $t->index('status_relid');
             $t->index('billing_cycle_relid');
             $t->index('next_due_date');
+
+            // Indexed because cron asks "what is due to end today" on every
+            // daily run. An install that predates Phase 24 gets the column and
+            // this index from src/Migration - up() only ever creates tables
+            // that do not exist, so neither reaches it any other way.
+            $t->index('cancel_at');
         });
     }
 }

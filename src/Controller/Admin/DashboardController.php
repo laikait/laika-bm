@@ -133,7 +133,9 @@ class DashboardController extends AdminController
     /**
      * How Invoices Are Split Across Their Statuses
      *
-     * Drives the donut. One count per status rather than one query per invoice.
+     * One count per status rather than one query per invoice. A status with
+     * nothing in it is left out, so the counts returned always add up to the
+     * total - the dashboard prints no separate total and relies on that.
      * @return array
      */
     private function invoiceMix(): array
@@ -155,12 +157,6 @@ class DashboardController extends AdminController
                 'color' =>  (string) $status['color'],
                 'count' =>  $count,
             ];
-        }
-
-        // The percentage is worked out here rather than in the template, so the
-        // donut and the legend cannot disagree about what they are showing.
-        foreach ($slices as $i => $slice) {
-            $slices[$i]['percent'] = $total > 0 ? round($slice['count'] / $total * 100, 1) : 0;
         }
 
         return ['slices' => $slices, 'total' => $total];

@@ -563,6 +563,25 @@ class Invoice extends Action
             $m->where([$m->id => $invoiceId])->update($data);
         });
 
+        // Outside the transaction, and only once it committed. Provisioning
+        // writes its own rows; doing that inside somebody else's transaction
+        // means a later failure silently un-creates a service the customer has
+        // already been told about.
+        //
+        // Rows only - no module, no network. See Action\Provision, and note
+        // that this call is an optimisation rather than the mechanism: cron
+        // reconciles regardless, so a settlement path that forgets to call it
+        // is late, not broken.
+        if ($settled) {
+            (new Provision())->forInvoice($invoiceId);
+
+            // And the other direction: a service this invoice was holding
+            // suspended comes back now rather than at the next tick. Dunning
+            // checks its own switch and every other condition itself, so this
+            // is a nudge and not a decision.
+            (new Dunning())->forInvoice($invoiceId);
+        }
+
         return $settled;
     }
 
@@ -633,7 +652,16 @@ class Invoice extends Action
             $data['status_relid'] = $status;
         }
 
-        return $this->update($invoiceId, $data);
+        $updated = $this->update($invoiceId, $data);
+
+        // The other settlement path. applyCredit() does NOT go through
+        // applyPayment() - it writes credit_applied and calls this directly -
+        // and staff can reach markPaid() on its own, so both need the nudge or
+        // a credit-settled invoice would wait for the next cron tick.
+        (new Provision())->forInvoice($invoiceId);
+        (new Dunning())->forInvoice($invoiceId);
+
+        return $updated;
     }
 
     /**

@@ -90,6 +90,9 @@ class Provider extends RelayProvider
             'action.todo'           =>  Action\Todo::class,
             'action.gateway'        =>  Action\Gateway::class,
             'action.gateway.callback' =>  Action\GatewayCallback::class,
+            'action.provision'      =>  Action\Provision::class,
+            'action.dunning'        =>  Action\Dunning::class,
+            'action.termination'    =>  Action\Termination::class,
         ] as $accessor => $class) {
             $this->registry->singleton($accessor, $class);
         }

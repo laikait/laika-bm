@@ -20,7 +20,11 @@ use LBM\Job\InvoiceGenerateJob;
 use LBM\Job\InvoiceReminderJob;
 use LBM\Job\PruneTokensJob;
 use LBM\Service\Mail;
+use LBM\Service\Dunning;
+use LBM\Service\Provision;
+use LBM\Service\Server;
 use LBM\Service\Setting;
+use LBM\Service\Termination;
 
 /**
  * Everything the operator's cron task actually does.
@@ -171,6 +175,44 @@ class Cron
             // bad address stopped invoices being raised.
             return $sent . ' sent, ' . $failed . ' failed';
         });
+
+        // Every run, not daily, and that is the whole point of it being here.
+        //
+        // A customer who pays at 09:02 for a hosting account should have it
+        // within minutes, not tomorrow morning - so this rides the five-minute
+        // tick. It is also the SAFETY NET for provisioning: Invoice::
+        // applyPayment() and markPaid() call Provision::forInvoice() directly
+        // for promptness, but the sweep here is what makes the guarantee, since
+        // it looks at settled invoices rather than at whether anybody
+        // remembered to call anything.
+        //
+        // Both halves are bounded per tick, so a backlog spreads over several
+        // runs instead of making one run last an hour and trip the lock.
+        $this->task('provision paid orders', static function (): string {
+            return Provision::run();
+        });
+
+        // Every run too, and for the same reason read in the other direction: a
+        // customer who has just paid must come back within minutes, not
+        // tomorrow. Suspension riding the same tick is a side effect of that and
+        // costs nothing - the verdict is a date comparison, so running it 288
+        // times a day reaches the same answer as running it once, just sooner.
+        //
+        // It reports `off` on every install that has not deliberately switched
+        // it on. That line in the cron log is the feature working, not a fault:
+        // an operator who has never heard of this can read what their cron does
+        // and see that nothing is being switched off behind their back.
+        $this->task('suspend overdue services', static function (): string {
+            return Dunning::run();
+        });
+
+        // Every run as well, because a cancellation scheduled for "the end of
+        // the term" has a time on it, not just a date - a customer whose month
+        // runs out at 14:00 should not still be billed and provisioned until
+        // the daily block happens to fire tomorrow morning.
+        $this->task('end cancelled services', static function (): string {
+            return Termination::run();
+        });
     }
 
     /**
@@ -203,6 +245,14 @@ class Cron
             (new PruneTokensJob())->handle();
 
             return 'done';
+        });
+
+        // Daily, not per tick: it touches every server row, and the answer
+        // cannot change unless something provisioned or terminated - both of
+        // which recount the affected server themselves. This is the repair pass
+        // for installs carrying the zeroes that shipped from Phase 0 until 24.
+        $this->task('recount server accounts', static function (): string {
+            return Server::recountAll() . ' servers';
         });
 
         $this->task('prune sent mail', function (): string {

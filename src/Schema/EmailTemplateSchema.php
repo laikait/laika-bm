@@ -279,6 +279,97 @@ class EmailTemplateSchema extends SchemaAbstract
                     'subject'        =>  'The subject the job chose. Used as the subject line.',
                 ],
             ],
+
+            // The two dunning messages. A suspension the customer is never told
+            // about is a support ticket by lunchtime, and a restoration they are
+            // never told about is the same ticket a second time - they have paid
+            // and have no way of knowing whether it landed.
+            'service-suspended' => [
+                'name'    =>  'service_suspended',
+                'subject' =>  'Your {{service_name}} service has been suspended',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>Your <strong>{{service_name}}</strong> service has been '
+                    . 'suspended because a payment is outstanding.</p>'
+                    . '<p>{{reason}}</p>'
+                    . '<p>Nothing has been deleted. As soon as the invoice is '
+                    . 'settled the service is switched back on, normally within '
+                    . 'a few minutes.</p>'
+                    . '<p>You can pay in your account: '
+                    . '<a href="{{client_area}}">{{client_area}}</a></p>'
+                    . '<p>If you believe this is a mistake, or you have already '
+                    . 'paid, please reply to this message.</p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'   =>  'The client\'s first name.',
+                    'last_name'    =>  'The client\'s last name.',
+                    'service_name' =>  'The product this service was bought from.',
+                    'domain'       =>  'The domain the service is for, if it has one.',
+                    'reason'       =>  'Which invoice is outstanding. Written for the client to read.',
+                ],
+            ],
+
+            'service-restored' => [
+                'name'    =>  'service_restored',
+                'subject' =>  'Your {{service_name}} service is back online',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>Thank you - your payment has been received and your '
+                    . '<strong>{{service_name}}</strong> service is active again.</p>'
+                    . '<p>Everything is as you left it. Nothing was removed while '
+                    . 'it was suspended.</p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'   =>  'The client\'s first name.',
+                    'last_name'    =>  'The client\'s last name.',
+                    'service_name' =>  'The product this service was bought from.',
+                    'domain'       =>  'The domain the service is for, if it has one.',
+                ],
+            ],
+
+            // The two end-of-life messages. Cancelling and terminating are
+            // different acts and need different words: one says the billing has
+            // stopped, the other says the data is gone. A single template
+            // covering both would have to be vague about which happened, and
+            // vague is the one thing this message must not be.
+            'service-cancelled' => [
+                'name'    =>  'service_cancelled',
+                'subject' =>  'Your {{service_name}} service has been cancelled',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>Your <strong>{{service_name}}</strong> service is set to end on '
+                    . '<strong>{{ends_on}}</strong>, and you will not be billed for it again.</p>'
+                    . '<p>{{reason}}</p>'
+                    . '<p>Nothing has been deleted yet. If you have anything on it you '
+                    . 'want to keep, please take a copy before that date.</p>'
+                    . '<p>If this was not what you meant, reply to this message and we '
+                    . 'will put it back.</p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'   =>  'The client\'s first name.',
+                    'last_name'    =>  'The client\'s last name.',
+                    'service_name' =>  'The product this service was bought from.',
+                    'domain'       =>  'The domain the service is for, if it has one.',
+                    'ends_on'      =>  'The date billing stops, already formatted.',
+                    'reason'       =>  'Why it is being cancelled, if a reason was given.',
+                ],
+            ],
+
+            'service-terminated' => [
+                'name'    =>  'service_terminated',
+                'subject' =>  'Your {{service_name}} service has been removed',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>Your <strong>{{service_name}}</strong> service has now been '
+                    . 'removed from our servers, along with the data on it.</p>'
+                    . '<p>{{reason}}</p>'
+                    . '<p>This cannot be undone. If you would like to start again, you '
+                    . 'are welcome to place a new order at any time.</p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'   =>  'The client\'s first name.',
+                    'last_name'    =>  'The client\'s last name.',
+                    'service_name' =>  'The product this service was bought from.',
+                    'domain'       =>  'The domain the service was for, if it had one.',
+                    'reason'       =>  'Why it was removed, if a reason was given.',
+                ],
+            ],
         ];
     }
 }

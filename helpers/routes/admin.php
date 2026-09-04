@@ -27,6 +27,7 @@ use LBM\Controller\Admin\ReportController;
 use LBM\Controller\Admin\GatewayController;
 use LBM\Controller\Admin\UtilController;
 use LBM\Controller\Admin\ServerController;
+use LBM\Controller\Admin\ServiceController;
 use LBM\Controller\Admin\TicketController;
 use LBM\Controller\Admin\InvoiceController;
 use LBM\Controller\Admin\ProductController;
@@ -180,6 +181,38 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.order.cancel')->pipeline([Permission::class . '|perm=order.update']);
     Url::post("/order/{order:{$uid}}/delete", [OrderController::class, 'delete'])
         ->name('staff.order.delete')->pipeline([Permission::class . '|perm=order.delete']);
+
+    /*=============================== SERVICES ==============================*/
+    //
+    // Gated on the ORDER permission rather than one of its own. A new group in
+    // Permission::GROUPS is only ever granted when a role is created, so a
+    // `service` group would leave these screens unreachable on every install
+    // that already exists - and unreachable in a way whose fix is a checkbox
+    // nobody knows to tick. Utilities and gateways sit on `settings` for the
+    // same reason; a service is what an order becomes, so `order` is the honest
+    // home for it.
+    Url::get('/services', [ServiceController::class, 'index'])
+        ->name('staff.services')->pipeline([Permission::class . '|perm=order.read']);
+
+    Url::get("/service/{service:{$uid}}", [ServiceController::class, 'show'])
+        ->name('staff.service')->pipeline([Permission::class . '|perm=order.read']);
+
+    Url::post("/service/{service:{$uid}}/suspend", [ServiceController::class, 'suspend'])
+        ->name('staff.service.suspend')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/service/{service:{$uid}}/unsuspend", [ServiceController::class, 'unsuspend'])
+        ->name('staff.service.unsuspend')->pipeline([Permission::class . '|perm=order.update']);
+
+    // Ending a service. `cancel` stops the billing and `terminate` destroys the
+    // account, so they are two routes rather than one with a flag - the second
+    // is gated on order.DELETE, because it is the only irreversible act on this
+    // screen and a role trusted to edit an order is not automatically trusted
+    // to destroy somebody's data.
+    Url::post("/service/{service:{$uid}}/cancel", [ServiceController::class, 'cancel'])
+        ->name('staff.service.cancel')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/service/{service:{$uid}}/uncancel", [ServiceController::class, 'uncancel'])
+        ->name('staff.service.uncancel')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/service/{service:{$uid}}/terminate", [ServiceController::class, 'terminate'])
+        ->name('staff.service.terminate')->pipeline([Permission::class . '|perm=order.delete']);
 
     /*=============================== INVOICES ==============================*/
     Url::get('/invoices', [InvoiceController::class, 'index'])

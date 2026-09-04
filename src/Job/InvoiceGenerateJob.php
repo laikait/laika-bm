@@ -132,10 +132,44 @@ class InvoiceGenerateJob extends Job
             $model->where(['status_relid' => $active]);
         }
 
-        return $model->notNull('next_due_date')
+        $rows = $model->notNull('next_due_date')
             ->where(['next_due_date' => $horizon], '<=')
             ->order($model->id, 'ASC')
             ->get();
+
+        return array_values(array_filter($rows, [$this, 'billable']));
+    }
+
+    /**
+     * Whether a Service Should Be Billed For Its Next Term
+     *
+     * Phase 24 lets a cancellation be scheduled for the end of the current
+     * term. Without this check the lookahead would raise the invoice for the
+     * term AFTER the one they cancelled in - a bill for a period the customer
+     * has already told you they do not want, sent up to fourteen days before
+     * the cancellation fires, and then chased by the reminder job.
+     *
+     * The comparison is against the period being billed rather than against
+     * today: a cancellation six months out on a monthly service should not stop
+     * the next five invoices.
+     *
+     * Filtered in PHP because the condition is "cancel_at IS NULL OR cancel_at >
+     * next_due_date" - an OR across two columns, which the where-shorthand
+     * cannot express - and the set is already bounded by the lookahead window.
+     * @param array $service Service Row
+     * @return bool
+     */
+    private function billable(array $service): bool
+    {
+        $cancelAt = trim((string) ($service['cancel_at'] ?? ''));
+
+        if ($cancelAt === '') {
+            return true;
+        }
+
+        $periodStart = trim((string) ($service['next_due_date'] ?? ''));
+
+        return $periodStart !== '' && strtotime($cancelAt) > strtotime($periodStart);
     }
 
     /**

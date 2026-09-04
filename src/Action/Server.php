@@ -235,6 +235,72 @@ class Server extends Action
     }
 
     /**
+     * Recount One Server's Live Accounts
+     *
+     * `servers.active_accounts` has existed since Phase 0, is read by
+     * `Provision::pickServer()` to refuse a full server and by `usage()` to draw
+     * the capacity bar - and until Phase 24 **nothing had ever written it**. It
+     * sat at 0 on every install for ever, so a max_accounts limit refused
+     * nothing, every capacity bar read 0%, and provisioning piled every account
+     * onto whichever server sorted first.
+     *
+     * COUNTED, not incremented. A counter nudged up on create and down on
+     * terminate drifts the first time a row is deleted straight out of the
+     * database, a job dies halfway, or - as here - a release ships where the
+     * increment never existed. A COUNT over an indexed column is cheap and
+     * cannot be wrong, and it repairs an existing install the first time
+     * anything happens on that server rather than needing a migration.
+     *
+     * Finished services do not count. A terminated account is not on the server
+     * any more; a suspended one still is.
+     * @param int $serverId Server ID
+     * @return int The count it wrote
+     */
+    public function recount(int $serverId): int
+    {
+        if ($serverId <= 0) {
+            return 0;
+        }
+
+        $services = new ClientServiceModel();
+        $services->where(['server_relid' => $serverId]);
+
+        $finished = (new ClientService())->finishedStatusIds();
+
+        if ($finished !== []) {
+            $services->whereNotIn('status_relid', $finished);
+        }
+
+        $count = (int) $services->count();
+
+        $model = new ServerModel();
+        $model->where([$model->id => $serverId])->update(['active_accounts' => $count]);
+
+        return $count;
+    }
+
+    /**
+     * Recount Every Server
+     *
+     * Run daily rather than only on provisioning events, so an install that has
+     * been carrying zeroes since Phase 0 becomes correct on the first cron tick
+     * after an update instead of waiting for somebody to buy something.
+     * @return int How many servers were counted
+     */
+    public function recountAll(): int
+    {
+        $model = new ServerModel();
+        $done = 0;
+
+        foreach ($model->order($model->id, self::ASC)->get() as $row) {
+            $this->recount((int) $row['server_id']);
+            $done++;
+        }
+
+        return $done;
+    }
+
+    /**
      * How Full a Server Is, As a Percentage
      * @param array $server Server Row
      * @return ?int Null when no account limit is set

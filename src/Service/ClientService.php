@@ -26,6 +26,7 @@ use Laika\Relay\Relay;
  * @method static array all(array $where = [], string $direction = 'ASC', ?string $order = null)
  * @method static array browse(array $where = [], ?string $search = null, ?int $limit = null, string $direction = 'DESC')
  * @method static array browseForClient(int $clientId, array $where = [], ?int $limit = null)
+ * @method static array browseWithClients(array $where = [], ?string $search = null, ?int $limit = null)
  * @method static int count(array $where = [])
  * @method static int create(array $data)
  * @method static ?string credential(array $service)

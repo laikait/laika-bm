@@ -19,6 +19,7 @@ use Laika\Service\Request;
 use LBM\Service\Client;
 use LBM\Service\Currency;
 use LBM\Service\Invoice;
+use LBM\Service\ClientService;
 use LBM\Service\Order;
 use LBM\Service\Product;
 
@@ -92,14 +93,52 @@ class OrderController extends AdminController
     {
         $row = $this->record(Order::find($order), 'order');
 
+        $items = Order::items((int) $row['oid']);
+
         return $this->screen('order', local('order_titled', $row['order_number']), [
-            'order'   =>  $row,
-            'client'  =>  Client::find((int) $row['client_relid']),
-            'items'   =>  Order::items((int) $row['oid']),
-            'invoice' =>  $row['invoice_relid']
+            'order'    =>  $row,
+            'client'   =>  Client::find((int) $row['client_relid']),
+            'items'    =>  $items,
+            'invoice'  =>  $row['invoice_relid']
                 ? Invoice::find((int) $row['invoice_relid'])
                 : null,
+
+            // What provisioning made of each line. This is where an operator
+            // asks "did it actually get set up?", so it is answered here rather
+            // than on a screen they would have to know to go and find.
+            'services' =>  $this->services($items),
         ]);
+    }
+
+    /**
+     * The Services An Order's Lines Produced, Keyed By Service Id
+     *
+     * Phase 22.2 puts a setup fee on its own line beside the recurring one, and
+     * Phase 22.4 points BOTH at the same service - so the same id appears
+     * twice and is looked up once. A line with no service is either not a
+     * product, or the invoice is not paid yet, or provisioning has not run.
+     * @param array $items Order Lines
+     * @return array<int,array<string,mixed>>
+     */
+    private function services(array $items): array
+    {
+        $out = [];
+
+        foreach ($items as $item) {
+            $id = (int) ($item['service_relid'] ?? 0);
+
+            if ($id <= 0 || isset($out[$id])) {
+                continue;
+            }
+
+            $service = ClientService::find($id);
+
+            if (is_array($service)) {
+                $out[$id] = $service;
+            }
+        }
+
+        return $out;
     }
 
     /**

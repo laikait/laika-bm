@@ -21,6 +21,7 @@ use Laika\Model\Model;
 use Laika\Service\Vault;
 use LBM\Model\BillingCycleModel;
 use LBM\Model\ClientServiceAddonModel;
+use LBM\Model\ClientModel;
 use LBM\Model\ClientServiceModel;
 use LBM\Model\ProductModel;
 use LBM\Service\Status;
@@ -52,13 +53,14 @@ class ClientService extends Action
         'client_relid', 'product_relid', 'server_relid', 'domain', 'username',
         'billing_cycle_relid', 'currency_relid', 'amount', 'next_due_date',
         'registration_date', 'termination_date', 'status_relid',
-        'suspension_reason',
+        'suspension_reason', 'cancel_at', 'cancel_reason',
     ];
 
     /** @var string[] Columns That Store Null Rather Than An Empty String */
     private const NULLABLE = [
         'server_relid', 'domain', 'username', 'next_due_date',
         'registration_date', 'termination_date', 'suspension_reason',
+        'cancel_at', 'cancel_reason',
     ];
 
     /** @var string[] Statuses That Mean The Service Is Over */
@@ -134,6 +136,82 @@ class ClientService extends Action
         ])->join($p, "{$p}.{$products->id}", '=', "{$s}.product_relid");
 
         $this->conditions($listed, $qualified);
+
+        return $this->paginate($listed, $counted, $limit, self::DESC);
+    }
+
+    /**
+     * One Page Of Services Across Every Client
+     *
+     * The staff listing. Both the client and the product are joined rather than
+     * looked up per row - a page of twenty services would otherwise cost
+     * forty-one queries, and this is the screen an operator refreshes while
+     * something is going wrong.
+     *
+     * Searched on domain, username and the client's name, because those are the
+     * three things somebody has in front of them when a customer is on the
+     * phone. Not on the uid: nobody reads one out.
+     * @param array $where Conditions
+     * @param ?string $search Search Term
+     * @param ?int $limit Rows Per Page
+     * @return array
+     */
+    public function browseWithClients(array $where = [], ?string $search = null, ?int $limit = null): array
+    {
+        $services = new ClientServiceModel();
+        $clients = new ClientModel();
+        $products = new ProductModel();
+
+        $s = $services->table;
+        $c = $clients->table;
+        $p = $products->table;
+
+        $qualified = [];
+
+        foreach ($where as $column => $value) {
+            $key = str_contains((string) $column, '.') ? (string) $column : "{$s}.{$column}";
+            $qualified[$key] = $value;
+        }
+
+        $counted = new ClientServiceModel();
+        $this->conditions($counted, $qualified);
+
+        $listed = new ClientServiceModel();
+        $listed->select([
+            "{$s}.*",
+            "{$p}.product_name AS product_name",
+            "{$c}.first_name AS client_first_name",
+            "{$c}.last_name AS client_last_name",
+            "{$c}.company_name AS client_company_name",
+            // cuid, not uid. The clients table keys its public identifier on
+            // `cuid` while invoices use `uid` and orders use `oid` - three
+            // tables, three names, and the wrong one is a 500 rather than a
+            // blank column.
+            "{$c}.cuid AS client_uid",
+        ])->join($p, "{$p}.{$products->id}", '=', "{$s}.product_relid")
+          ->join($c, "{$c}.{$clients->id}", '=', "{$s}.client_relid");
+
+        $this->conditions($listed, $qualified);
+
+        if ($search !== null && trim($search) !== '') {
+            $term = '%' . trim($search) . '%';
+            $columns = [
+                "{$s}.domain"       =>  $term,
+                "{$s}.username"     =>  $term,
+                "{$c}.first_name"   =>  $term,
+                "{$c}.last_name"    =>  $term,
+                "{$c}.company_name" =>  $term,
+            ];
+
+            $counted->join($c, "{$c}.{$clients->id}", '=', "{$s}.client_relid")
+                ->whereGroup(static function (Model $group) use ($columns): void {
+                    $group->where($columns, 'LIKE', 'OR');
+                });
+
+            $listed->whereGroup(static function (Model $group) use ($columns): void {
+                $group->where($columns, 'LIKE', 'OR');
+            });
+        }
 
         return $this->paginate($listed, $counted, $limit, self::DESC);
     }

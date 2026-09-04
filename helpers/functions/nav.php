@@ -80,6 +80,10 @@ function nav_admin(?string $current = null): array
     nav_item('clients',      'staff.clients',      'clients',      staff_has_access('client.read'),      $billing);
     nav_item('products',     'staff.products',     'products',     staff_has_access('product.read'),     $billing);
     nav_item('orders',       'staff.orders',       'orders',       staff_has_access('order.read'),       $billing);
+    // 'folder' rather than a services glyph, because there is not one: Icon::svg()
+    // falls back silently on an unknown name, so a made-up icon name would ship a
+    // wrong picture rather than an error anybody would notice.
+    nav_item('services',     'staff.services',     'folder',       staff_has_access('order.read'),       $billing);
     nav_item('invoices',     'staff.invoices',     'invoices',     staff_has_access('invoice.read'),     $billing);
     nav_item('transactions', 'staff.transactions', 'transactions', staff_has_access('transaction.read'), $billing);
 

@@ -21,6 +21,8 @@ use Laika\Relay\Relay;
  * Provisioning servers and the groups they are allocated from.
  *
  * @see \LBM\Action\Server
+ * @method static int recount(int $serverId)
+ * @method static int recountAll()
  * @method static array all(array $where = [], string $direction = 'ASC', ?string $order = null)
  * @method static array browse(array $where = [], ?string $search = null, ?int $limit = null, string $direction = 'DESC')
  * @method static int count(array $where = [])

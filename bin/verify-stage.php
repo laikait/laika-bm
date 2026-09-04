@@ -434,6 +434,39 @@ must_not_exist(
     'Test fixture from callbackwalk.php. It signs its own callbacks - shipping it would hand anyone a way to mark invoices paid.'
 );
 
+// Phase 22.4. Provisioning fails silently in the worst possible direction: an
+// operator's customers pay, their orders show as active, and nothing is ever
+// set up - because the class that would have done it is not in the archive and
+// the cron task that calls it throws into a log nobody reads.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Provision.php',
+    'Turns a paid invoice into a service. Without it, customers pay and nothing is ever delivered.'
+);
+
+// The provisioning fixture from provisionwalk.php. Milder than the gateway one
+// - it cannot take money - but it hands out accounts on demand, and a run that
+// died before its teardown leaves it in the app root.
+must_not_exist(
+    'modules/servers/Probe',
+    'Test fixture from provisionwalk.php and dunningwalk.php. It creates accounts on demand and belongs nowhere near a release.'
+);
+
+// Phase 23. Suspension is the half of the loop that costs an operator money
+// when it is missing: services are provisioned on payment and then never react
+// to anything again, so a customer who stops paying keeps their hosting.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Dunning.php',
+    'Suspends a service when its invoice goes unpaid, and restores it when it settles. Without it nobody is ever chased.'
+);
+must_exist(
+    'template/admin/bootstrap/services.twig',
+    'The only screen showing what the automation switched off. Without it, cron suspends customers where nobody can see it.'
+);
+must_exist(
+    'template/admin/bootstrap/service.twig',
+    'Where a suspension is explained and reversed by hand. Without it an operator cannot undo what cron did.'
+);
+
 
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.

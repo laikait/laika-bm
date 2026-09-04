@@ -53,7 +53,7 @@ class Setting extends Action
      */
     public const BOOLEANS = [
         'strict_ip', 'allow_registration', 'mail_keepalive', 'mail_auto_tls',
-        'mail_validate_cert',
+        'mail_validate_cert', 'suspend_overdue',
     ];
 
     /** @var array<string,string[]> Which Keys Belong To Which Settings Screen */
@@ -70,6 +70,7 @@ class Setting extends Action
         'billing' => [
             'invoice_prefix', 'order_prefix', 'ticket_prefix', 'invoice_due_days',
             'late_fee_percent', 'invoice_generate_days', 'invoice_reminder_days',
+            'suspend_overdue', 'suspend_overdue_days', 'terminate_cancelled_days',
         ],
         'security' => [
             'login_lifetime', 'strict_ip', 'password_min_length',

@@ -73,7 +73,7 @@ class Permission implements PipelineInterface
             // Not signed in at all. That is a login problem, not a permission
             // problem - 403ing here would show a locked door to somebody who
             // was never offered a key.
-            Redirect::to(Auth::STAFF_LOGIN);
+            Redirect::with(local('require_sign_in'), false)->to(Auth::STAFF_LOGIN);
         }
 
         if (!Access::allows(isset($staff['role_relid']) ? (int) $staff['role_relid'] : null, $access)) {
@@ -83,9 +83,9 @@ class Permission implements PipelineInterface
         return $next();
     }
 
-    ####################################################################################
-    /*================================= INTERNAL API =================================*/
-    ####################################################################################
+    ##############################################################################
+    /*============================== INTERNAL API ==============================*/
+    ##############################################################################
 
     /**
      * Refuse The Request

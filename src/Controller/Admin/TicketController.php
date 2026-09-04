@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Request;
 use LBM\Service\Client;
+use LBM\Service\ClientService;
 use LBM\Service\Staff;
 use LBM\Service\Support;
 
@@ -123,6 +124,16 @@ class TicketController extends AdminController
             'statuses'    =>  $this->statusChoices(Support::statuses()),
             'staffs'      =>  $this->staffChoices(),
             'department'  =>  Support::department((int) $row['department_relid']),
+
+            // The service the ticket is about, when it names one. A
+            // cancellation request arrives here as a ticket carrying
+            // service_relid, and without this the member of staff reading it
+            // has to go and find the service by hand - which is exactly the
+            // gap that left Phase 23 chasing customers who had already asked
+            // to leave.
+            'service'     =>  $row['service_relid']
+                ? ClientService::find((int) $row['service_relid'])
+                : null,
         ]);
     }
 
