@@ -407,6 +407,33 @@ must_exist(
     'The cart screen. It is in the public nav and is where every Add To Cart lands.'
 );
 
+// Phase 22.3. The callback path fails SILENTLY when a piece of it is missing:
+// the gateway posts, gets a 404 or a 500, retries for a day and gives up, and
+// the only symptom on the operator's side is invoices that never settle. Each
+// of these is therefore named individually rather than trusted to the general
+// package check above.
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Webhook/GatewayWebhookController.php',
+    'The webhook endpoint. Without it every gateway callback is a 404 and no invoice ever settles itself.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Schema/GatewayCallbackSchema.php',
+    'The callback ledger. It carries the UNIQUE key that stops a repeated callback paying an invoice twice.'
+);
+must_exist(
+    'template/admin/bootstrap/gateway-callbacks.twig',
+    'The only screen that shows a callback being refused. Without it, "not arriving" and "arriving and rejected" look identical.'
+);
+
+// A redirect-style test gateway that signs its own callbacks is exactly the
+// thing an attacker would want on a production install, so scratchpad/
+// callbackwalk.php plants it and removes it rather than leaving it in the app
+// root. This is the check that notices when a run died before its teardown.
+must_not_exist(
+    'modules/gateways/Probe',
+    'Test fixture from callbackwalk.php. It signs its own callbacks - shipping it would hand anyone a way to mark invoices paid.'
+);
+
 
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.
