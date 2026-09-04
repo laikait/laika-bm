@@ -21,7 +21,7 @@ use Laika\Relay\Relay;
  * Orders - what a client asked for, before it is billed.
  *
  * @see \LBM\Action\Order
- * @method static int accept(int|string $key)
+ * @method static int accept(int|string $key, bool $activate = true)
  * @method static array all(array $where = [], string $direction = 'ASC', ?string $order = null)
  * @method static array browse(array $where = [], ?string $search = null, ?int $limit = null, string $direction = 'DESC')
  * @method static array browseForClient(int $clientId, ?int $limit = null)

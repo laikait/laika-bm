@@ -396,6 +396,17 @@ must_exist(
     'The offline gateway manifest points at this class. A manifest without its driver configures a gateway that cannot build.'
 );
 
+// The cart template. Every other front view is reachable only from a link, so a
+// missing one is a 500 on a page somebody has to go looking for. This one is in
+// the public navigation bar AND is the destination of every Add To Cart button
+// on the site, so if it failed to ship the operator's shop is broken from the
+// first click - and the failure is a template-not-found, which reads as a bug in
+// the theme rather than as a file missing from the archive.
+must_exist(
+    'template/front/bootstrap/cart.twig',
+    'The cart screen. It is in the public nav and is where every Add To Cart lands.'
+);
+
 
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.

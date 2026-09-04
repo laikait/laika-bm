@@ -16,6 +16,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Route\Url;
 use LBM\Pipeline\Install;
 use LBM\Pipeline\GlobalPipeline;
+use LBM\Controller\Webhook\GatewayWebhookController;
 
 ####################################################################################
 /*--------------------------------- GLOBAL SETUP ---------------------------------*/
@@ -54,3 +55,32 @@ Url::globalPipeline([
 // admin, app, client, front, install - and matching is first-match-wins, so a
 // `/` left here would have beaten front.php's and silently kept the old
 // redirect.
+
+####################################################################################
+/*---------------------------------- WEBHOOKS ------------------------------------*/
+####################################################################################
+//
+// Where payment gateways call back. Declared HERE rather than in front.php for
+// two reasons, and the first is load order: route files are read in filename
+// order - admin, app, client, front, install - so anything in this file is
+// registered before front.php's fallback, and a callback can never be answered
+// by a 404 page because something else matched first.
+//
+// The second is that these are not pages. GatewayWebhookController renders no
+// template and extends no Controller; it answers a line of text to a machine.
+// Putting it among the public site's routes would invite somebody to give it a
+// layout.
+//
+// THE PREFIX COMES FROM GlobalPipeline::WEBHOOK, aliased rather than repeated.
+// That constant is what exempts this URL from the CSRF check, and a literal
+// typed twice is a literal that can drift - which is exactly how Phase 20.1's
+// module type lists came apart, silently, in both directions. Written this way
+// the route and its exemption are the same string or neither works.
+//
+// POST only. There is nothing to read here, and a GET webhook endpoint is an
+// invitation to fire one from an image tag.
+
+Url::post(
+    '/' . GlobalPipeline::WEBHOOK . '/{gateway:[a-z0-9\-]+}',
+    [GatewayWebhookController::class, 'receive']
+)->name('webhook.gateway');

@@ -18,6 +18,7 @@ use Laika\Service\Date;
 use Laika\Service\Init;
 use Laika\Service\Local;
 use Laika\Service\Request;
+use Laika\Service\Url;
 use Laika\Service\Redirect;
 use Laika\Core\Exceptions\HttpException;
 use Laika\Model\Connection;
@@ -55,6 +56,15 @@ class GlobalPipeline implements PipelineInterface
     public const LANGUAGE = 'en';
 
     /**
+     * @var string The One URL Prefix Exempt From The CSRF Check
+     *
+     * Gateway callbacks. helpers/routes/app.php builds the route from this
+     * constant rather than repeating the literal, so the exemption and the
+     * route it exempts cannot come apart. See handle() for why it is safe.
+     */
+    public const WEBHOOK = 'webhook';
+
+    /**
      * Handle The Request
      * @param callable $next Next Pipeline
      * @param array $params Route Parameters
@@ -72,7 +82,25 @@ class GlobalPipeline implements PipelineInterface
 
         // Instruction 15: every POST is CSRF checked, with no exception and no
         // per-controller opt-in - a form that forgets the field fails here.
-        if (Request::isPost() && !$this->csrf()) {
+        //
+        // THE ONE EXEMPTION, and it is not a loophole: a payment gateway's
+        // server calling us back cannot hold a CSRF token, because it never
+        // loaded a page to be given one.
+        //
+        // CSRF exists to stop a browser being TRICKED into making a request
+        // that its own cookies authenticate. A webhook carries no session and
+        // no cookies, so there is no ambient authority to borrow and nothing
+        // for the check to protect. What replaces it is strictly stronger: the
+        // gateway module verifies a signature over the body, and
+        // Action\GatewayCallback refuses anything that comes back
+        // `verified => false`. An unsigned POST to this route can therefore
+        // reach the handler and still cannot move a penny.
+        //
+        // Narrow on purpose - one URL prefix, matched exactly, declared once in
+        // WEBHOOK and aliased by helpers/routes/app.php so the two cannot
+        // drift. Phase 20.1 found what drift between two copies of a list costs:
+        // a module that was listed and never loaded, with nothing reporting it.
+        if (Request::isPost() && !$this->exempt() && !$this->csrf()) {
             // Throwing is the only genuine short-circuit. Invoke::pipeline()
             // builds each link as `function (bool $continue = true)` and makes
             // `false` mean "skip the rest of the chain and call the controller"
@@ -267,6 +295,20 @@ class GlobalPipeline implements PipelineInterface
         }
 
         return option('default_language', self::LANGUAGE) ?: self::LANGUAGE;
+    }
+
+    /**
+     * Whether This Request Is On The Webhook Prefix
+     *
+     * A literal first-segment match, not a pattern and not a route name: this
+     * decides whether a POST may skip the CSRF check, so it should be readable
+     * at a glance and impossible to widen by accident. `/webhook` itself and
+     * anything below it; nothing else.
+     * @return bool
+     */
+    private function exempt(): bool
+    {
+        return Url::segment(1) === self::WEBHOOK;
     }
 
     /**

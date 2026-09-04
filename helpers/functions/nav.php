@@ -178,6 +178,12 @@ function nav_front(?string $current = null): array
     nav_item('support',       'front.support',       null, true);
     nav_item('contact',       'front.contact',       null, true);
 
+    // The cart is a public entry like every other one here, and it is shown
+    // whether or not anything is in it. A link that appears only once a cart
+    // has contents is a link nobody can find their way back to after closing
+    // the tab - and the cart survives in the session precisely so they can.
+    nav_item('cart', 'front.cart', null, true);
+
     return nav_finish('front', $current);
 }
 

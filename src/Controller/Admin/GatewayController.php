@@ -19,6 +19,7 @@ use RuntimeException;
 use Laika\Core\Exceptions\HttpException;
 use Laika\Service\Request;
 use LBM\Service\Gateway;
+use LBM\Service\GatewayCallback;
 
 /**
  * Setting up the ways this installation can take money.
@@ -72,12 +73,59 @@ class GatewayController extends AdminController
                 'row'      =>  $row,
                 'problem'  =>  Gateway::problemWith($row),
                 'settings' =>  Gateway::settings($row),
+
+                // The URL the operator has to paste into their processor's
+                // dashboard. Shown rather than documented, because it is
+                // derived from THIS installation's base URL and route table -
+                // an operator behind a reverse proxy or in a subdirectory has
+                // a different one, and a webhook pointed at the wrong path
+                // fails silently until somebody notices unpaid invoices.
+                'webhook'  =>  named('webhook.gateway', ['gateway' => (string) $row['gateway_slug']]),
             ];
         }
 
         return $this->screen('gateways', local('payment_gateways'), [
             'configured'   =>  $configured,
             'unconfigured' =>  Gateway::unconfigured(),
+        ]);
+    }
+
+    /**
+     * What Gateways Have Sent Us
+     *
+     * The diagnostic screen for everything Phase 22.3 built. A webhook that is
+     * not arriving and a webhook that is arriving and being refused look
+     * identical from the outside - unpaid invoices - and they need opposite
+     * fixes, so the operator has to be able to see which is happening.
+     *
+     * Unverified callbacks are listed too, deliberately. One of those is
+     * somebody attempting to mark an invoice paid, and it is the single most
+     * useful thing on this page.
+     * @return string
+     */
+    public function callbacks(): string
+    {
+        $gateways = [];
+
+        foreach (Gateway::all([], 'ASC', 'display_name') as $row) {
+            $gateways[(int) $row['gateway_id']] = (string) $row['display_name'];
+        }
+
+        $where = [];
+        $outcome = trim((string) Request::input('outcome', ''));
+
+        // Filtered against the action's own list rather than passed through:
+        // `outcome` is an enum column, and a value outside it is a query that
+        // matches nothing while looking like a working filter.
+        if (in_array($outcome, GatewayCallback::outcomes(), true)) {
+            $where['outcome'] = $outcome;
+        }
+
+        return $this->screen('gateway-callbacks', local('gateway_callbacks'), [
+            'callbacks' =>  GatewayCallback::browseRecent($where),
+            'gateways'  =>  $gateways,
+            'outcomes'  =>  GatewayCallback::outcomes(),
+            'outcome'   =>  $outcome,
         ]);
     }
 

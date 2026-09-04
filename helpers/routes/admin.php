@@ -389,6 +389,12 @@ Url::group(ADMIN, function () use ($uid): void {
     // already exists. The same decision the utilities screens above took.
     Url::get('/gateways', [GatewayController::class, 'index'])
         ->name('staff.gateways')->pipeline([Permission::class . '|perm=settings.read']);
+
+    // Before /gateway/{gateway}/... for the usual reason, and before
+    // /gateways/configure is irrelevant because that one is a POST. A GET
+    // listing, so it is filterable and bookmarkable.
+    Url::get('/gateways/callbacks', [GatewayController::class, 'callbacks'])
+        ->name('staff.gateway.callbacks')->pipeline([Permission::class . '|perm=settings.read']);
     // Literal before parameterised: matching is first-match-wins in registration
     // order, and {gateway} matches the word "configure" perfectly well.
     Url::post('/gateways/configure', [GatewayController::class, 'configure'])

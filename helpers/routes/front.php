@@ -16,6 +16,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Route\Url;
 use LBM\Pipeline\Install;
 use LBM\Pipeline\GlobalPipeline;
+use LBM\Controller\Front\CartController;
 use LBM\Controller\Front\HomeController;
 use LBM\Controller\Front\ErrorController;
 use LBM\Controller\Front\SupportController;
@@ -75,8 +76,8 @@ Url::get('/privacy', [HomeController::class, 'privacy'])->name('front.privacy');
 
 /*=================================== SERVICES ===================================*/
 //
-// Informational. Cart and checkout are out of scope, so every call to action
-// leads to /panel/register, which already exists.
+// Informational. Ordering happens at /cart below, so a product page offers a
+// real Add To Cart rather than sending a would-be customer to register first.
 //
 // The collection is /services and a member is /service/<slug>, singular -
 // matching the convention the admin and client areas already use, and keeping
@@ -85,6 +86,32 @@ Url::get('/privacy', [HomeController::class, 'privacy'])->name('front.privacy');
 Url::get('/services', [ServiceController::class, 'index'])->name('front.services');
 Url::get("/services/{group:{$slug}}", [ServiceController::class, 'group'])->name('front.service.group');
 Url::get("/service/{product:{$slug}}", [ServiceController::class, 'show'])->name('front.service');
+
+/*==================================== ORDERING ==================================*/
+//
+// Cart and checkout. Every path here is a literal below /cart, so none of them
+// can be reached by a `{slug}` belonging to something else, and none of them
+// needs the ordering care the sections above and below do.
+//
+// GET reads the cart, POST changes it - the same split the rest of the
+// application uses, and the reason there is no `/cart/add/{product}` link. An
+// "add to cart" that a GET can perform is one an image tag on somebody else's
+// page can perform, and a cart filled by a stranger is a checkout screen that
+// lies about what was chosen.
+//
+// No Auth pipeline. A cart belongs to a browser, not to an account, so a
+// visitor fills one and signs in at checkout - which is where the account
+// becomes necessary, because an order has a client on it. CartController::
+// checkout() sends an unauthenticated visitor to sign in, and AuthController
+// brings them back here rather than to the dashboard.
+
+Url::get('/cart', [CartController::class, 'index'])->name('front.cart');
+
+Url::post('/cart/add', [CartController::class, 'add'])->name('front.cart.add');
+Url::post('/cart/update', [CartController::class, 'update'])->name('front.cart.update');
+Url::post('/cart/remove', [CartController::class, 'remove'])->name('front.cart.remove');
+Url::post('/cart/clear', [CartController::class, 'clear'])->name('front.cart.clear');
+Url::post('/cart/checkout', [CartController::class, 'checkout'])->name('front.cart.checkout');
 
 /*================================= KNOWLEDGEBASE ================================*/
 //

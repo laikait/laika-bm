@@ -282,11 +282,24 @@ class Order extends Action
      * One invoice per order, and the link is recorded on the order so accepting
      * twice cannot produce two. That check is the whole reason this is a single
      * method rather than a controller calling Invoice::store() itself.
+     *
+     * `$activate` separates the two halves of what "accept" used to mean, and
+     * they are not the same act. Raising the invoice says what is owed; moving
+     * the order to `active` says the operator has agreed to deliver it. A member
+     * of staff pressing Accept means both, which is why that stays the default
+     * and the admin panel is unchanged.
+     *
+     * A customer checking out means only the first. Their order needs an invoice
+     * to pay against, but nothing has been paid yet - and an order that goes
+     * active because somebody pressed a button is an order provisioned for free.
+     * It stays pending until staff accept it, or until Phase 22.4 does when the
+     * invoice settles.
      * @param int|string $key Order ID Or Uid
+     * @param bool $activate Whether To Move The Order To Active
      * @return int The invoice ID
      * @throws RuntimeException
      */
-    public function accept(int|string $key): int
+    public function accept(int|string $key, bool $activate = true): int
     {
         $order = $this->find($key);
 
@@ -324,7 +337,7 @@ class Order extends Action
 
         $data = ['invoice_relid' => $invoiceId];
 
-        $active = Status::idOf(self::STATUSES, 'active');
+        $active = $activate ? Status::idOf(self::STATUSES, 'active') : null;
 
         if ($active !== null) {
             $data['status_relid'] = $active;

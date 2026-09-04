@@ -22,6 +22,7 @@ use LBM\Controller\Controller;
 use LBM\Pipeline\Auth;
 use LBM\Service\AuthClient;
 use LBM\Service\Country;
+use LBM\Support\Cart;
 
 /**
  * Signing clients and their sub-logins in and out.
@@ -89,7 +90,19 @@ class AuthController extends Controller
                 $result = AuthClient::attempt($identifier, $password);
 
                 if ($result['ok']) {
-                    Redirect::with(local('signed_in'), true)->to('client.dashboard');
+                    // Back to the cart when one is waiting, rather than to the
+                    // dashboard. A visitor who filled a cart and was asked to
+                    // sign in came here to finish an order, and landing on the
+                    // dashboard makes them go and find it again - by which
+                    // point plenty of people conclude the cart was lost.
+                    //
+                    // Deliberately NOT a return-to URL taken from the request.
+                    // That is an open redirect waiting to happen, and it is not
+                    // needed: the cart is in the session, so the one question
+                    // worth asking is whether it has anything in it.
+                    $to = Cart::isEmpty() ? 'client.dashboard' : 'front.cart';
+
+                    Redirect::with(local('signed_in'), true)->to($to);
 
                     return null;
                 }
