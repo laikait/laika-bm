@@ -84,6 +84,10 @@ class InvoiceController extends ClientController
             'transactions' =>  Transaction::forInvoice($id),
             'balance'      =>  Invoice::balance($row),
             'tax_amount'   =>  Invoice::taxAmount($row),
+            // One row per rate charged. An invoice raised by the shop
+            // carries its rates on the LINES, so `invoice.tax` is 0 on it
+            // and a template keyed on that would hide the tax entirely.
+            'tax_bands'    =>  Invoice::taxBreakdown((int) $row['invoice_id']),
             'settled'      =>  Invoice::isSettled($row),
             'overdue'      =>  Invoice::isOverdue($row),
             'credit'       =>  $this->creditAvailable(),
@@ -271,6 +275,10 @@ class InvoiceController extends ClientController
             'transactions' =>  Transaction::forInvoice($id),
             'balance'      =>  Invoice::balance($row),
             'tax_amount'   =>  Invoice::taxAmount($row),
+            // One row per rate charged. An invoice raised by the shop
+            // carries its rates on the LINES, so `invoice.tax` is 0 on it
+            // and a template keyed on that would hide the tax entirely.
+            'tax_bands'    =>  Invoice::taxBreakdown((int) $row['invoice_id']),
             'settled'      =>  Invoice::isSettled($row),
         ]);
     }

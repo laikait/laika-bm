@@ -213,6 +213,7 @@ function nav_settings(?string $current = null): array
     nav_item('general',      'staff.settings',              'settings', true, null, null, 14);
     nav_item('localisation', 'staff.settings.localisation', 'domains',  true, null, null, 14);
     nav_item('billing',      'staff.settings.billing',      'invoices', true, null, null, 14);
+    nav_item('tax',          'staff.settings.tax',          'currency', true, null, null, 14);
     nav_item('security',     'staff.settings.security',     'key',      true, null, null, 14);
     nav_item('mail',         'staff.settings.mail',         'mail',     true, null, null, 14);
     nav_item('templates',    'staff.settings.templates',    'edit',     true, null, null, 14);

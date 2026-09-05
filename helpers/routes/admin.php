@@ -476,6 +476,20 @@ Url::group(ADMIN, function () use ($uid): void {
     Url::post('/settings/billing', [SettingsController::class, 'billing'])
         ->pipeline([Permission::class . '|perm=settings.update']);
 
+    /**
+     * Tax rules sit on `settings`, not a group of their own - 20.5's rule. The
+     * rule writes are settings.update because a rate is a thing that decides
+     * what customers are charged, and reading the table is settings.read.
+     */
+    Url::get('/settings/tax', [SettingsController::class, 'tax'])
+        ->name('staff.settings.tax')->pipeline([Permission::class . '|perm=settings.read']);
+    Url::post('/settings/tax', [SettingsController::class, 'tax'])
+        ->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post('/settings/tax/rule', [SettingsController::class, 'taxRule'])
+        ->name('staff.settings.tax.rule')->pipeline([Permission::class . '|perm=settings.update']);
+    Url::post("/settings/tax/rule/{rule:{$uid}}/delete", [SettingsController::class, 'taxRuleDelete'])
+        ->name('staff.settings.tax.rule.delete')->pipeline([Permission::class . '|perm=settings.update']);
+
     Url::get('/settings/security', [SettingsController::class, 'security'])
         ->name('staff.settings.security')->pipeline([Permission::class . '|perm=settings.read']);
     Url::post('/settings/security', [SettingsController::class, 'security'])

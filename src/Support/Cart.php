@@ -21,6 +21,7 @@ use LBM\Model\BillingCycleModel;
 use LBM\Service\Currency;
 use LBM\Service\Money;
 use LBM\Service\Product;
+use LBM\Service\Tax;
 
 /**
  * The shopping cart - what a visitor has chosen, before there is an order.
@@ -146,10 +147,16 @@ class Cart
      * vanishes between the page and the invoice is how a customer ends up
      * paying for something other than what they chose.
      *
+     * Tax needs a client, because the rate depends on where they are. Anonymous
+     * carts price at no tax and say so on the screen rather than showing a
+     * figure nobody can stand behind - a visitor with no country has no rate,
+     * and inventing the operator's own would be wrong for every customer abroad.
+     *
      * @param ?int $currencyId Currency To Price In. Null means the operator's default
+     * @param ?array $client Signed-In Client, When There Is One
      * @return array<int,array<string,mixed>>
      */
-    public static function lines(?int $currencyId = null): array
+    public static function lines(?int $currencyId = null, ?array $client = null): array
     {
         $currencyId = $currencyId ?: (int) (Currency::default()['currency_id'] ?? 0);
 
@@ -157,7 +164,7 @@ class Cart
         $lines  = [];
 
         foreach (self::items() as $key => $item) {
-            $lines[] = self::line($key, $item, $currencyId, $cycles);
+            $lines[] = self::line($key, $item, $currencyId, $cycles, $client);
         }
 
         return $lines;
@@ -176,6 +183,7 @@ class Cart
     {
         $recurring = '0';
         $setup     = '0';
+        $tax       = '0';
 
         foreach ($lines as $line) {
             if (($line['ok'] ?? false) !== true) {
@@ -184,12 +192,26 @@ class Cart
 
             $recurring = Money::add($recurring, (string) $line['subtotal']);
             $setup     = Money::add($setup, (string) $line['setup_total']);
+            $tax       = Money::add($tax, (string) ($line['tax'] ?? '0'));
         }
 
+        $quoted    = Money::add($recurring, $setup);
+        $inclusive = Tax::inclusive();
+
+        // `total` is what the customer pays, and it means that whichever way
+        // prices are quoted: under inclusive pricing the tax is already inside
+        // the line figures, so adding it on would charge it twice.
+        //
+        // `inclusive` is here because the SENTENCE has to change, not just the
+        // arithmetic. "Tax 16.67" above "Due today 100.00" does not add up on
+        // the page, and a customer who cannot make the numbers agree does not
+        // finish checking out.
         return [
             'recurring' =>  Money::round($recurring),
             'setup'     =>  Money::round($setup),
-            'total'     =>  Money::round(Money::add($recurring, $setup)),
+            'tax'       =>  Money::round($tax),
+            'inclusive' =>  $inclusive,
+            'total'     =>  Money::round($inclusive ? $quoted : Money::add($quoted, $tax)),
         ];
     }
 
@@ -329,10 +351,16 @@ class Cart
      * @param array $item Stored Line
      * @param int $currencyId Currency To Price In
      * @param array<int,string> $cycles Cycle Names Keyed By Id
+     * @param ?array $client Signed-In Client, When There Is One
      * @return array<string,mixed>
      */
-    private static function line(string $key, array $item, int $currencyId, array $cycles): array
-    {
+    private static function line(
+        string $key,
+        array $item,
+        int $currencyId,
+        array $cycles,
+        ?array $client = null
+    ): array {
         $quantity = (int) $item['quantity'];
 
         $line = [
@@ -347,6 +375,8 @@ class Cart
             'setup_fee'   =>  '0',
             'subtotal'    =>  '0',
             'setup_total' =>  '0',
+            'tax_rate'    =>  '0',
+            'tax'         =>  '0',
             'ok'          =>  false,
             'problem'     =>  null,
         ];
@@ -389,9 +419,43 @@ class Cart
         $line['subtotal']    = Money::round(Money::mul((string) $quantity, $line['price']));
         $line['setup_total'] = Money::round(Money::mul((string) $quantity, $line['setup_fee']));
 
+        // The same question the invoice will ask, asked with the same two rows.
+        // The cart and the invoice have to reach the same rate or the customer
+        // agrees to one number and is billed another - which is the whole
+        // reason this is computed here rather than left to checkout.
+        $line['tax_rate'] = $client === null ? '0' : Tax::rateFor($client, $product);
+        $line['tax'] = self::taxOn(
+            Money::add($line['subtotal'], $line['setup_total']),
+            (string) $line['tax_rate']
+        );
+
         $line['ok'] = true;
 
         return $line;
+    }
+
+    /**
+     * The Tax On One Line's Money
+     *
+     * Inclusive and exclusive are not a display choice, they are opposite
+     * arithmetic on the same rate: inclusive tax is the part already inside the
+     * figure, exclusive tax goes on top of it. Doing one where the other was
+     * meant is a silent over- or under-charge on every line in the shop.
+     * @param string $gross The Line's Money, As Quoted
+     * @param string $rate Percentage
+     * @return string Decimal string
+     */
+    private static function taxOn(string $gross, string $rate): string
+    {
+        if (Money::isZero($rate) || Money::isZero($gross)) {
+            return '0';
+        }
+
+        return Money::round(
+            Tax::inclusive()
+                ? Money::sub($gross, Tax::netOf($gross, $rate))
+                : Tax::amountOn($gross, $rate)
+        );
     }
 
     /**

@@ -318,13 +318,40 @@ class Order extends Action
             throw new RuntimeException('An order with no items cannot be invoiced.');
         }
 
+        // The client is read once for the whole order, and each product once
+        // however many lines it is on. rateForClient() would do both again per
+        // line, and an order with ten lines is not the place to find that out.
+        $client    = (new Client())->find((int) ($order['client_relid'] ?? 0));
+        $tax       = new Tax();
+        $inclusive = $tax->inclusive();
+        $products  = [];
+
         $items = [];
 
         foreach ($lines as $line) {
+            $productId = (int) ($line['product_relid'] ?? 0);
+
+            if ($productId > 0 && !array_key_exists($productId, $products)) {
+                $products[$productId] = (new Product())->find($productId);
+            }
+
+            // Snapshotted here and never asked for again. An invoice states
+            // what was charged on a day; re-deriving its rate from whatever the
+            // rules say later would reprice a document somebody has already
+            // paid. Action\Tax makes the whole argument.
+            $rate   = $tax->rateFor($client, $products[$productId] ?? null);
+            $amount = (string) ($line['amount'] ?? '0');
+
             $items[] = [
                 'description'   =>  $this->describe($line),
                 'quantity'      =>  (string) ($line['quantity'] ?? '1'),
-                'unit_price'    =>  (string) ($line['amount'] ?? '0'),
+
+                // Under inclusive pricing the catalogue figure already has the
+                // tax in it, so the net is what goes on the line and the tax is
+                // added back on top - which lands on the same total the
+                // customer was shown, by a route the invoice can state.
+                'unit_price'    =>  $inclusive ? $tax->netOf($amount, $rate) : $amount,
+                'tax'           =>  $rate,
                 'service_relid' =>  $line['service_relid'] ?? null,
                 'domain_relid'  =>  $line['domain_relid'] ?? null,
             ];

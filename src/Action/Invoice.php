@@ -31,12 +31,28 @@ use Laika\Service\Uid;
  *   item.total     = quantity * unit_price - discount
  *   subtotal       = sum of every item total
  *   taxable        = subtotal - invoice discount
- *   total          = taxable + tax% of taxable
+ *   line taxable   = item.total, less its share of the invoice discount
+ *   tax            = sum of each line taxable at that line's rate
+ *   total          = taxable + tax
  *   balance due    = total - amount_paid - credit_applied
  *
  * `tax` is a percentage on both the invoice and its items - the column is
  * decimal(7,4), which tops out at 999.9999 and so was never a money column.
  * `discount` is an amount.
+ *
+ * TAX IS PER LINE, AND FALLS BACK TO THE INVOICE
+ *
+ * A line carrying its own rate uses it; a line carrying none uses the rate on
+ * the invoice. That fallback is what keeps every invoice raised before Phase 25
+ * adding up to exactly what it did: their items all carry 0, so all of them
+ * inherit the one rate a member of staff typed, and summing per line comes back
+ * to the same number as taxing the total, because a percentage is linear.
+ *
+ * Per line is not decoration. Hosting at one rate beside a zero-rated domain is
+ * an ordinary invoice in most of the world, and an invoice that can only hold
+ * one rate cannot state it. The rate is written once, when the invoice is
+ * raised - see `Action\Tax` for where it comes from and why it is never asked
+ * again.
  *
  * Every step runs through Money, which is bcmath over decimal strings. Nothing
  * here touches a float: the whole point of a billing system is that the numbers
@@ -51,6 +67,15 @@ class Invoice extends Action
     public const FIELDS = [
         'client_relid', 'currency_relid', 'status_relid', 'discount', 'tax',
         'invoice_due_date', 'payment_gateway', 'terms',
+    ];
+
+    /**
+     * @var string[] Columns a Replaced Item Inherits From The Row It Replaces
+     *
+     * Everything the edit form has no field for. See replaceItems().
+     */
+    public const CARRIED = [
+        'tax', 'service_relid', 'domain_relid', 'period_start', 'period_end',
     ];
 
     /** @var string[] Columns An Item Form May Write */
@@ -199,6 +224,55 @@ class Invoice extends Action
         $tax = Money::sub((string) ($invoice['total'] ?? '0'), $taxable);
 
         return Money::isGreater($tax, '0') ? Money::round($tax) : '0';
+    }
+
+    /**
+     * The Tax On An Invoice, Split By Rate
+     *
+     * One entry per rate actually charged, because an invoice carrying two
+     * rates has to say which money belongs to which - a single "Tax" line on a
+     * document with 20% hosting and a zero-rated domain on it is not something
+     * anybody can check, or file.
+     *
+     * Each band is rounded on its own and the invoice's tax is their sum, so
+     * the bands always add up to the total exactly. Rounding once at the end
+     * and apportioning backwards is the arrangement where a printed invoice is
+     * a penny out from its own subtotals.
+     * @param int $invoiceId Invoice ID
+     * @return array<int,array{rate:string,amount:string}> Highest rate first
+     */
+    public function taxBreakdown(int $invoiceId): array
+    {
+        $invoice = $this->find($invoiceId);
+
+        if ($invoice === null) {
+            return [];
+        }
+
+        $items = $this->items($invoiceId);
+
+        $subtotal = '0';
+
+        foreach ($items as $item) {
+            $subtotal = Money::add($subtotal, $this->itemTotal($item));
+        }
+
+        $bands = $this->bands(
+            $items,
+            $subtotal,
+            (string) ($invoice['discount'] ?? '0'),
+            (string) ($invoice['tax'] ?? '0')
+        );
+
+        $out = [];
+
+        foreach ($bands as $rate => $amount) {
+            $out[] = ['rate' => (string) $rate, 'amount' => $amount];
+        }
+
+        usort($out, static fn(array $a, array $b): int => Money::compare($b['rate'], $a['rate']));
+
+        return $out;
     }
 
     /**
@@ -425,12 +499,49 @@ class Invoice extends Action
      * Replace rather than reconcile: an item form posts the whole set, and
      * matching submitted rows against stored ones to work out which were edited
      * is a great deal of machinery for no visible difference.
+     *
+     * WHAT THE FORM DOES NOT CARRY STILL HAS TO SURVIVE. Deleting every row and
+     * inserting what came back means every column the form has no field for was
+     * being dropped, and two of them are not cosmetic: `service_relid` and
+     * `period_start` are the pair InvoiceGenerateJob asks "have I already billed
+     * this service for this period" with. Losing them billed the customer AGAIN
+     * on the next cron run - a member of staff correcting a typo in a line
+     * description produced a duplicate invoice days later, with nothing on
+     * either one to connect them.
+     *
+     * So a submitted row naming a uid inherits what it did not send. By uid and
+     * not by position, and only from rows already on THIS invoice, so a uid from
+     * anywhere else carries nothing.
      * @param int $invoiceId Invoice ID
      * @param array $items Line Items
      * @return void
      */
     public function replaceItems(int $invoiceId, array $items): void
     {
+        $stored = [];
+
+        foreach ($this->items($invoiceId) as $row) {
+            $key = trim((string) ($row['uid'] ?? ''));
+
+            if ($key !== '') {
+                $stored[$key] = $row;
+            }
+        }
+
+        foreach ($items as $index => $item) {
+            $previous = $stored[trim((string) ($item['uid'] ?? ''))] ?? null;
+
+            if ($previous === null) {
+                continue;
+            }
+
+            foreach (self::CARRIED as $column) {
+                if (!array_key_exists($column, $item)) {
+                    $items[$index][$column] = $previous[$column] ?? null;
+                }
+            }
+        }
+
         (new InvoiceItemModel())->transaction(
             function (InvoiceItemModel $m) use ($invoiceId, $items): void {
                 $m->where(['invoice_relid' => $invoiceId])->delete();
@@ -493,17 +604,21 @@ class Invoice extends Action
             return ['subtotal' => '0', 'total' => '0'];
         }
 
+        $items = $this->items($invoiceId);
+
         $subtotal = '0';
 
-        foreach ($this->items($invoiceId) as $item) {
+        foreach ($items as $item) {
             $subtotal = Money::add($subtotal, $this->itemTotal($item));
         }
 
         $discount = (string) ($invoice['discount'] ?? '0');
-        $taxRate  = (string) ($invoice['tax'] ?? '0');
 
         $taxable = Money::sub($subtotal, $discount);
-        $total   = Money::add($taxable, Money::percent($taxable, $taxRate));
+        $total   = Money::add(
+            $taxable,
+            $this->taxOn($items, $subtotal, $discount, (string) ($invoice['tax'] ?? '0'))
+        );
 
         $subtotal = Money::round($subtotal);
         $total    = Money::round($total);
@@ -781,6 +896,95 @@ class Invoice extends Action
         );
 
         return Money::round(Money::sub($line, (string) ($item['discount'] ?? '0')));
+    }
+
+    /**
+     * What The Tax On a Set Of Items Comes To
+     * @param array $items Item Rows
+     * @param string $subtotal Sum Of Every Item Total
+     * @param string $discount Invoice Level Discount
+     * @param string $fallback The Invoice's Own Rate
+     * @return string Decimal string
+     */
+    private function taxOn(array $items, string $subtotal, string $discount, string $fallback): string
+    {
+        $tax = '0';
+
+        foreach ($this->bands($items, $subtotal, $discount, $fallback) as $amount) {
+            $tax = Money::add($tax, $amount);
+        }
+
+        return $tax;
+    }
+
+    /**
+     * The Tax On a Set Of Items, Grouped By Rate
+     *
+     * Two things happen here that are easy to get wrong.
+     *
+     * A discount on the INVOICE comes off the whole invoice, so it has to be
+     * shared out across the lines before tax is worked out on any of them -
+     * otherwise a customer given 50 off a 100 invoice is charged tax on the
+     * full 100. The share is pro rata by line total, which is the only split
+     * whose parts add back up to the discount.
+     *
+     * And a line with no rate of its own takes the invoice's. That is what
+     * makes every invoice raised before Phase 25 come out at exactly the total
+     * it already has: all of their items carry 0, so all of them inherit the
+     * one rate, and taxing each line and summing equals taxing the sum.
+     * @param array $items Item Rows
+     * @param string $subtotal Sum Of Every Item Total
+     * @param string $discount Invoice Level Discount
+     * @param string $fallback The Invoice's Own Rate
+     * @return array<string,string> Rounded amount, keyed by rate
+     */
+    private function bands(array $items, string $subtotal, string $discount, string $fallback): array
+    {
+        $sharing = !Money::isZero($discount) && Money::isGreater($subtotal, '0');
+        $bands = [];
+
+        foreach ($items as $item) {
+            $rate = (string) ($item['tax'] ?? '0');
+
+            if (Money::isZero($rate)) {
+                $rate = $fallback;
+            }
+
+            if (Money::isZero($rate)) {
+                continue;
+            }
+
+            $line = $this->itemTotal($item);
+
+            if ($sharing) {
+                $line = Money::sub($line, Money::mul($discount, Money::div($line, $subtotal)));
+            }
+
+            $key = $this->rateKey($rate);
+            $bands[$key] = Money::add($bands[$key] ?? '0', Money::percent($line, $rate));
+        }
+
+        foreach ($bands as $key => $amount) {
+            $bands[$key] = Money::round($amount);
+        }
+
+        return $bands;
+    }
+
+    /**
+     * A Rate As An Array Key
+     *
+     * `20.0000` and `20` are the same rate and must land in the same band. The
+     * trailing zeroes go by string, never by casting to a float - this is a
+     * billing system and nothing here touches one.
+     * @param string $rate Percentage
+     * @return string
+     */
+    private function rateKey(string $rate): string
+    {
+        $rate = trim($rate);
+
+        return str_contains($rate, '.') ? rtrim(rtrim($rate, '0'), '.') : $rate;
     }
 
     /**

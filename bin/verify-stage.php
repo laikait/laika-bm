@@ -467,6 +467,44 @@ must_exist(
     'Where a suspension is explained and reversed by hand. Without it an operator cannot undo what cron did.'
 );
 
+// Phase 24. Without this a service can be created, switched off and switched
+// back on, and never end - so a customer who cancels keeps being invoiced, and
+// then chased for the invoices, for ever.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Termination.php',
+    'Ends a service: stops the billing, and destroys the account. Without it nobody can ever leave.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Support/ServesServices.php',
+    'Shared by Provision, Dunning and Termination. Its absence is a fatal on the first cron tick, not a missing feature.'
+);
+
+// The first real migration. `up()` only ever creates tables that do not exist,
+// so client_services.cancel_at reaches an existing install through this file or
+// through nothing at all - and an update that reports success while the feature
+// silently does not work is the exact failure the mechanism exists to prevent.
+must_exist(
+    'vendor/laikait/laika-bm/src/Migration/M202609050100AddServiceCancellation.php',
+    'Adds cancel_at to an install that already exists. Without it, scheduling a cancellation is a 500 on an install that has been running.'
+);
+
+
+// Phase 25. Without these the two automated invoice paths raise UNTAXED
+// invoices while the product screens go on showing a tax rate, a tax-exempt
+// flag and a tax rules table - so the operator believes they are charging tax
+// and owes it out of their own margin, compounding on every renewal.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Tax.php',
+    'Turns tax rules into the rate that goes on an invoice line. Without it every invoice the shop raises is untaxed.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/Tax.php',
+    'The facade Cart and the settings screen reach it through. Its absence is a RelayException on the cart, not a missing feature.'
+);
+must_exist(
+    'template/admin/bootstrap/settings-tax.twig',
+    'The only screen where a rate can be set. Without it tax can only be changed by editing the database.'
+);
 
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.

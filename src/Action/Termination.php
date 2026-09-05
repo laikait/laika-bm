@@ -340,7 +340,6 @@ class Termination extends Action
             return ['success' => false, 'message' => 'That service has already ended.'];
         }
 
-        $this->call($service, $reason);
         $services->setStatus($serviceId, 'cancelled');
 
         // Cleared, because it has happened. A date left in the past would make

@@ -23,6 +23,8 @@ use LBM\Service\Currency;
 use LBM\Service\Mail;
 use LBM\Service\Setting;
 use LBM\Service\Status;
+use LBM\Service\Country;
+use LBM\Service\Tax;
 
 /**
  * Settings - everything stored in the `options` table (instruction 14).
@@ -363,6 +365,82 @@ class SettingsController extends AdminController
             'tab'    =>  'statuses',
             'tables' =>  $this->statusTables(),
         ]);
+    }
+
+    /**
+     * Tax Rules, And Whether Prices Include Tax
+     *
+     * The rules live on the settings tab rather than a screen of their own, and
+     * behind `settings` rather than a permission group of their own, for the
+     * reason 20.5 settled: Permission::GROUPS is only granted when a role is
+     * CREATED, so a `tax` group would ship a screen that is invisible on every
+     * installation that already exists, fixed by a checkbox nobody knows to
+     * tick.
+     * @return ?string
+     */
+    public function tax(): ?string
+    {
+        if (Request::isPost()) {
+            return $this->save('tax', 'staff.settings.tax');
+        }
+
+        return $this->tab('tax', 'Tax', [
+            'rules'     =>  Tax::listing(),
+            'countries' =>  Country::choices(),
+        ]);
+    }
+
+    /**
+     * Add Or Update One Tax Rule
+     *
+     * One POST for both, the same shape as the currencies screen: a row per
+     * rule with a blank one at the bottom.
+     * @return ?string
+     */
+    public function taxRule(): ?string
+    {
+        $input = Request::inputs();
+        $name  = trim((string) ($input['rule_name'] ?? ''));
+        $key   = trim((string) ($input['rule'] ?? ''));
+
+        return $this->attempt(
+            function () use ($input, $key, $name): void {
+                Tax::save($input, $key !== '' ? $key : null);
+
+                $this->log(
+                    'tax.rule.saved',
+                    ($key !== '' ? 'Updated' : 'Added') . " tax rule {$name}."
+                );
+            },
+            'staff.settings.tax',
+            local($key !== '' ? 'tax_rule_updated' : 'tax_rule_added', $name)
+        );
+    }
+
+    /**
+     * Delete One Tax Rule
+     *
+     * Nothing an invoice points at goes with it - the rate is copied onto the
+     * line when the invoice is raised, never referenced - so this changes no
+     * document that already exists. It only stops the rule applying to what
+     * comes next.
+     * @param string $rule Rule Uid
+     * @return ?string
+     */
+    public function taxRuleDelete(string $rule): ?string
+    {
+        $row  = $this->record(Tax::find($rule), 'rule');
+        $name = (string) $row['rule_name'];
+
+        return $this->attempt(
+            function () use ($row, $name): void {
+                Tax::remove((int) $row['tr_id']);
+
+                $this->log('tax.rule.deleted', "Deleted tax rule {$name}.");
+            },
+            'staff.settings.tax',
+            local('deleted_named', $name)
+        );
     }
 
     ####################################################################################

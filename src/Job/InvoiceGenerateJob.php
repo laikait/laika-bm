@@ -26,6 +26,7 @@ use LBM\Action\Client;
 use LBM\Action\Invoice;
 use LBM\Action\Mail;
 use LBM\Action\Product;
+use LBM\Action\Tax;
 use LBM\Service\Status;
 
 /**
@@ -188,6 +189,19 @@ class InvoiceGenerateJob extends Job
 
         $periodEnd = $this->periodEnd($periodStart, $service);
 
+        // Worked out fresh for every renewal rather than copied off the last
+        // invoice, and that is the point of asking here: a customer who moved
+        // country, or a rate that changed in the Budget, is charged what is due
+        // NOW. What must never move is the rate on an invoice already raised -
+        // see Action\Tax.
+        $tax  = new Tax();
+        $rate = $tax->rateForClient(
+            (int) ($service['client_relid'] ?? 0),
+            (int) ($service['product_relid'] ?? 0)
+        );
+
+        $amount = (string) ($service['amount'] ?? '0');
+
         $invoiceId = (new Invoice())->store([
             'client_relid'     =>  $service['client_relid'] ?? null,
             'currency_relid'   =>  $service['currency_relid'] ?? null,
@@ -195,7 +209,12 @@ class InvoiceGenerateJob extends Job
         ], [[
             'description'   =>  $this->describe($service),
             'quantity'      =>  '1',
-            'unit_price'    =>  (string) ($service['amount'] ?? '0'),
+
+            // client_services.amount was copied off the order line, so under
+            // inclusive pricing it carries the tax the same way the catalogue
+            // price did.
+            'unit_price'    =>  $tax->inclusive() ? $tax->netOf($amount, $rate) : $amount,
+            'tax'           =>  $rate,
             'service_relid' =>  $serviceId,
             'period_start'  =>  $periodStart,
             'period_end'    =>  $periodEnd,

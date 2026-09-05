@@ -22,6 +22,7 @@ use LBM\Service\Currency;
 use LBM\Service\Gateway;
 use LBM\Service\Invoice;
 use LBM\Service\Order;
+use LBM\Service\Tax;
 use LBM\Service\Product;
 use LBM\Support\Cart;
 
@@ -78,7 +79,12 @@ class CartController extends FrontController
     public function index(): string
     {
         $currency = $this->currency();
-        $lines    = Cart::lines((int) ($currency['currency_id'] ?? 0));
+
+        // Tax depends on where the customer is, so an anonymous cart cannot
+        // show a rate. The screen says the tax is worked out at checkout rather
+        // than quoting a number that would be wrong for anybody abroad.
+        $client = current_client();
+        $lines  = Cart::lines((int) ($currency['currency_id'] ?? 0), $client);
 
         return $this->screen('cart', local('cart'), [
             'lines'      =>  $lines,
@@ -86,6 +92,7 @@ class CartController extends FrontController
             'currency'   =>  $currency,
             'orderable'  =>  Cart::isOrderable($lines),
             'signed_in'  =>  is_client(),
+            'taxed'      =>  $client !== null && Tax::configured(),
             'gateways'   =>  Gateway::payable(),
         ]);
     }
@@ -217,7 +224,7 @@ class CartController extends FrontController
         // Read again. The cart the visitor was shown was priced when the page
         // was rendered, which may have been an hour ago, and this is the read
         // the order is actually built from.
-        $lines = Cart::lines($currencyId);
+        $lines = Cart::lines($currencyId, $client);
 
         if ($lines === []) {
             return $this->done('front.cart', local('cart_empty'), false);

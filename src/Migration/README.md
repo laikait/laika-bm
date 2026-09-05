@@ -2,11 +2,16 @@
 
 One class per change to a database that already exists.
 
-This directory is **empty on purpose**. `up()` handles every table that does not
-exist yet; a migration is only needed when a table that *does* exist has to
-change — a new column, a widened one, a new index, a data backfill. There is no
-such change outstanding today, so there is nothing here. The first real one goes
-in when the first real one arises.
+`up()` handles every table that does not exist yet; a migration is only needed
+when a table that *does* exist has to change — a new column, a widened one, a
+new index, a data backfill.
+
+The directory was empty from Phase 21 until Phase 24, which is when the first
+real change arrived: `M202609050100AddServiceCancellation` adds
+`client_services.cancel_at` and `cancel_reason` so a cancellation can be
+scheduled. Read it as the worked example — it is short, it covers both engines,
+and its `applies()` shows the fresh-install path (the columns are in
+`ClientServiceSchema` too, so a new install baselines it without running it).
 
 The directory itself must stay. `helpers/loader.php` registers it as a resource
 and `bin/verify-stage.php` asserts it ships, because an over-eager exclusion rule
