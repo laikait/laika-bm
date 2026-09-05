@@ -506,6 +506,26 @@ must_exist(
     'The only screen where a rate can be set. Without it tax can only be changed by editing the database.'
 );
 
+// Phase 26. Without these a customer can buy exactly one thing at one price:
+// four tables that have existed since Phase 0 stay unreadable, and the extras
+// an operator has defined and priced are on no screen a customer ever sees.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Addon.php',
+    'Prices the extras and records them against a service. Without it nothing can be sold alongside a plan.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/AddonController.php',
+    'The only place an addon can be created or priced. Without it they can only be written by hand into the database.'
+);
+must_exist(
+    'template/admin/bootstrap/addons.twig',
+    'The addon list. Without it /admin/addons is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/addon.twig',
+    'Where an addon is priced per currency and cycle. Without it an addon can be created and never sold.'
+);
+
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.
 foreach ([

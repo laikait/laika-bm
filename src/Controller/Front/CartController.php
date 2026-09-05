@@ -18,6 +18,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Throwable;
 use RuntimeException;
 use Laika\Service\Request;
+use LBM\Service\Addon;
 use LBM\Service\Currency;
 use LBM\Service\Gateway;
 use LBM\Service\Invoice;
@@ -131,11 +132,23 @@ class CartController extends FrontController
             return $this->done('front.cart', local('cart_no_price'), false);
         }
 
+        // Checked HERE as well as at render time, for the same reason the price
+        // is: an id that is not one of this product's extras would go in, the
+        // cart would refuse the whole line, and the visitor would have just been
+        // told it was added. Refusing at the door names the problem while they
+        // are still looking at the form.
+        $chosen = $this->chosenAddons($input, (int) $product['pid']);
+
+        if ($chosen === null) {
+            return $this->done('front.cart', local('cart_addon_gone'), false);
+        }
+
         Cart::add(
             (int) $product['pid'],
             $cycle,
             (int) ($input['quantity'] ?? 1),
-            isset($input['domain']) ? (string) $input['domain'] : null
+            isset($input['domain']) ? (string) $input['domain'] : null,
+            $chosen
         );
 
         return $this->done('front.cart', local('cart_added'));
@@ -313,6 +326,25 @@ class CartController extends FrontController
                 'amount'        =>  $line['price'],
             ];
 
+            // An extra is its own order line, carrying BOTH the addon it is and
+            // the product it hangs off. The second one is what lets Provision
+            // put it on the right service when an order holds two plans: order
+            // lines have no parent link, and (product, domain) is the grouping
+            // already in place.
+            foreach ($line['addons'] as $addon) {
+                $items[] = [
+                    'type'          =>  'addon',
+                    'product_relid' =>  $line['product_id'],
+                    'addon_relid'   =>  $addon['id'],
+                    'billing_cycle' =>  $addon['pricing_model'] === 'one_time'
+                        ? 'one_time'
+                        : $line['cycle'],
+                    'domain'        =>  $line['domain'],
+                    'quantity'      =>  $line['quantity'],
+                    'amount'        =>  $addon['price'],
+                ];
+            }
+
             if ((float) $line['setup_fee'] <= 0) {
                 continue;
             }
@@ -328,6 +360,49 @@ class CartController extends FrontController
         }
 
         return $items;
+    }
+
+    /**
+     * The Extras Posted With An Add, Checked Against What The Product Offers
+     *
+     * Null when any of them is not on offer, so the caller refuses the whole add
+     * rather than deciding which of somebody's choices to honour.
+     * @param array $input Submitted Data
+     * @param int $productId Product ID
+     * @return ?int[]
+     */
+    private function chosenAddons(array $input, int $productId): ?array
+    {
+        $posted = $input['addons'] ?? [];
+
+        if (!is_array($posted) || $posted === []) {
+            return [];
+        }
+
+        $offered = Addon::mappedIds($productId);
+        $active = [];
+
+        foreach (Addon::forProduct($productId) as $row) {
+            $active[] = (int) $row['addon_id'];
+        }
+
+        $chosen = [];
+
+        foreach ($posted as $id) {
+            $id = (int) $id;
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            if (!in_array($id, $offered, true) || !in_array($id, $active, true)) {
+                return null;
+            }
+
+            $chosen[] = $id;
+        }
+
+        return $chosen;
     }
 
     /**

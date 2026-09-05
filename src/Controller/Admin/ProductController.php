@@ -19,6 +19,7 @@ use Laika\Model\Model;
 use Laika\Service\Request;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Activity;
+use LBM\Service\Addon;
 use LBM\Service\Currency;
 use LBM\Service\Product;
 
@@ -128,6 +129,18 @@ class ProductController extends AdminController
 
                 Product::modify((int) $row['pid'], $input);
 
+                // Only when the section was on the form. An unticked checkbox
+                // group posts NOTHING, so without the marker "the operator
+                // cleared every addon" and "this submission never carried the
+                // section" are the same request - and one of those readings
+                // wipes a mapping nobody touched.
+                if (!empty($input['addons_present'])) {
+                    Addon::mapToProduct(
+                        (int) $row['pid'],
+                        is_array($input['addons'] ?? null) ? $input['addons'] : []
+                    );
+                }
+
                 $this->log('product.updated', 'Updated product ' . $row['product_name'], $changes);
 
                 return $this->done('staff.product', local('product_updated'), true, ['product' => $row['uid']]);
@@ -235,12 +248,20 @@ class ProductController extends AdminController
      */
     private function form(?array $product, string $title): string
     {
+        $productId = (int) ($product['pid'] ?? 0);
+
         return $this->screen('product-form', $title, [
             'product'  =>  $product,
             'statuses' =>  $this->statusChoices(Product::statuses()),
             'groups'   =>  $this->groupChoices(),
             'types'    =>  $this->typeChoices(),
             'models'   =>  $this->pricingModelChoices(),
+
+            // Every addon, not only the active ones: a plan already offering
+            // one that has since been switched off must still show it ticked,
+            // or saving the form would silently unmap it.
+            'addons'   =>  Addon::listing(),
+            'mapped'   =>  $productId > 0 ? Addon::mappedIds($productId) : [],
         ]);
     }
 

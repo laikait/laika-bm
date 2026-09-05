@@ -16,6 +16,7 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
+use LBM\Service\Addon;
 use LBM\Service\Client;
 use LBM\Service\ClientService;
 use LBM\Service\Dunning;
@@ -109,6 +110,13 @@ class ServiceController extends AdminController
             // When it is due to end, if it is. A date in the past reads as not
             // scheduled - see Termination::scheduledFor() - so the screen never
             // offers to call off a cancellation that is about to fire anyway.
+            // What the customer is paying for beyond the plan. Read from
+            // client_service_addons rather than from the order, because the
+            // order is what they bought once and this is what they are billed
+            // for every cycle - and after the first renewal those diverge.
+            'addons'      =>  Addon::detailedFor($serviceId),
+            'addon_total' =>  Addon::totalFor($serviceId),
+
             'ends_at'    =>  Termination::scheduledFor($row),
             'finished'   =>  ClientService::isFinished($row),
             'terminated' =>  (int) $row['status_relid'] === (int) ClientService::statusId('terminated'),

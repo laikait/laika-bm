@@ -79,6 +79,7 @@ function nav_admin(?string $current = null): array
     $billing = nav_group('billing');
     nav_item('clients',      'staff.clients',      'clients',      staff_has_access('client.read'),      $billing);
     nav_item('products',     'staff.products',     'products',     staff_has_access('product.read'),     $billing);
+    nav_item('addons',       'staff.addons',       'plus',         staff_has_access('product.read'),     $billing);
     nav_item('orders',       'staff.orders',       'orders',       staff_has_access('order.read'),       $billing);
     // 'folder' rather than a services glyph, because there is not one: Icon::svg()
     // falls back silently on an unknown name, so a made-up icon name would ship a

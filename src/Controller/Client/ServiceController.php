@@ -16,6 +16,7 @@ namespace LBM\Controller\Client;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
+use LBM\Service\Addon;
 use LBM\Service\ClientService;
 use LBM\Service\Server;
 
@@ -76,7 +77,11 @@ class ServiceController extends ClientController
         return $this->screen('service', ClientService::label($row), [
             'service'    =>  $row,
             'product'    =>  $product,
-            'addons'     =>  ClientService::addons((int) $row['service_id']),
+            // Through Addon, not ClientService::addons(), because that returns
+            // the raw row - and the panel template printed `#{{ addon_relid }}`
+            // at the customer. Written in Phase 8 against a table nothing ever
+            // filled, so nobody had seen it until this phase put rows in it.
+            'addons'     =>  Addon::detailedFor((int) $row['service_id']),
             'cycles'     =>  ClientService::cycleNames(),
             'credential' =>  ClientService::credential($row),
             'active'     =>  ClientService::isActive($row),

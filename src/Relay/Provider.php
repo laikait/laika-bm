@@ -94,6 +94,7 @@ class Provider extends RelayProvider
             'action.dunning'        =>  Action\Dunning::class,
             'action.termination'    =>  Action\Termination::class,
             'action.tax'            =>  Action\Tax::class,
+            'action.addon'          =>  Action\Addon::class,
         ] as $accessor => $class) {
             $this->registry->singleton($accessor, $class);
         }

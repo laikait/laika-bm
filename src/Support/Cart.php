@@ -20,6 +20,7 @@ use Laika\Session\SessionManager;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Currency;
 use LBM\Service\Money;
+use LBM\Service\Addon;
 use LBM\Service\Product;
 use LBM\Service\Tax;
 
@@ -66,6 +67,14 @@ class Cart
     /** @var int Most Of Any One Line */
     public const MAX_QUANTITY = 99;
 
+    /**
+     * @var int Most Addons On One Line
+     *
+     * MAX_LINES' reasoning. The ids come off a form, they end up in a session
+     * row, and nothing else bounds how many a script can post.
+     */
+    public const MAX_ADDONS = 20;
+
     ####################################################################################
     /*=================================== READING ====================================*/
     ####################################################################################
@@ -77,7 +86,7 @@ class Cart
      * found in the session is discarded rather than trusted, because a stored
      * shape from an older release is exactly the sort of thing that survives an
      * upgrade and then gets read as if it were current.
-     * @return array<string,array{product:int,cycle:int,quantity:int,domain:?string}>
+     * @return array<string,array{product:int,cycle:int,quantity:int,domain:?string,addons:int[]}>
      */
     public static function items(): array
     {
@@ -110,6 +119,12 @@ class Cart
                 'cycle'    =>  $cycle,
                 'quantity' =>  self::clampQuantity((int) ($item['quantity'] ?? 1)),
                 'domain'   =>  self::cleanDomain($item['domain'] ?? null),
+
+                // Ids only, and put back through the same normalisation an
+                // incoming form goes through - a cart written by an older
+                // release has no `addons` at all, and one written by hand could
+                // have anything in it.
+                'addons'   =>  self::cleanAddons($item['addons'] ?? []),
             ];
         }
 
@@ -250,16 +265,28 @@ class Cart
      * it is the caller that has a screen to say so on - and lines() checks again
      * at render time anyway, which is the check that actually protects an order.
      *
+     * The same plan with different extras on it is a DIFFERENT line, which is
+     * why the addons are part of the key. Merging them would fold one set of
+     * choices into another, and the only sign would be an invoice that does not
+     * match what the customer picked.
+     *
      * @param int $productId Product ID
      * @param int $cycleId Billing Cycle ID
      * @param int $quantity How Many
      * @param ?string $domain Domain, For Products Ordered Against One
+     * @param int[] $addons Addon Ids Chosen With It
      * @return string The line key
      */
-    public static function add(int $productId, int $cycleId, int $quantity = 1, ?string $domain = null): string
-    {
+    public static function add(
+        int $productId,
+        int $cycleId,
+        int $quantity = 1,
+        ?string $domain = null,
+        array $addons = []
+    ): string {
         $domain = self::cleanDomain($domain);
-        $key    = self::key($productId, $cycleId, $domain);
+        $addons = self::cleanAddons($addons);
+        $key    = self::key($productId, $cycleId, $domain, $addons);
         $items  = self::items();
 
         $existing = (int) ($items[$key]['quantity'] ?? 0);
@@ -269,6 +296,7 @@ class Cart
             'cycle'    =>  $cycleId,
             'quantity' =>  self::clampQuantity($existing + self::clampQuantity($quantity)),
             'domain'   =>  $domain,
+            'addons'   =>  $addons,
         ];
 
         self::put($items);
@@ -377,6 +405,7 @@ class Cart
             'setup_total' =>  '0',
             'tax_rate'    =>  '0',
             'tax'         =>  '0',
+            'addons'      =>  [],
             'ok'          =>  false,
             'problem'     =>  null,
         ];
@@ -419,6 +448,36 @@ class Cart
         $line['subtotal']    = Money::round(Money::mul((string) $quantity, $line['price']));
         $line['setup_total'] = Money::round(Money::mul((string) $quantity, $line['setup_fee']));
 
+        // An extra the product no longer offers, or one the operator has never
+        // priced on this cycle, makes the LINE a problem - it does not quietly
+        // disappear. 22.2 learned that the hard way: a checkout that drops an
+        // unorderable part of a line shows the customer a refusal and invoices
+        // them anyway for the rest of what they chose.
+        $addons = self::addonLines($item['addons'], $product, $currencyId, $item['cycle'], $quantity, $cycles);
+
+        if ($addons === null) {
+            $line['problem'] = 'addon_unavailable';
+
+            return $line;
+        }
+
+        $line['addons'] = $addons;
+
+        foreach ($addons as $addon) {
+            // A one-off extra belongs in the same bucket as a setup fee: due
+            // today, and not again. Folding it into the recurring figure would
+            // quote a monthly price that is wrong from the second month on.
+            if ($addon['pricing_model'] === 'one_time') {
+                $line['setup_total'] = Money::add($line['setup_total'], $addon['total']);
+                continue;
+            }
+
+            $line['subtotal'] = Money::add($line['subtotal'], $addon['total']);
+        }
+
+        $line['subtotal']    = Money::round($line['subtotal']);
+        $line['setup_total'] = Money::round($line['setup_total']);
+
         // The same question the invoice will ask, asked with the same two rows.
         // The cart and the invoice have to reach the same rate or the customer
         // agrees to one number and is billed another - which is the whole
@@ -432,6 +491,80 @@ class Cart
         $line['ok'] = true;
 
         return $line;
+    }
+
+    /**
+     * Price The Extras Chosen With One Line
+     *
+     * Null - not an empty list - when any of them cannot be sold, so the caller
+     * can mark the whole line rather than deciding for the customer which of
+     * their choices to keep.
+     *
+     * The rate is deliberately NOT asked per addon. An extra takes the tax rate
+     * of the plan it hangs off, so one cart line carries one rate; addons have
+     * no rate column of their own to say otherwise, and a backup service on a
+     * zero-rated plan being taxed differently from the plan would be a surprise
+     * nobody asked for.
+     * @param int[] $ids Chosen Addon Ids
+     * @param array $product Product Row
+     * @param int $currencyId Currency ID
+     * @param int $cycleId The Line's Billing Cycle
+     * @param int $quantity How Many Of The Line
+     * @param array<int,string> $cycles Cycle Names Keyed By Id
+     * @return ?array<int,array<string,mixed>>
+     */
+    private static function addonLines(
+        array $ids,
+        array $product,
+        int $currencyId,
+        int $cycleId,
+        int $quantity,
+        array $cycles
+    ): ?array {
+        if ($ids === []) {
+            return [];
+        }
+
+        $offered = [];
+
+        foreach (Addon::forProduct((int) $product['pid']) as $row) {
+            $offered[(int) $row['addon_id']] = $row;
+        }
+
+        $oneTime = (int) (array_search('one_time', $cycles, true) ?: 0);
+        $lines = [];
+
+        foreach ($ids as $id) {
+            $addon = $offered[$id] ?? null;
+
+            // Not mapped to this product, or withdrawn since it was chosen.
+            if ($addon === null) {
+                return null;
+            }
+
+            $model = (string) ($addon['pricing_model'] ?? 'recurring');
+            $on = $model === 'one_time' ? $oneTime : $cycleId;
+
+            $price = $on > 0 ? Addon::price($id, $currencyId, $on) : null;
+
+            // No row means not offered on this cycle. Zero would mean free, and
+            // those are different answers - Product::price() has the same rule.
+            if (!is_array($price)) {
+                return null;
+            }
+
+            $each = Money::round((string) ($price['addon_price'] ?? '0'));
+
+            $lines[] = [
+                'id'            =>  $id,
+                'name'          =>  (string) ($addon['addon_name'] ?? ''),
+                'pricing_model' =>  $model,
+                'price'         =>  $each,
+                'total'         =>  Money::round(Money::mul((string) $quantity, $each)),
+            ];
+        }
+
+        return $lines;
     }
 
     /**
@@ -502,17 +635,51 @@ class Cart
     /**
      * The Key One Line Is Stored Under
      *
-     * Product, cycle and domain together - so the same plan on two different
-     * domains is two lines, which is how somebody orders hosting twice, while
-     * the same plan added twice is one line with a quantity of two.
+     * Product, cycle, domain and addons together - so the same plan on two
+     * different domains is two lines, which is how somebody orders hosting
+     * twice, while the same plan added twice is one line with a quantity of two.
      * @param int $productId Product ID
      * @param int $cycleId Billing Cycle ID
      * @param ?string $domain Domain
+     * @param int[] $addons Addon Ids, Already Normalised
      * @return string
      */
-    private static function key(int $productId, int $cycleId, ?string $domain): string
+    private static function key(int $productId, int $cycleId, ?string $domain, array $addons = []): string
     {
-        return $productId . '-' . $cycleId . '-' . ($domain === null ? '' : md5($domain));
+        return $productId . '-' . $cycleId
+            . '-' . ($domain === null ? '' : md5($domain))
+            . '-' . ($addons === [] ? '' : md5(implode(',', $addons)));
+    }
+
+    /**
+     * Normalise Submitted Addon Ids
+     *
+     * Sorted and de-duplicated, because the KEY is built from them: the same two
+     * extras picked in the other order have to land on the same line, and an id
+     * posted twice must not make a third.
+     * @param mixed $addons Submitted Addon Ids
+     * @return int[]
+     */
+    private static function cleanAddons(mixed $addons): array
+    {
+        if (!is_array($addons)) {
+            return [];
+        }
+
+        $ids = [];
+
+        foreach ($addons as $id) {
+            $id = (int) $id;
+
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+
+        $ids = array_values($ids);
+        sort($ids);
+
+        return array_slice($ids, 0, self::MAX_ADDONS);
     }
 
     /**

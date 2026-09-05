@@ -32,6 +32,7 @@ use LBM\Controller\Admin\TicketController;
 use LBM\Controller\Admin\InvoiceController;
 use LBM\Controller\Admin\ProductController;
 use LBM\Controller\Admin\ProfileController;
+use LBM\Controller\Admin\AddonController;
 use LBM\Controller\Admin\AnnouncementController;
 use LBM\Controller\Admin\KnowledgeBaseController;
 use LBM\Controller\Admin\ActivityController;
@@ -151,6 +152,36 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.product.delete')->pipeline([Permission::class . '|perm=product.delete']);
 
     /*--------------------------- Product Groups ---------------------------*/
+    /**
+     * Addons - the extras sold alongside a product.
+     *
+     * Behind `product` rather than a group of their own: an addon IS catalogue,
+     * and 20.5's rule is that a new permission group only ever reaches a role
+     * created after it exists.
+     *
+     * `/addons/new` registers BEFORE `/addon/{addon}` for the reason every
+     * literal in this file does - matching is first-match-wins in registration
+     * order and $uid matches "new".
+     */
+    Url::get('/addons', [AddonController::class, 'index'])
+        ->name('staff.addons')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get('/addons/new', [AddonController::class, 'create'])
+        ->name('staff.addon.new')->pipeline([Permission::class . '|perm=product.create']);
+    Url::post('/addons/new', [AddonController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=product.create']);
+
+    Url::get("/addon/{addon:{$uid}}", [AddonController::class, 'show'])
+        ->name('staff.addon')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get("/addon/{addon:{$uid}}/edit", [AddonController::class, 'edit'])
+        ->name('staff.addon.edit')->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/addon/{addon:{$uid}}/edit", [AddonController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=product.update']);
+
+    Url::post("/addon/{addon:{$uid}}/delete", [AddonController::class, 'delete'])
+        ->name('staff.addon.delete')->pipeline([Permission::class . '|perm=product.delete']);
+
     Url::get('/product-groups', [ProductController::class, 'groups'])
         ->name('staff.product.groups')->pipeline([Permission::class . '|perm=product.read']);
     Url::post('/product-groups', [ProductController::class, 'groupSave'])

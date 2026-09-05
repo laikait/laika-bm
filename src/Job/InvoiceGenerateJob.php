@@ -22,6 +22,7 @@ use LBM\Model\BillingCycleModel;
 use LBM\Model\ClientServiceModel;
 use LBM\Model\InvoiceItemModel;
 use LBM\Action\Activity;
+use LBM\Action\Addon;
 use LBM\Action\Client;
 use LBM\Action\Invoice;
 use LBM\Action\Mail;
@@ -202,11 +203,7 @@ class InvoiceGenerateJob extends Job
 
         $amount = (string) ($service['amount'] ?? '0');
 
-        $invoiceId = (new Invoice())->store([
-            'client_relid'     =>  $service['client_relid'] ?? null,
-            'currency_relid'   =>  $service['currency_relid'] ?? null,
-            'invoice_due_date' =>  $periodStart,
-        ], [[
+        $items = [[
             'description'   =>  $this->describe($service),
             'quantity'      =>  '1',
 
@@ -218,7 +215,37 @@ class InvoiceGenerateJob extends Job
             'service_relid' =>  $serviceId,
             'period_start'  =>  $periodStart,
             'period_end'    =>  $periodEnd,
-        ]]);
+        ]];
+
+        // The extras renew WITH the plan, on the plan's invoice, as their own
+        // lines. Two things follow from that and both are the point.
+        //
+        // They are lines rather than an amount folded into the plan's, because
+        // an invoice has to say what the money is for - "Hosting 45.00" where 15
+        // of it is backups is one a customer queries and staff cannot answer.
+        //
+        // And they are billed from the SERVICE rather than on a schedule of
+        // their own, so a service that is cancelled, suspended or terminated
+        // takes its extras with it without anything having to remember to.
+        foreach ((new Addon())->forService($serviceId) as $row) {
+            $each = (string) ($row['amount'] ?? '0');
+
+            $items[] = [
+                'description'   =>  $this->describeAddon($row),
+                'quantity'      =>  '1',
+                'unit_price'    =>  $tax->inclusive() ? $tax->netOf($each, $rate) : $each,
+                'tax'           =>  $rate,
+                'service_relid' =>  $serviceId,
+                'period_start'  =>  $periodStart,
+                'period_end'    =>  $periodEnd,
+            ];
+        }
+
+        $invoiceId = (new Invoice())->store([
+            'client_relid'     =>  $service['client_relid'] ?? null,
+            'currency_relid'   =>  $service['currency_relid'] ?? null,
+            'invoice_due_date' =>  $periodStart,
+        ], $items);
 
         // Moving the due date forward is what keeps the next run from
         // considering this service again once the period has been billed.
@@ -235,6 +262,18 @@ class InvoiceGenerateJob extends Job
         );
 
         $this->notify($invoiceId, $service);
+    }
+
+    /**
+     * What An Addon Line On a Renewal Says
+     * @param array $row client_service_addons Row
+     * @return string
+     */
+    private function describeAddon(array $row): string
+    {
+        $addon = (new Addon())->find((int) ($row['addon_relid'] ?? 0));
+
+        return (string) ($addon['addon_name'] ?? 'Addon');
     }
 
     /**

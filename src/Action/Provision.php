@@ -438,9 +438,12 @@ class Provision extends Action
         $groups = [];
 
         foreach ($lines as $line) {
-            // Only products become services. A `domain` line is a registrar's
-            // job, and 22.4 does not do domains - see the phase notes.
-            if ((string) ($line['type'] ?? '') !== 'product') {
+            $type = (string) ($line['type'] ?? '');
+
+            // Products become services; addons ride along on the service their
+            // product line makes. A `domain` line is a registrar's job, and
+            // nothing does domains yet - see the phase notes.
+            if ($type !== 'product' && $type !== 'addon') {
                 continue;
             }
 
@@ -457,13 +460,22 @@ class Provision extends Action
 
             $key = $productId . '|' . strtolower(trim((string) ($line['domain'] ?? '')));
 
-            $groups[$key] ??= ['lines' => [], 'lead' => null];
+            $groups[$key] ??= ['lines' => [], 'lead' => null, 'addons' => []];
+
+            if ($type === 'addon') {
+                $groups[$key]['addons'][] = $line;
+                $groups[$key]['lines'][] = $line;
+
+                continue;
+            }
+
             $groups[$key]['lines'][] = $line;
 
             $cycle = (string) ($line['billing_cycle'] ?? '');
 
             // The recurring line leads. A group with nothing but a one-off line
-            // is a one-off product, and then that line leads by default.
+            // is a one-off product, and then that line leads by default. Only a
+            // PRODUCT line can lead - an addon has no plan of its own to bill.
             if ($groups[$key]['lead'] === null || $cycle !== 'one_time') {
                 if ($groups[$key]['lead'] === null
                     || (string) ($groups[$key]['lead']['billing_cycle'] ?? '') === 'one_time') {
@@ -472,7 +484,12 @@ class Provision extends Action
             }
         }
 
-        return $groups;
+        // A group of nothing but addons has no service to hang them on, which
+        // means its product line was provisioned on an earlier run and these
+        // were somehow left behind. serviceFor() would answer 0 and they would
+        // be retried for ever, so they are dropped here where it can be said
+        // why rather than looking like a silent no-op.
+        return array_filter($groups, static fn(array $g): bool => is_array($g['lead']));
     }
 
     /**
@@ -516,8 +533,31 @@ class Provision extends Action
             return 0;
         }
 
-        // Point EVERY line in the group at it, the setup-fee line included, so
-        // the marker is complete and a second run has nothing left to pick up.
+        // The extras, recorded against the service so they renew with it and can
+        // be cancelled on their own. A one-off addon gets no row: there is
+        // nothing recurring to record, and one sitting in client_service_addons
+        // would be re-billed every cycle for something bought once.
+        $service = (new ClientService())->find($serviceId);
+
+        if (is_array($service)) {
+            $addons = new Addon();
+
+            foreach ($group['addons'] as $line) {
+                if ((string) ($line['billing_cycle'] ?? '') === 'one_time') {
+                    continue;
+                }
+
+                $addons->attach(
+                    $service,
+                    (int) $line['addon_relid'],
+                    (string) ($line['amount'] ?? '0')
+                );
+            }
+        }
+
+        // Point EVERY line in the group at it - the setup-fee line and the
+        // addons included - so the marker is complete and a second run has
+        // nothing left to pick up.
         $items = new OrderItemModel();
 
         foreach ($group['lines'] as $line) {

@@ -18,6 +18,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Model\Model;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Product;
+use LBM\Service\Addon;
 use LBM\Service\Currency;
 
 /**
@@ -112,12 +113,68 @@ class ServiceController extends FrontController
             'pricing'          =>  Product::pricing((int) $product['pid']),
             'currency'         =>  Currency::default(),
             'cycles'           =>  $this->cycles(),
+
+            // Active only. An extra the operator has switched off is not an
+            // offer, and showing it greyed out is a control that does nothing.
+            'addons'           =>  $this->addonsFor((int) $product['pid']),
         ]);
     }
 
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
+
+    /**
+     * The Extras On Offer With One Product, Priced
+     *
+     * Each one carries what it costs on EVERY cycle it is sold on, because the
+     * cycle is a radio button on the same form and the page has no way to
+     * re-price itself when the visitor moves it. Showing one cycle's figure
+     * would be right until they picked the other one, and wrong silently.
+     *
+     * An addon with no price at all is dropped: it cannot be ordered - the cart
+     * would refuse the whole line - so offering it is offering a dead end.
+     * @param int $productId Product ID
+     * @return array<int,array<string,mixed>>
+     */
+    private function addonsFor(int $productId): array
+    {
+        $currencyId = (int) (Currency::default()['currency_id'] ?? 0);
+
+        if ($currencyId <= 0) {
+            return [];
+        }
+
+        $cycles = $this->cycles();
+        $out = [];
+
+        foreach (Addon::forProduct($productId) as $addon) {
+            $addonId = (int) $addon['addon_id'];
+            $prices = [];
+
+            foreach ($cycles as $cycleId => $cycleName) {
+                $price = Addon::price($addonId, $currencyId, (int) $cycleId);
+
+                if (is_array($price)) {
+                    $prices[(string) $cycleName] = (string) $price['addon_price'];
+                }
+            }
+
+            if ($prices === []) {
+                continue;
+            }
+
+            $out[] = [
+                'id'            =>  $addonId,
+                'name'          =>  (string) $addon['addon_name'],
+                'description'   =>  (string) ($addon['description'] ?? ''),
+                'pricing_model' =>  (string) ($addon['pricing_model'] ?? 'recurring'),
+                'prices'        =>  $prices,
+            ];
+        }
+
+        return $out;
+    }
 
     /**
      * A Product Query Restricted To What Is For Sale

@@ -522,6 +522,20 @@ class Order extends Action
         $name = $product['product_name'] ?? ucfirst($type);
         $cycle = (string) ($line['billing_cycle'] ?? '');
 
+        // An addon says what it is AND what it is on. An invoice holding two
+        // plans and a "Daily Backups" line between them is one somebody rings
+        // up about, and the person answering cannot tell them either.
+        if ($type === 'addon' && !empty($line['addon_relid'])) {
+            $addon = (new Addon())->find((int) $line['addon_relid']);
+            $label = (string) ($addon['addon_name'] ?? 'Addon');
+
+            if ($product !== null) {
+                $label .= ' for ' . (string) $product['product_name'];
+            }
+
+            return $cycle === '' ? $label : "{$label} ({$cycle})";
+        }
+
         return $cycle === '' ? $name : "{$name} ({$cycle})";
     }
 
