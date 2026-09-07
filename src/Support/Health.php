@@ -48,7 +48,12 @@ class Health
         'lf-storage',
         'lf-logs',
         'uploads',
-        'modules',
+        // `modules` was on this list until Phase 31, for the upload feature's
+        // sake - it was the only thing that ever wrote into that directory.
+        // Modules now arrive over SFTP or inside the release, so the
+        // application only ever READS there, and reporting a read-only modules
+        // directory as a fault would send an operator to loosen permissions on
+        // the one directory in the product that holds executable code.
     ];
 
     /**

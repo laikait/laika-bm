@@ -42,7 +42,7 @@ class SettingsController extends AdminController
 {
     protected function nav(): string
     {
-        return 'settings';
+        return 'general_settings';
     }
 
     ####################################################################################

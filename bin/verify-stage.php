@@ -749,6 +749,59 @@ must_not_exist(
     'Test fixture from domainwalk.php. It answers every availability check and registers anything it is handed.'
 );
 
+// ---------------------------------------------------------------------------
+// Phase 31. Module metadata moved out of the options table.
+// ---------------------------------------------------------------------------
+//
+// The schema is the whole feature: without it `modules` is never created, and
+// Action\Module then reads an empty list through its own try/catch and reports
+// EVERY MODULE AS SWITCHED OFF - silently, with the screen still showing every
+// switch in the off position. A payment gateway simply stops existing.
+must_exist(
+    'vendor/laikait/laika-bm/src/Schema/ModuleSchema.php',
+    'Without the modules table the switch has nowhere to live and every module reads as disabled.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Model/ModuleModel.php',
+    'Action\Module builds on it; without it the modules screen is a 500.'
+);
+
+// And the migration, which is the half that matters on an UPGRADE rather than a
+// fresh install. `modules` is a new table so it is created either way; what an
+// existing installation needs is its `module_enabled_*` rows carried across.
+// Ship the table without this and every module on every upgraded install goes
+// dark on the first request after the update.
+must_exist(
+    'vendor/laikait/laika-bm/src/Migration/M202609080100MoveModuleStateIntoTable.php',
+    'Carries module_enabled_* option rows into the modules table. Without it every module on an upgraded install reads as switched off.'
+);
+
+// The upload feature was removed in 31.2, and this check is not tidiness: the
+// class wrote executable PHP into the application's own directory from a form
+// on the admin panel. A copy left in a release is a code-execution path with no
+// route in front of it today and nothing to stop one being added back.
+must_not_exist(
+    'vendor/laikait/laika-bm/src/Module/ModuleInstaller.php',
+    'Removed in Phase 31.2. It extracted uploaded archives into modules/ - a copy in a release is a code-execution path waiting for a route.'
+);
+
+// modulewalk's three fixtures. The first two are the dangerous ones: Probe
+// ships a route that answers on the public site, and Broken throws from its
+// manifest during composer's autoload - which takes an operator's whole
+// installation down before any page can render, the moment it is enabled.
+must_not_exist(
+    'modules/fraud/Probe',
+    'Test fixture from modulewalk.php. It registers a public route that exists only to prove the loader ran.'
+);
+must_not_exist(
+    'modules/fraud/Broken',
+    'Test fixture from modulewalk.php. Its manifest throws on purpose.'
+);
+must_not_exist(
+    'modules/addons/Keeper',
+    'Test fixture from modulewalk.php. It exists only to keep the enabled list non-empty.'
+);
+
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.
 foreach ([

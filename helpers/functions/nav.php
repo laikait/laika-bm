@@ -80,16 +80,6 @@ function nav_admin(?string $current = null): array
     nav_item('clients',      'staff.clients',      'clients',      staff_has_access('client.read'),      $billing);
     nav_item('products',     'staff.products',     'products',     staff_has_access('product.read'),     $billing);
     nav_item('addons',       'staff.addons',       'plus',         staff_has_access('product.read'),     $billing);
-    // Beside the addons, because they are the same job seen twice: an extra
-    // sold alongside a plan, and a size the plan itself comes in.
-    //
-    // The same cog as Settings, further down, and that is the lesser evil.
-    // Icon::svg() falls back SILENTLY on a name it does not know, so an
-    // invented one ships a wrong picture rather than an error anybody would
-    // see - and of the icons that do exist, a cog is the only one that means
-    // configuration. Two cogs in different groups beats one wrong glyph.
-    nav_item('config_options', 'staff.config.options', 'settings',     staff_has_access('product.read'),     $billing);
-    nav_item('promos',       'staff.promos',       'megaphone',    staff_has_access('product.read'),     $billing, 'promo_codes');
     nav_item('orders',       'staff.orders',       'orders',       staff_has_access('order.read'),       $billing);
     // 'folder' rather than a services glyph, because there is not one: Icon::svg()
     // falls back silently on an unknown name, so a made-up icon name would ship a
@@ -105,8 +95,6 @@ function nav_admin(?string $current = null): array
     $operations = nav_group('operations');
     nav_item('tickets', 'staff.tickets', 'tickets', staff_has_access('ticket.read'), $operations, 'support');
     nav_item('domains', 'staff.domains', 'domains', staff_has_access('domain.read'), $operations);
-    nav_item('tlds', 'staff.tlds', 'currency', staff_has_access('domain.read'), $operations, 'domain_pricing');
-    nav_item('servers', 'staff.servers', 'servers', staff_has_access('server.read'), $operations);
 
     // Site content ----------------------------------------------------------
     //
@@ -122,20 +110,38 @@ function nav_admin(?string $current = null): array
     $admin = nav_group('administration');
     nav_item('reports',    'staff.reports',    'reports',    staff_has_access('report.read'),   $admin);
     nav_item('staffs',     'staff.staffs',     'staff',      staff_has_access('staff.read'),    $admin, 'staff');
-    nav_item('roles',      'staff.roles',      'roles',      staff_has_access('role.read'),     $admin);
-    nav_item('currencies', 'staff.currencies', 'currency',   staff_has_access('currency.read'), $admin);
-    nav_item('modules',    'staff.modules',    'modules',    staff_has_access('module.read'),   $admin);
     nav_item('activities', 'staff.activities', 'activity',   staff_has_access('activity.read'), $admin, 'activity');
-    nav_item('settings',   'staff.settings',   'settings',   staff_has_access('settings.read'), $admin);
 
-    // Utilities share the settings permission rather than carrying one of their
-    // own. A new group in Permission::GROUPS is only ever granted when a role is
-    // created, so a `utils` group would leave these screens unreachable on every
-    // install that already exists - and unreachable in a way whose fix is a
-    // checkbox nobody knows to tick. UtilController carries the full reasoning.
-    nav_item('utils',      'staff.utils',      'database',   staff_has_access('settings.read'), $admin, 'utilities');
-    // Gateways sit on the same permission, for the same reason.
-    nav_item('gateways',   'staff.gateways',   'currency',   staff_has_access('settings.read'), $admin, 'payment_gateways');
+    // Settings ---------------------------------------------------------------
+    //
+    // Everything that CONFIGURES the installation, in one place. Before Phase
+    // 30.2 these were spread across three groups by the permission each
+    // happened to ride on rather than by what an operator was trying to do,
+    // and the result was seventeen top-level entries with no way to tell
+    // configuration from daily work.
+    //
+    // THE GROUP IS NAMED `settings` AND THE SCREEN IS NAMED `general_settings`,
+    // and they cannot share a name: nav_mark() walks depth-first and returns on
+    // the first match, so a group and a child called the same thing would mark
+    // the group - which renders as a heading with no active state - and the
+    // link below it would never highlight.
+    //
+    // NOT ONE PERMISSION CHANGES HERE. 20.5's rule: a group is granted only
+    // when a role is CREATED, so moving a screen behind a tidier gate would
+    // make it unreachable on every install that already has roles.
+    $settings = nav_group('settings');
+    nav_item('general_settings', 'staff.settings',       'settings',  staff_has_access('settings.read'), $settings, 'general_settings');
+    nav_item('gateways',         'staff.gateways',       'currency',  staff_has_access('settings.read'), $settings, 'payment_gateways');
+    nav_item('servers',          'staff.servers',        'servers',   staff_has_access('server.read'),   $settings);
+    nav_item('tlds',             'staff.tlds',           'currency',  staff_has_access('domain.read'),   $settings, 'domain_pricing');
+    nav_item('modules',          'staff.modules',        'modules',   staff_has_access('module.read'),   $settings);
+    nav_item('config_options',   'staff.config.options', 'settings',  staff_has_access('product.read'),  $settings);
+    nav_item('promos',           'staff.promos',         'megaphone', staff_has_access('product.read'),  $settings, 'promo_codes');
+    nav_item('currencies',       'staff.currencies',     'currency',  staff_has_access('currency.read'), $settings);
+    nav_item('roles',            'staff.roles',          'roles',     staff_has_access('role.read'),     $settings);
+    // Utilities and Gateways share the settings permission rather than carrying
+    // one of their own - 20.5's rule again, and UtilController spells it out.
+    nav_item('utils',            'staff.utils',          'database',  staff_has_access('settings.read'), $settings, 'utilities');
 
     return nav_finish('admin', $current);
 }

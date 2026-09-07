@@ -47,7 +47,6 @@ class Requirements
         'curl'     =>  'Outbound calls from payment and provisioning modules',
         'fileinfo' =>  'MIME detection for ticket attachments',
         'gd'       =>  'Resizing uploaded logos',
-        'zip'      =>  'Installing modules from an archive',
     ];
 
     /** @var string[] Directories That Must Be Writable, Relative to APP_PATH */

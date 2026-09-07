@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Throwable;
 use Laika\Model\Model;
+use LBM\Model\ModuleModel;
 use LBM\Module\ModuleManager;
 
 /**
@@ -32,12 +33,32 @@ use LBM\Module\ModuleManager;
  * screen that would have fixed it can render.
  *
  * Modules live at the app root rather than inside this package because they are
- * the operator's own code: they must survive `composer update` and a
- * reinstall of vendor/.
+ * the operator's own code: they must survive `composer update` and a reinstall
+ * of vendor/.
  *
- * Enabled state is an option per module rather than a table, because it is one
- * boolean per installed directory and a table would need migrating, seeding and
- * cleaning up after a module somebody deleted by hand.
+ * ---------------------------------------------------------------------------
+ * WHERE THE STATE LIVES - CHANGED IN PHASE 31
+ * ---------------------------------------------------------------------------
+ * It used to be an option row per module, `module_enabled_<uid>`, and this
+ * class said so in as many words: `model()` returned a Model pointed at
+ * `options` under a docblock reading "There Is No Modules Table". Everything
+ * else about a module - version, author, what it declares - was re-read off
+ * disk on every request and could not be asked a question about.
+ *
+ * There is a `modules` table now. What has NOT changed, and cannot, is that the
+ * loader still reads a generated file: `ModuleManager::discover()` runs inside
+ * composer's `files` autoload, where there is no database, no `option()`, and
+ * on a fresh checkout no schema at all. So the pairing Phase 20.1 built is
+ * intact - one record of truth, one generated projection - and only the record
+ * of truth has moved.
+ *
+ * ---------------------------------------------------------------------------
+ * DISK DECIDES WHAT EXISTS; THE TABLE REMEMBERS WHAT WE KNOW ABOUT IT
+ * ---------------------------------------------------------------------------
+ * `all()` still scans the directory, and a module that is not there is not
+ * listed whatever the table says. A row is a record ABOUT a directory and never
+ * a substitute for one - which is the rule that stops a module somebody deleted
+ * by hand sitting in the loader's cache for ever.
  */
 class Module extends Action
 {
@@ -61,43 +82,38 @@ class Module extends Action
     /** @var string[] The Kinds Of Module, Which Are Also The Subdirectories */
     public const TYPES = ModuleManager::TYPES;
 
-    /** @var string Option Key Prefix For The Enabled Flag */
+    /**
+     * @var string The Option Key Prefix The Enabled Flag USED To Live Under
+     *
+     * Kept after Phase 31 moved the flag into the `modules` table, because the
+     * migration that carries those rows across has to be able to find them -
+     * and because somebody meeting `module_enabled_gateways-stripe` in an older
+     * installation's options table deserves something to grep for.
+     *
+     * Nothing writes it any more.
+     */
     public const OPTION = 'module_enabled_';
 
     /** @var array<string,array>|null Discovered Modules, Keyed By Uid */
     private ?array $modules = null;
 
     /**
-     * @var array<string,bool> States Written In This Process
-     *
-     * option() memoises into a `static` inside the function itself, with nothing
-     * that can clear it, so a key read once keeps its first value for the rest
-     * of the process no matter what is written to the table underneath. This
-     * shadows that cache for the keys we ourselves have just written.
-     *
-     * Static rather than per-instance because the cache it shadows is
-     * process-wide: a second Module instance would otherwise read the stale
-     * value the first one had already invalidated.
-     *
-     * The web app never noticed - one toggle per request and then a redirect,
-     * which is the same reason every settings save redirects. It shows up the
-     * moment anything toggles twice: the second rebuildCache() re-read the key
-     * it had just written, got the previous answer, and wrote a loader cache
-     * that disagreed with the options table. Found by a harness enabling a
-     * module and then disabling it.
-     */
-    private static array $written = [];
-
-    /**
-     * There Is No Modules Table
-     *
-     * The base class needs a model to build on; nothing here reads or writes
-     * one. Manifests come off disk and the enabled flag is an option.
+     * The Modules Table
      * @return Model
      */
     public function model(): Model
     {
-        return (new Model())->table('options');
+        return new ModuleModel();
+    }
+
+    protected function createdColumn(): ?string
+    {
+        return 'module_created_at';
+    }
+
+    protected function updatedColumn(): ?string
+    {
+        return 'module_updated_at';
     }
 
     ####################################################################################
@@ -105,7 +121,12 @@ class Module extends Action
     ####################################################################################
 
     /**
-     * Every Module On Disk
+     * Every Module On Disk, With What The Table Knows About It
+     *
+     * Disk is the list; the table supplies the switch and whatever was recorded
+     * when we last looked. A module with no row yet is reported disabled, which
+     * is both the safe answer and the documented one - nothing an operator drops
+     * on disk runs until they say so.
      * @return array<string,array>
      */
     public function all(array $where = [], string $direction = self::ASC, ?string $order = null): array
@@ -120,6 +141,23 @@ class Module extends Action
             foreach ($this->scan($type) as $module) {
                 $modules[$module['uid']] = $module;
             }
+        }
+
+        $rows = $this->rows();
+
+        foreach ($modules as $uid => $module) {
+            $row = $rows[$uid] ?? null;
+
+            $modules[$uid]['enabled'] = $row !== null && (string) $row['is_enabled'] === 'yes';
+            $modules[$uid]['installed_at'] = $row['installed_at'] ?? null;
+
+            // record() RETURNS the id, and it has to. Setting module_id from
+            // $row and then reconciling underneath it reported 0 for a module
+            // whose row had just been inserted one line further down - so
+            // toggle() read that 0, took its own insert branch, and hit the
+            // UNIQUE key on uid. Every module met for the first time crashed
+            // the moment it was switched on.
+            $modules[$uid]['module_id'] = $this->record($uid, $modules[$uid], $row);
         }
 
         uasort($modules, static fn(array $a, array $b): int => strcmp($a['name'], $b['name']));
@@ -161,28 +199,61 @@ class Module extends Action
      */
     public function isEnabled(string $uid): bool
     {
-        return self::$written[$uid] ?? option_bool(self::OPTION . $uid);
+        return (bool) ($this->all()[$uid]['enabled'] ?? false);
     }
 
     /**
      * Switch a Module On Or Off
      *
-     * The option is the source of truth; the loader's cache is rewritten in the
+     * The table is the source of truth; the loader's cache is rewritten in the
      * same breath, so the change takes effect on the very next request rather
      * than whenever something else happens to rebuild it.
+     *
+     * A module with no row yet gets one here rather than being refused - the
+     * table fills in as modules are met, not through an install step somebody
+     * has to remember.
      * @param string $uid Module Uid
      * @param ?bool $enabled Null flips whatever it is now
      * @return bool The state it ended up in
      */
     public function toggle(string $uid, ?bool $enabled = null): bool
     {
+        $module = $this->find($uid);
+
+        // Not on disk, so there is nothing to switch. Answering false rather
+        // than writing a row keeps the rule this class is built on: the table
+        // records directories, it does not invent them.
+        if ($module === null) {
+            return false;
+        }
+
         $state = $enabled ?? !$this->isEnabled($uid);
+        $id = (int) ($module['module_id'] ?? 0);
 
-        (new Setting())->put(self::OPTION . $uid, $state);
+        if ($id > 0) {
+            $this->update($id, ['is_enabled' => $state ? 'yes' : 'no']);
+        } else {
+            // find() reconciles, so every module it can return already has a
+            // row - which means arriving here at all says that insert failed:
+            // a read-only database, or a release deployed but not yet migrated.
+            //
+            // Deliberately NOT wrapped. record() swallows its failures because
+            // it is bookkeeping that happens while somebody looks at a list;
+            // this is a button somebody pressed, and a switch that silently
+            // updates no rows is the worst outcome available - the screen says
+            // enabled, the loader never hears, and there is nothing to find.
+            $this->insertRow($uid, $module, $state);
+        }
 
-        // Before rebuildCache(), which reads every module's state back.
-        self::$written[$uid] = $state;
-
+        // rebuildCache() flushes first and then reads every module's state back
+        // out of the table, so the write above is what it sees.
+        //
+        // NO PROCESS-WIDE SHADOW IS NEEDED ANY MORE. There used to be one -
+        // a static `$written` array - because option() memoises per key into a
+        // static with nothing that can clear it, so a second toggle in one
+        // process re-read the value the key had the first time and wrote a
+        // loader cache that disagreed with the options table. A table read has
+        // no such cache, so flush() is the whole of it.
         $this->rebuildCache();
 
         return $state;
@@ -190,7 +261,7 @@ class Module extends Action
 
     /**
      * How Many Modules Are Installed
-     * @param array $where Ignored - modules are not queried
+     * @param array $where Ignored - the list is whatever is on disk
      * @return int
      */
     public function count(array $where = []): int
@@ -208,19 +279,20 @@ class Module extends Action
     // "enabled" would show a green tick beside a module that is doing nothing.
 
     /**
-     * Which Modules Are Switched On, According To The Options Table
+     * Which Modules Are Switched On
      *
-     * Only ones actually on disk. An option left behind by a module somebody
-     * deleted by hand would otherwise sit in the cache forever - the option key
-     * is the only trace such a module leaves.
+     * Only ones actually on disk. A row left behind by a module somebody
+     * deleted by hand would otherwise sit in the loader's cache for ever - and
+     * that row is the only trace such a module leaves, which is exactly why it
+     * is kept rather than deleted.
      * @return string[]
      */
     public function enabledUids(): array
     {
         $uids = [];
 
-        foreach (array_keys($this->all()) as $uid) {
-            if ($this->isEnabled((string) $uid)) {
+        foreach ($this->all() as $uid => $module) {
+            if (!empty($module['enabled'])) {
                 $uids[] = (string) $uid;
             }
         }
@@ -229,7 +301,7 @@ class Module extends Action
     }
 
     /**
-     * Write The Loader's Cache From The Options Table
+     * Write The Loader's Cache From The Table
      *
      * `ModuleManager` runs during composer's autoload, where there is no
      * database and no `option()`, so it reads a generated file instead. This is
@@ -283,7 +355,7 @@ class Module extends Action
     }
 
     /**
-     * Forget What Was Read Off Disk
+     * Forget What Was Read Off Disk And Out Of The Table
      * @return void
      */
     public function flush(): void
@@ -315,6 +387,118 @@ class Module extends Action
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
+
+    /**
+     * Everything The Table Holds, Keyed By Uid
+     *
+     * Wrapped, because this is reached from `GlobalPipeline` on a request that
+     * may be running before the table exists - during an install, or on the one
+     * request between deploying a new release and migrating it. A modules screen
+     * that 500s is a modules screen nobody can switch anything off from, which
+     * is the failure this whole class is shaped around.
+     * @return array<string,array>
+     */
+    private function rows(): array
+    {
+        try {
+            $rows = $this->model()->get();
+        } catch (Throwable) {
+            return [];
+        }
+
+        $keyed = [];
+
+        foreach ($rows as $row) {
+            $keyed[(string) $row['uid']] = $row;
+        }
+
+        return $keyed;
+    }
+
+    /**
+     * Bring One Module's Row Into Line With Its Manifest
+     *
+     * ONLY WHEN SOMETHING ACTUALLY DIFFERS. Without that guard every load of the
+     * modules screen would write a row per module and move `module_updated_at`
+     * on all of them - which turns "when did this last change", the one question
+     * the column exists to answer, into "when was this page last opened".
+     *
+     * The manifest wins on every field it owns. `is_enabled` is not one of them:
+     * the switch is the operator's and a module does not get a vote on it.
+     * @param string $uid Module Uid
+     * @param array $module What Is On Disk
+     * @param ?array $row What The Table Holds, If Anything
+     * @return int The row's id, or 0 if it could not be recorded
+     */
+    private function record(string $uid, array $module, ?array $row): int
+    {
+        try {
+            if ($row === null) {
+                return $this->insertRow($uid, $module, false);
+            }
+
+            $changed = [];
+
+            foreach ($this->manifestColumns($module) as $column => $value) {
+                if ((string) ($row[$column] ?? '') !== (string) $value) {
+                    $changed[$column] = $value;
+                }
+            }
+
+            if ($changed !== []) {
+                $this->update((int) $row['module_id'], $changed);
+            }
+
+            return (int) $row['module_id'];
+        } catch (Throwable) {
+            // Reconciliation is bookkeeping, not behaviour. A read-only database
+            // or a table that has not been migrated yet must not stop an
+            // operator seeing what is installed.
+            return (int) ($row['module_id'] ?? 0);
+        }
+    }
+
+    /**
+     * Record a Module We Have Not Met Before
+     * @param string $uid Module Uid
+     * @param array $module What Is On Disk
+     * @param bool $enabled Whether It Is Switched On
+     * @return int The new row's id
+     */
+    private function insertRow(string $uid, array $module, bool $enabled): int
+    {
+        return (int) $this->model()->insert($this->stamp(
+            $this->manifestColumns($module) + [
+                'uid'          =>  $uid,
+                'is_enabled'   =>  $enabled ? 'yes' : 'no',
+                'installed_at' =>  $this->now(),
+            ],
+            true
+        ));
+    }
+
+    /**
+     * The Columns A Manifest Owns
+     *
+     * Everything here is a copy of something on disk, so it is safe to overwrite
+     * from the manifest on every reconcile. `is_enabled` and `installed_at` are
+     * deliberately absent: one belongs to the operator, the other to the first
+     * time we saw the directory.
+     * @param array $module What Is On Disk
+     * @return array<string,?string>
+     */
+    private function manifestColumns(array $module): array
+    {
+        return [
+            'module_type'   =>  (string) $module['type'],
+            'directory'     =>  (string) $module['directory'],
+            'module_name'   =>  (string) $module['name'],
+            'version'       =>  ((string) ($module['version'] ?? '')) ?: null,
+            'author'        =>  ((string) ($module['author'] ?? '')) ?: null,
+            'description'   =>  ((string) ($module['description'] ?? '')) ?: null,
+            'module_class'  =>  ((string) ($module['class'] ?? '')) ?: null,
+        ];
+    }
 
     /**
      * Read Every Manifest Of One Kind
@@ -358,14 +542,16 @@ class Module extends Action
         $directory = basename(dirname($file));
 
         $module = [
-            'uid'       =>  $this->uid($type, $directory),
-            'type'      =>  $type,
-            'directory' =>  $directory,
-            'path'      =>  dirname($file),
-            'name'      =>  $directory,
-            'version'   =>  '',
-            'author'    =>  '',
-            'error'     =>  null,
+            'uid'         =>  $this->uid($type, $directory),
+            'type'        =>  $type,
+            'directory'   =>  $directory,
+            'path'        =>  dirname($file),
+            'name'        =>  $directory,
+            'version'     =>  '',
+            'author'      =>  '',
+            'description' =>  '',
+            'class'       =>  '',
+            'error'       =>  null,
         ];
 
         try {
@@ -393,8 +579,8 @@ class Module extends Action
      * A Stable Identifier For a Module
      *
      * Derived from where it sits rather than stored, so it survives being
-     * disabled, deleted and put back - and so the enabled option key for
-     * `gateways/Stripe` is the same on every install.
+     * disabled, deleted and put back - and so the row for `gateways/Stripe` is
+     * keyed the same on every install.
      * @param string $type Subdirectory
      * @param string $directory Module Directory
      * @return string

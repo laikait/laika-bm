@@ -616,13 +616,10 @@ Url::group(ADMIN, function () use ($uid): void {
     /*=============================== MODULES ===============================*/
     Url::get('/modules', [ModuleController::class, 'index'])
         ->name('staff.modules')->pipeline([Permission::class . '|perm=module.read']);
-    // Registered ahead of the parameterised sibling as a matter of habit. These
-    // two cannot actually collide - /module/upload is two segments and the
-    // toggle route is three - but literal-before-parameterised is the rule that
-    // keeps this file safe to add to, since matching is first-match-wins and
-    // $uid happily matches a word like "upload".
-    Url::post('/module/upload', [ModuleController::class, 'upload'])
-        ->name('staff.module.upload')->pipeline([Permission::class . '|perm=module.create']);
+    // POST /module/upload was here until Phase 31. It is GONE rather than
+    // disabled: a route that still resolves is a door somebody finds, and the
+    // feature behind it wrote executable PHP into the application's own
+    // directory from a form on the admin panel.
     Url::post("/module/{module:{$uid}}/toggle", [ModuleController::class, 'toggle'])
         ->name('staff.module.toggle')->pipeline([Permission::class . '|perm=module.update']);
 
