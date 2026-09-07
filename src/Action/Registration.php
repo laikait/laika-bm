@@ -506,6 +506,22 @@ class Registration extends Action
 
         if ($id > 0) {
             $this->wasCreated = true;
+
+            // WHO THE NAME IS FOR, built from the client, at the moment the row
+            // exists. Without this the registrar call goes out with nobody on
+            // it - see Action\DomainContact.
+            //
+            // A client with no country cannot supply one and this answers false;
+            // that is NOT a reason to refuse the domain. The customer has paid,
+            // the record belongs in the table, and `register()` will refuse it
+            // with something staff can act on. Losing a paid order over a
+            // missing postcode would be the worse trade.
+            if (!(new DomainContact())->seedFor($id, $clientId)) {
+                (new Activity())->record(
+                    'domain.contact.missing',
+                    'Recorded ' . $name . ' with no registrant: the client has no complete address on file.'
+                );
+            }
         }
 
         return $id;
@@ -528,7 +544,13 @@ class Registration extends Action
 
         return [
             'client'      =>  is_array($client) ? $client : [],
-            'contacts'    =>  [],
+            // REAL CONTACTS, not an empty array. This key has been declared by
+            // RegistrarInterface::register() since Phase 9 and every call site
+            // passed `[]` until Phase 29 - so a driver was asked to register a
+            // name with nobody on it, and a registry either refuses that or
+            // fills the registrant slot with the API account holder, which makes
+            // the OPERATOR the legal owner of the customer's domain.
+            'contacts'    =>  (new DomainContact())->forRegistrar((int) ($domain['domain_id'] ?? 0)),
             'years'       =>  max(1, (new Tld())->yearsForCycle((string) ($domain['billing_cycle'] ?? 'annual'))),
 
             // Empty at registration, on purpose. A registrar defaults a new

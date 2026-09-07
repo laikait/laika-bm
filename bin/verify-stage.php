@@ -618,6 +618,27 @@ must_exist(
     'The facade cron reaches it through. Its absence is a fatal on every cron tick, not a missing feature.'
 );
 
+// Phase 29. Without these `domain_contacts` goes back to being a table with no
+// reader, and every registrar call goes back to carrying an empty `contacts`
+// array - which a registry either refuses, or fills with the API account
+// holder, making the OPERATOR the registrant of their customer's domain.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/DomainContact.php',
+    'Who a domain is registered to. Without it a registrar is asked to register a name with nobody named on it.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/DomainContact.php',
+    'The facade both domain screens reach it through. Its absence is a RelayException on /admin/domain, not a missing feature.'
+);
+
+// A registrar that records what it is handed and registers nothing. Planted
+// and removed by scratchpad/contactwalk.php; this is the check that notices
+// when a run died before its teardown.
+must_not_exist(
+    'modules/registrars/ContactProbe',
+    'Test fixture from contactwalk.php. It answers every availability check yes and registers nothing.'
+);
+
 // Phase 28. Without these `credit_notes` goes back to being a pair of tables
 // with no reader anywhere, and - worse - the admin Refund button goes back to
 // writing a ledger row and telling the payment processor nothing, so the books

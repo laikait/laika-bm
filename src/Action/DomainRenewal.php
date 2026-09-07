@@ -424,7 +424,9 @@ class DomainRenewal extends Action
 
         return [
             'client'      =>  is_array($client) ? $client : [],
-            'contacts'    =>  [],
+            // Real contacts - see Registration::contextFor() for why an empty
+            // array here was the bug rather than the default.
+            'contacts'    =>  (new DomainContact())->forRegistrar((int) ($domain['domain_id'] ?? 0)),
             'years'       =>  max(1, (new Tld())->yearsForCycle((string) ($domain['billing_cycle'] ?? 'annual'))),
             'nameservers' =>  [],
         ];

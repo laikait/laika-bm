@@ -421,6 +421,14 @@ Url::group(ADMIN, function () use ($uid): void {
     // Finishing a transfer the registry has approved. Staff-driven because
     // RegistrarInterface has no verb to ask a registrar how a transfer is
     // going - see Action\Transfer - so somebody has to say when it landed.
+    // Phase 29. Contacts are their own POST rather than fields on the edit
+    // form: a registry contact is eleven boxes per role and five roles, and
+    // folding that into the domain form would make saving a due date rewrite
+    // an address nobody touched - 26.1's unticked-checkbox trap, one table over.
+    Url::post("/domain/{domain:{$uid}}/contacts", [DomainController::class, 'contacts'])
+        ->name('staff.domain.contacts')->pipeline([Permission::class . '|perm=domain.update']);
+    Url::post("/domain/{domain:{$uid}}/contacts/clear", [DomainController::class, 'forgetContact'])
+        ->name('staff.domain.contact.clear')->pipeline([Permission::class . '|perm=domain.update']);
     Url::post("/domain/{domain:{$uid}}/complete-transfer", [DomainController::class, 'completeTransfer'])
         ->name('staff.domain.transfer.complete')->pipeline([Permission::class . '|perm=domain.update']);
 

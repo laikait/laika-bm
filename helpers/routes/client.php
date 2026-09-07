@@ -82,6 +82,13 @@ Url::group(PANEL, function () use ($uid): void {
     Url::post("/domain/{domain:{$uid}}/nameservers", [DomainController::class, 'nameservers'])
         ->name('client.domain.nameservers');
 
+    // Their own registry details. Writable here for the reason the
+    // nameservers are: it is the customer's own legal data, a registry
+    // publishes it, and somebody who has moved house should not need to
+    // open a ticket to correct what the world can look up about them.
+    Url::post("/domain/{domain:{$uid}}/contacts", [DomainController::class, 'contacts'])
+        ->name('client.domain.contacts');
+
     // Where the customer hands over the auth code for a transfer they have
     // paid for. POST only and never rendered back: it is a bearer credential -
     // whoever holds it can move the name - so it is stored encrypted and the

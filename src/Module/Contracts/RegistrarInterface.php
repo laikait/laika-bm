@@ -124,4 +124,40 @@ interface RegistrarInterface
      * @return array{success: bool, nameservers: string[], message: ?string, raw: array}
      */
     public function nameservers(array $domain, ?array $hosts = null, array $context = []): array;
+
+    /**
+     * Read Or Replace The Registry Contacts
+     *
+     * Added in Phase 29, and its absence was the same shape of hole
+     * `available()` was before 27.1. `register()` has declared a `contacts` key
+     * in its context since Phase 9 and every caller passed an EMPTY ARRAY, so a
+     * driver was asked to register a name with nobody named on it. A registry
+     * either refuses that or - worse, and this is what resellers actually hit -
+     * substitutes the account holder's own details, which makes the OPERATOR
+     * the registrant of their customer's domain.
+     *
+     * Safe to add for 27.1's reason: LBM has never shipped a registrar driver
+     * and this interface had no third-party implementations, so nobody can have
+     * one to break.
+     *
+     * Read and replace are one method for `nameservers()`'s reason - they are
+     * the same registry call with and without a payload, and two methods would
+     * be two implementations to keep in agreement about shape.
+     *
+     * Passing null reads. Passing a set replaces it. The return value is WHAT
+     * THE REGISTRY HOLDS afterwards, which is not always what was asked for: a
+     * registry may reject a field, normalise a country, or - for many endings -
+     * refuse a registrant change outright because that is a trade rather than
+     * an edit. Storing the request instead is how a panel comes to disagree
+     * with the registry about who owns a name.
+     *
+     * @param array $domain The `domains` row
+     * @param ?array<string,array> $contacts Null to read; otherwise keyed by
+     *   type - registrant, admin, tech, billing, abuse - each a flat array of
+     *   company_name, first_name, last_name, email, phone_cc, phone_number,
+     *   address1, address2, city, state, postcode and country (ISO 2)
+     * @param array $context See register()
+     * @return array{success: bool, contacts: array<string,array>, message: ?string, raw: array}
+     */
+    public function contacts(array $domain, ?array $contacts = null, array $context = []): array;
 }

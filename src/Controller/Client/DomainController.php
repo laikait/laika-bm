@@ -19,7 +19,9 @@ use Throwable;
 use RuntimeException;
 use Laika\Service\Request;
 use Laika\Core\Exceptions\HttpException;
+use LBM\Service\Country;
 use LBM\Service\Domain;
+use LBM\Service\DomainContact;
 use LBM\Service\Transfer;
 use LBM\Support\RegistersDomains;
 
@@ -104,6 +106,13 @@ class DomainController extends ClientController
         return $this->screen('domain', (string) $row['domain'], [
             'domain'      =>  $row,
             'nameservers' =>  Domain::nameservers((int) $row['domain_id']),
+
+            // Who the name is registered to. Their own legal data, which they
+            // must be able to see and correct - it is what a registry publishes
+            // about them.
+            'contacts'    =>  DomainContact::forDomain((int) $row['domain_id']),
+            'roles'       =>  DomainContact::types(),
+            'countries'   =>  Country::all(),
             'expired'     =>  Domain::isExpired($row),
             'days'        =>  Domain::daysToExpiry($row),
             'minimum'     =>  self::MINIMUM,
@@ -180,6 +189,69 @@ class DomainController extends ClientController
         );
 
         return $this->done('client.domain', local('auth_code_stored'), true, $back);
+    }
+
+    /**
+     * Correct The Details a Domain Is Registered To
+     *
+     * The customer's OWN legal data. A registry publishes it, and somebody who
+     * has moved house has to be able to fix it without opening a ticket - the
+     * same argument that makes nameservers writable here.
+     *
+     * Recorded FIRST and pushed second, exactly as the nameservers are, and for
+     * the same reason: when the registrar call fails, this install still holds
+     * what the customer asked for, which is what staff need in order to apply it
+     * by hand. A failure is when that matters most.
+     *
+     * WHAT THE REGISTRY HOLDS AFTERWARDS WINS. Many endings refuse a registrant
+     * change outright - it is a trade rather than an edit - so storing the
+     * request and calling it done is how a panel comes to disagree with the
+     * registry about who owns a name.
+     * @param string $domain Domain Uid
+     * @return ?string
+     */
+    public function contacts(string $domain): ?string
+    {
+        $this->allow('domain', self::UPDATE);
+
+        $row = $this->domain($domain);
+        $id = (int) $row['domain_id'];
+        $back = ['domain' => $row['uid']];
+
+        $type = trim((string) Request::input('type', ''));
+        $input = Request::inputs();
+
+        // Not attempt(), for nameservers()'s reason: the two outcomes are only
+        // distinguishable after the work has run, and attempt() builds its
+        // success message before it.
+        try {
+            if (!in_array($type, DomainContact::types(), true)) {
+                throw new RuntimeException('That is not a contact role this product knows about.');
+            }
+
+            DomainContact::put($id, $type, $input);
+
+            $applied = $this->pushContacts($row);
+
+            $this->log(
+                'domain.contacts.changed',
+                'Changed the ' . $type . ' contact on ' . $row['domain'] . '.'
+                . ($applied ? ' Applied at the registrar.' : ' Not applied at the registrar yet.')
+            );
+        } catch (HttpException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            return $this->done('client.domain', $e->getMessage(), false, $back);
+        }
+
+        return $this->done(
+            'client.domain',
+            $applied
+                ? local('domain_contacts_applied')
+                : local('domain_contacts_recorded'),
+            true,
+            $back
+        );
     }
 
     /**
@@ -300,6 +372,45 @@ class DomainController extends ClientController
 
         if (is_array($held) && $held !== []) {
             Domain::setNameservers((int) $row['domain_id'], $held);
+        }
+
+        return true;
+    }
+
+    /**
+     * Send The Contact Set To The Registrar
+     *
+     * The whole set rather than the one role that changed, because
+     * `RegistrarInterface::contacts()` replaces rather than patches - the same
+     * shape as `nameservers()`, and for the same reason.
+     * @param array $row Domain Row
+     * @return bool Whether the registry took it
+     */
+    private function pushContacts(array $row): bool
+    {
+        $driver = $this->driverForDomain($row);
+
+        if ($driver === null) {
+            return false;
+        }
+
+        $set = DomainContact::forRegistrar((int) $row['domain_id']);
+
+        // No registrant means no set at all - forRegistrar() answers empty
+        // rather than partial, because handing a driver admin-only contacts
+        // lets it fill the registrant slot itself.
+        if ($set === []) {
+            return false;
+        }
+
+        try {
+            $result = $driver->contacts($row, $set);
+        } catch (Throwable) {
+            return false;
+        }
+
+        if (!is_array($result) || empty($result['success'])) {
+            return false;
         }
 
         return true;
