@@ -80,6 +80,16 @@ function nav_admin(?string $current = null): array
     nav_item('clients',      'staff.clients',      'clients',      staff_has_access('client.read'),      $billing);
     nav_item('products',     'staff.products',     'products',     staff_has_access('product.read'),     $billing);
     nav_item('addons',       'staff.addons',       'plus',         staff_has_access('product.read'),     $billing);
+    // Beside the addons, because they are the same job seen twice: an extra
+    // sold alongside a plan, and a size the plan itself comes in.
+    //
+    // The same cog as Settings, further down, and that is the lesser evil.
+    // Icon::svg() falls back SILENTLY on a name it does not know, so an
+    // invented one ships a wrong picture rather than an error anybody would
+    // see - and of the icons that do exist, a cog is the only one that means
+    // configuration. Two cogs in different groups beats one wrong glyph.
+    nav_item('config_options', 'staff.config.options', 'settings',     staff_has_access('product.read'),     $billing);
+    nav_item('promos',       'staff.promos',       'megaphone',    staff_has_access('product.read'),     $billing);
     nav_item('orders',       'staff.orders',       'orders',       staff_has_access('order.read'),       $billing);
     // 'folder' rather than a services glyph, because there is not one: Icon::svg()
     // falls back silently on an unknown name, so a made-up icon name would ship a
@@ -87,11 +97,15 @@ function nav_admin(?string $current = null): array
     nav_item('services',     'staff.services',     'folder',       staff_has_access('order.read'),       $billing);
     nav_item('invoices',     'staff.invoices',     'invoices',     staff_has_access('invoice.read'),     $billing);
     nav_item('transactions', 'staff.transactions', 'transactions', staff_has_access('transaction.read'), $billing);
+    // Beside the ledger and behind the same permission: a credit note IS a
+    // ledger document, and 20.5's rule rules out a group of its own.
+    nav_item('credit_notes', 'staff.credit.notes', 'invoices', staff_has_access('transaction.read'), $billing);
 
     // Operations ------------------------------------------------------------
     $operations = nav_group('operations');
     nav_item('tickets', 'staff.tickets', 'tickets', staff_has_access('ticket.read'), $operations, 'support');
     nav_item('domains', 'staff.domains', 'domains', staff_has_access('domain.read'), $operations);
+    nav_item('tlds', 'staff.tlds', 'currency', staff_has_access('domain.read'), $operations, 'domain_pricing');
     nav_item('servers', 'staff.servers', 'servers', staff_has_access('server.read'), $operations);
 
     // Site content ----------------------------------------------------------
@@ -149,6 +163,9 @@ function nav_panel(?string $current = null): array
     nav_item('services', 'client.services', 'products', client_can('service.read'), $account);
     nav_item('domains',  'client.domains',  'domains',  client_can('domain.read'),  $account);
     nav_item('invoices', 'client.invoices', 'invoices', client_can('invoice.read'), $account);
+    // A credit note is the customer's document as much as the invoice is, and
+    // behind the same permission - there is no separate one to grant.
+    nav_item('credit_notes', 'client.credit.notes', 'invoices', client_can('invoice.read'), $account);
 
     $help = nav_group('help');
     nav_item('tickets', 'client.tickets', 'tickets', client_can('ticket.read'),  $help, 'support');
@@ -178,6 +195,7 @@ function nav_front(?string $current = null): array
     Nav::flush();
 
     nav_item('services',      'front.services',      null, true);
+    nav_item('domains',       'front.domains',       null, true);
     nav_item('knowledgebase', 'front.knowledgebase', null, true);
     nav_item('announcements', 'front.announcements', null, true);
     nav_item('support',       'front.support',       null, true);

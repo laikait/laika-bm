@@ -15,9 +15,13 @@ namespace LBM\Controller\Client;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use Throwable;
 use RuntimeException;
 use Laika\Service\Request;
+use Laika\Core\Exceptions\HttpException;
 use LBM\Service\Domain;
+use LBM\Service\Transfer;
+use LBM\Support\RegistersDomains;
 
 /**
  * A client's domains.
@@ -31,13 +35,29 @@ use LBM\Service\Domain;
  * money or move ownership, and both belong to a registrar module talking to a
  * real registrar rather than to a form that only updates this database.
  *
- * The nameserver write does not reach a registrar either - the registrar
- * runtime is a later phase - so it records the intent and the screen says so.
- * Silently storing a change and letting somebody believe their DNS moved would
- * be worse than not offering it.
+ * THE NAMESERVER WRITE NOW REACHES THE REGISTRAR, when there is a module for
+ * it. Until Phase 27.1 it did not, and the message it showed - "recorded and
+ * passed to support" - was not true either: nothing was passed anywhere, no
+ * ticket was raised and no email was sent. The row was written and that was
+ * all. The screen has been saying so to customers since Phase 8, on a table
+ * nothing could fill, so nobody had ever read it.
+ *
+ * Both outcomes are still possible and they are told apart, because they need
+ * opposite things from the customer:
+ *
+ *   - A module answered. The set the REGISTRY reports is what gets stored -
+ *     RegistrarInterface says outright that it is not always what was asked
+ *     for, and storing the request instead would leave this install disagreeing
+ *     with the only copy that matters.
+ *   - No module, or the call failed. The intent is recorded, staff are told
+ *     through the activity log, and the customer is told it has not taken
+ *     effect yet. Letting somebody believe their DNS had moved is the failure
+ *     worth avoiding here.
  */
 class DomainController extends ClientController
 {
+    use RegistersDomains;
+
     /** @var int The Fewest Nameservers a Domain Needs */
     private const MINIMUM = 2;
 
@@ -88,7 +108,78 @@ class DomainController extends ClientController
             'days'        =>  Domain::daysToExpiry($row),
             'minimum'     =>  self::MINIMUM,
             'maximum'     =>  self::MAXIMUM,
+
+            // Whether a change made here will actually reach the registrar.
+            // The screen has to say which, because the two outcomes ask
+            // different things of the customer - one is done, the other means
+            // waiting for somebody. Computed by building the driver, since a
+            // module named but not installed reads the same in the database as
+            // one that works.
+            'pushes'      =>  $this->driverForDomain($row) !== null,
+
+            // A transfer in progress asks something of the customer that a
+            // registration never does, and it is the only screen that can ask.
+            // Three states, and they need three different sentences: waiting
+            // on an auth code we do not have, sent to the registrar and
+            // waiting on them, or not a transfer at all.
+            'transfer'    =>  (string) ($row['type'] ?? '') === 'transfer',
+            'submitted'   =>  Transfer::wasSubmitted($row),
+
+            // Whether one is ON FILE, never what it is. An auth code is a
+            // bearer credential: whoever holds it can move the name, so it is
+            // written once and never rendered back to anybody at all.
+            'has_code'    =>  Transfer::authCode($row) !== null,
+            'needs_code'  =>  Transfer::needsCode($row),
         ]);
+    }
+
+    /**
+     * Take The Auth Code For a Transfer
+     *
+     * Stored encrypted through Domain::setEppCode() and never read back to a
+     * screen. The cron sweep picks the transfer up on its next tick, which is
+     * why this does not submit anything itself: a registry call inside a web
+     * request is a page that hangs on somebody else's network.
+     *
+     * Refused once the transfer has gone. Changing the code after submission
+     * cannot reach the registrar - the request is already with them - so
+     * accepting it would tell the customer something had been done when
+     * nothing had.
+     * @param string $domain Domain Uid
+     * @return ?string
+     */
+    public function authCode(string $domain): ?string
+    {
+        $this->allow('domain', self::UPDATE);
+
+        $row = $this->domain($domain);
+        $back = ['domain' => $row['uid']];
+
+        if ((string) ($row['type'] ?? '') !== 'transfer') {
+            return $this->done('client.domain', local('domain_not_a_transfer'), false, $back);
+        }
+
+        if (Transfer::wasSubmitted($row)) {
+            return $this->done('client.domain', local('domain_transfer_sent'), false, $back);
+        }
+
+        $code = trim((string) Request::input('auth_code', ''));
+
+        if ($code === '') {
+            return $this->done('client.domain', local('auth_code_required'), false, $back);
+        }
+
+        Domain::setEppCode((int) $row['domain_id'], $code);
+
+        // The code itself is NOT in the log line. An activity log is read by
+        // staff, exported and kept - putting a bearer credential in it undoes
+        // the encryption two lines above.
+        $this->log(
+            'domain.authcode.stored',
+            'Stored an auth code for the transfer of ' . $row['domain'] . '.'
+        );
+
+        return $this->done('client.domain', local('auth_code_stored'), true, $back);
     }
 
     /**
@@ -111,42 +202,108 @@ class DomainController extends ClientController
             ? $submitted
             : (preg_split('/[\s,]+/', (string) $submitted) ?: []);
 
-        return $this->attempt(
-            function () use ($id, $hosts, $row): void {
-                $clean = $this->clean($hosts);
+        $back = ['domain' => $row['uid']];
 
-                // Refused rather than stored: a domain with one nameserver is a
-                // domain that stops resolving the moment that host blinks, and
-                // an empty list is a domain that stops resolving at once.
-                if (count($clean) < self::MINIMUM) {
-                    throw new RuntimeException(
-                        'A domain needs at least ' . self::MINIMUM . ' nameservers.'
-                    );
-                }
+        // NOT attempt(), and that is the whole reason this reads differently
+        // from every other mutation in the client area. attempt() takes its
+        // success message as an argument, so the message is built before the
+        // work runs - and the two outcomes here are only distinguishable
+        // afterwards. Passing a flag the closure sets would read the value from
+        // before the call every time.
+        try {
+            $clean = $this->clean($hosts);
 
-                if (count($clean) > self::MAXIMUM) {
-                    throw new RuntimeException(
-                        'A domain takes at most ' . self::MAXIMUM . ' nameservers.'
-                    );
-                }
-
-                Domain::setNameservers($id, $clean);
-
-                $this->log(
-                    'domain.nameservers.changed',
-                    'Changed the nameservers on ' . $row['domain'] . '.',
-                    ['nameservers' => implode(', ', $clean)]
+            // Refused rather than stored: a domain with one nameserver is a
+            // domain that stops resolving the moment that host blinks, and an
+            // empty list is a domain that stops resolving at once.
+            if (count($clean) < self::MINIMUM) {
+                throw new RuntimeException(
+                    'A domain needs at least ' . self::MINIMUM . ' nameservers.'
                 );
-            },
+            }
+
+            if (count($clean) > self::MAXIMUM) {
+                throw new RuntimeException(
+                    'A domain takes at most ' . self::MAXIMUM . ' nameservers.'
+                );
+            }
+
+            // Recorded FIRST, deliberately. If the registrar call then fails,
+            // this install still holds what the customer asked for, which is
+            // exactly what staff need in order to apply it by hand. Calling
+            // first and storing only on success loses the request on every
+            // failure - and a failure is when it is most needed.
+            Domain::setNameservers($id, $clean);
+
+            $applied = $this->push($row, $clean);
+
+            $this->log(
+                'domain.nameservers.changed',
+                'Changed the nameservers on ' . $row['domain'] . '.'
+                . ($applied ? ' Applied at the registrar.' : ' Not applied at the registrar yet.'),
+                ['nameservers' => implode(', ', $clean)]
+            );
+        } catch (HttpException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            return $this->done('client.domain', $e->getMessage(), false, $back);
+        }
+
+        return $this->done(
             'client.domain',
-            local('nameservers_recorded'),
-            ['domain' => $row['uid']]
+            local($applied ? 'nameservers_applied' : 'nameservers_recorded'),
+            true,
+            $back
         );
     }
 
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
+
+    /**
+     * Send a Nameserver Change To The Registrar
+     *
+     * False for every way of not having reached the registry - no module for
+     * this registrar, a driver that threw, a driver that reported failure. The
+     * caller turns that into "recorded, not applied yet", which is a true
+     * sentence in all three cases and the only one a customer can act on.
+     *
+     * On success the set the REGISTRY reports is written back over the one that
+     * was asked for. RegistrarInterface says outright that they are not always
+     * the same, and where they differ the registry is right - this install
+     * holding a list the registry does not have is how somebody debugs DNS for
+     * an afternoon against the wrong facts.
+     * @param array $row Domain Row
+     * @param string[] $hosts Requested Nameservers
+     * @return bool Whether the registrar applied it
+     */
+    private function push(array $row, array $hosts): bool
+    {
+        $driver = $this->driverForDomain($row);
+
+        if ($driver === null) {
+            return false;
+        }
+
+        try {
+            $result = $driver->nameservers($row, $hosts);
+        } catch (Throwable) {
+            return false;
+        }
+
+        if (!is_array($result) || empty($result['success'])) {
+            return false;
+        }
+
+        $held = $result['nameservers'] ?? null;
+
+        if (is_array($held) && $held !== []) {
+            Domain::setNameservers((int) $row['domain_id'], $held);
+        }
+
+        return true;
+    }
 
     /**
      * Resolve One Of The Client's Own Domains, Or 404

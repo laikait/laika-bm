@@ -19,6 +19,7 @@ use Laika\Model\Model;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Product;
 use LBM\Service\Addon;
+use LBM\Service\ConfigOption;
 use LBM\Service\Currency;
 
 /**
@@ -117,6 +118,12 @@ class ServiceController extends FrontController
             // Active only. An extra the operator has switched off is not an
             // offer, and showing it greyed out is a control that does nothing.
             'addons'           =>  $this->addonsFor((int) $product['pid']),
+
+            // The sizes this plan comes in. Same rule as the addons above -
+            // active choices only - and the same pricing shape, for the same
+            // reason: the cycle is a radio on this form and the page cannot
+            // re-price itself when the visitor moves it.
+            'configs'          =>  $this->configFor((int) $product['pid']),
         ]);
     }
 
@@ -170,6 +177,100 @@ class ServiceController extends FrontController
                 'description'   =>  (string) ($addon['description'] ?? ''),
                 'pricing_model' =>  (string) ($addon['pricing_model'] ?? 'recurring'),
                 'prices'        =>  $prices,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The Configurable Options On One Product, Priced
+     *
+     * Every choice carries what it costs on EVERY cycle the operator sells
+     * it on, for addonsFor()'s reason - one cycle's figure would be right
+     * until the visitor moved the radio, and wrong silently afterwards.
+     *
+     * ONLY THE CYCLES THIS PRODUCT IS SOLD ON. A choice priced annually on a
+     * plan the operator only sells monthly can never be ordered - the cycle
+     * it needs is not on this form - so showing it is offering a dead end
+     * that refuses the whole line when it is picked.
+     *
+     * A CHOICE WITH NO PRICE LEFT IS DROPPED, and a non-text field left with
+     * no choices goes with it: a dropdown with nothing in it is a question
+     * nobody can answer, and a REQUIRED one in that state makes the plan
+     * unbuyable. Better found here than at the cart.
+     * @param int $productId Product ID
+     * @return array<int,array<string,mixed>>
+     */
+    private function configFor(int $productId): array
+    {
+        $currencyId = (int) (Currency::default()['currency_id'] ?? 0);
+
+        if ($currencyId <= 0) {
+            return [];
+        }
+
+        // The cycles the PLAN itself is sold on in this currency, which is
+        // exactly the set of radio buttons on the form beside these fields.
+        $sold = [];
+
+        foreach (Product::pricing($productId) as $row) {
+            if ((int) ($row['currency_relid'] ?? 0) === $currencyId) {
+                $sold[(int) $row['billing_cycle_relid']] = true;
+            }
+        }
+
+        $cycles = array_filter(
+            $this->cycles(),
+            static fn(int $id): bool => isset($sold[$id]),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        $out = [];
+
+        foreach (ConfigOption::forProduct($productId) as $group) {
+            $choices = [];
+
+            foreach ($group['subs'] as $sub) {
+                $subId = (int) $sub['pcos_id'];
+                $prices = [];
+
+                foreach ($cycles as $cycleId => $cycleName) {
+                    $price = ConfigOption::price($subId, $currencyId, (int) $cycleId);
+
+                    if (is_array($price)) {
+                        $prices[(string) $cycleName] = (string) $price['price'];
+                    }
+                }
+
+                if ($prices === []) {
+                    continue;
+                }
+
+                $choices[] = [
+                    'id'     =>  $subId,
+                    'name'   =>  (string) $sub['option_name'],
+                    'prices' =>  $prices,
+                ];
+            }
+
+            if ($group['type'] !== 'text' && $choices === []) {
+                continue;
+            }
+
+            $out[] = [
+                'id'          =>  (int) $group['pco_id'],
+                'name'        =>  (string) $group['name'],
+                'description' =>  (string) $group['description'],
+                'type'        =>  (string) $group['type'],
+                'required'    =>  (bool) $group['required'],
+
+                // The real clamp is in resolve(). This is the same number so
+                // the browser refuses what the server would have thrown away -
+                // read from the constant rather than typed into the template,
+                // where it would drift the first time the bound moved.
+                'max'         =>  ConfigOption::maxQuantity(),
+                'choices'     =>  $choices,
             ];
         }
 

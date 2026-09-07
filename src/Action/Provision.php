@@ -137,7 +137,12 @@ class Provision extends Action
 
         // Orders that have an invoice. Bounded so a backlog cannot make one
         // cron tick run for an hour.
-        $rows = $orders->where(['invoice_relid' => null], '!=')
+        // notNull(), NOT where([... => null], '!='). The second renders as
+        // `invoice_relid != NULL`, which is never true in SQL, so the sweep
+        // returned NOTHING - see the phase notes. It looked healthy because the
+        // cron line reads "0 created" whether there is nothing to do or the
+        // question cannot be answered.
+        $rows = $orders->notNull('invoice_relid')
             ->order($orders->id, self::DESC)
             ->limit(self::BATCH * 5)
             ->get();
@@ -175,16 +180,32 @@ class Provision extends Action
      *
      * Cancelled overrides both. An invoice paid and then cancelled is a refund
      * waiting to happen, not a service waiting to be built.
+     * Public because `Registration` asks the same question about the same
+     * invoices. Two sweeps with two definitions of "paid" is two sweeps that
+     * eventually disagree about one invoice, and the shape of that
+     * disagreement is a customer with a domain and no hosting.
      * @param array $invoice Invoice Row
      * @return bool
      */
-    private function isPaid(array $invoice): bool
+    public function isPaid(array $invoice): bool
     {
         $status = (int) ($invoice['status_relid'] ?? 0);
 
         $cancelled = Status::idOf(Invoice::STATUSES, 'cancelled');
 
         if ($cancelled !== null && $status === $cancelled) {
+            return false;
+        }
+
+        // And refunded, for a sharper version of the same reason - Phase 28.
+        // A cancelled invoice is "a refund waiting to happen"; a refunded one
+        // is the refund having happened. `amount_paid` is deliberately left
+        // standing when money goes back, so the arithmetic below still reads
+        // this invoice as settled and would hand over a service the customer
+        // has already been given their money back for.
+        $refunded = Status::idOf(Invoice::STATUSES, 'refunded');
+
+        if ($refunded !== null && $status === $refunded) {
             return false;
         }
 
@@ -554,6 +575,16 @@ class Provision extends Action
                 );
             }
         }
+
+        // The CONFIGURATION, copied off the line that leads the group. It is
+        // the recurring line, which is the one the order form put the answers
+        // on - the setup-fee line beside it is the same purchase said twice,
+        // and copying from both would configure the service in duplicate.
+        //
+        // No money moves here. The chosen sizes are already inside the lead
+        // line's `amount`, which is what client_services.amount was set from
+        // above and what every renewal is billed off - see Action\ConfigOption.
+        (new ConfigOption())->copyToService((int) $lead['order_item_id'], $serviceId);
 
         // Point EVERY line in the group at it - the setup-fee line and the
         // addons included - so the marker is complete and a second run has

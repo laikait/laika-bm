@@ -20,6 +20,7 @@ use Laika\Service\Request;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Activity;
 use LBM\Service\Addon;
+use LBM\Service\ConfigOption;
 use LBM\Service\Currency;
 use LBM\Service\Product;
 
@@ -138,6 +139,16 @@ class ProductController extends AdminController
                     Addon::mapToProduct(
                         (int) $row['pid'],
                         is_array($input['addons'] ?? null) ? $input['addons'] : []
+                    );
+                }
+
+                // The configurable options, with their own marker for the
+                // same reason - two checkbox sections on one form, and a
+                // shared marker would let either of them wipe the other.
+                if (!empty($input['config_groups_present'])) {
+                    ConfigOption::mapToProduct(
+                        (int) $row['pid'],
+                        is_array($input['config_groups'] ?? null) ? $input['config_groups'] : []
                     );
                 }
 
@@ -262,6 +273,12 @@ class ProductController extends AdminController
             // or saving the form would silently unmap it.
             'addons'   =>  Addon::listing(),
             'mapped'   =>  $productId > 0 ? Addon::mappedIds($productId) : [],
+
+            // Every group, active choices or not, for the reason above it: a
+            // plan already offering one has to show it ticked or saving the
+            // form silently unmaps it.
+            'configs'  =>  ConfigOption::listing(),
+            'configured' =>  $productId > 0 ? ConfigOption::mappedIds($productId) : [],
         ]);
     }
 

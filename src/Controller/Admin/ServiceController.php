@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Request;
 use LBM\Service\Addon;
+use LBM\Service\ConfigOption;
 use LBM\Service\Client;
 use LBM\Service\ClientService;
 use LBM\Service\Dunning;
@@ -115,6 +116,7 @@ class ServiceController extends AdminController
             // order is what they bought once and this is what they are billed
             // for every cycle - and after the first renewal those diverge.
             'addons'      =>  Addon::detailedFor($serviceId),
+            'config'      =>  ConfigOption::detailedFor($serviceId),
             'addon_total' =>  Addon::totalFor($serviceId),
 
             'ends_at'    =>  Termination::scheduledFor($row),

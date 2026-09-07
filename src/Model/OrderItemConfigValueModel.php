@@ -17,13 +17,13 @@ defined('APP_PATH') || http_response_code(403).die('403 Direct Access Denied!');
 
 use Laika\Model\Model;
 
-class CreditNoteModel extends Model
+class OrderItemConfigValueModel extends Model
 {
     // Table Name
-    protected string $table = 'credit_notes';
+    protected string $table = 'order_item_config_values';
 
     // Primary Column Name
-    protected string $id = 'credit_note_id';
+    protected string $id = 'oicv_id';
 
     /** @var string UID Column Name */
     protected string $uid = 'uid';
@@ -39,17 +39,11 @@ class CreditNoteModel extends Model
 
     /** @var array<string,string> Casts, derived from the column types in the schema */
     protected array $casts = [
-        'credit_note_id' =>  'int',
-        'client_relid'   =>  'int',
-
-        // Nullable in the table, and the cast turns a stored NULL into 0 - so
-        // every reader asks `> 0` rather than `!== null`. Same shape as
-        // TransactionModel's own invoice_relid, and the trap 26.2 documented.
-        'invoice_relid'  =>  'int',
-        'currency_relid' =>  'int',
-        'amount'         =>  'decimal',
-        'used_amount'    =>  'decimal',
-        'status_relid'   =>  'int',
+        'oicv_id'          =>  'int',
+        'order_item_relid' =>  'int',
+        'pco_relid'        =>  'int',
+        'pcos_relid'       =>  'int',
+        'quantity'         =>  'int',
     ];
 
     // Start Code From Here

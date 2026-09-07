@@ -19,6 +19,7 @@ use Laika\Service\Request;
 use LBM\Service\Client;
 use LBM\Service\Currency;
 use LBM\Service\Invoice;
+use LBM\Service\Refund;
 use LBM\Service\Transaction;
 
 /**
@@ -114,36 +115,60 @@ class TransactionController extends AdminController
             'transaction' =>  $row,
             'client'      =>  Client::find((int) $row['client_relid']),
             'invoice'     =>  $row['invoice_relid'] ? Invoice::find((int) $row['invoice_relid']) : null,
-            'refunded'    =>  Transaction::refundedAgainst((int) $row['tx_id']),
+            'refunded'    =>  Refund::refundedOn((int) ($row['invoice_relid'] ?? 0)),
+
+            // What can still go back, which is what the operator is deciding
+            // about - not what has already gone. Zero hides the whole panel.
+            'refundable'  =>  Refund::refundableOn($row),
+
+            // Null when the processor can be asked. Anything else is a REASON,
+            // and the screen prints it: a Refund button that is simply absent
+            // is a support ticket, and the four reasons need four different
+            // things done about them.
+            'refusal'     =>  Refund::gatewayRefusal($row),
+            'gateway'     =>  Refund::gatewayFor($row),
         ]);
     }
 
     /**
-     * Refund a Payment
+     * Refund a Payment Through Its Gateway
+     *
+     * THE PROCESSOR IS ASKED FIRST and nothing is written unless it agrees.
+     * Until Phase 28 this route wrote a ledger row and told nobody: the money
+     * stayed in the merchant account and every screen in the product said it
+     * had gone back.
      * @param string $transaction Transaction Uid
      * @return ?string
      */
     public function refund(string $transaction): ?string
     {
-        $row = $this->record(Transaction::find($transaction), 'transaction');
-        $input = Request::inputs();
+        return $this->giveBack($transaction, 'gateway');
+    }
 
-        $amount = trim((string) ($input['amount'] ?? ''));
+    /**
+     * Record a Refund The Operator Has Already Made
+     *
+     * Its own route and its own button, never a fallback from the one above -
+     * a failed API call that silently became a bookkeeping entry is the bug
+     * this phase exists to remove, rebuilt with more steps.
+     * @param string $transaction Transaction Uid
+     * @return ?string
+     */
+    public function refundByHand(string $transaction): ?string
+    {
+        return $this->giveBack($transaction, 'manual');
+    }
 
-        return $this->attempt(
-            function () use ($row, $input, $amount): void {
-                Transaction::refund(
-                    (int) $row['tx_id'],
-                    $amount !== '' ? $amount : null,
-                    (string) ($input['reason'] ?? '')
-                );
-
-                $this->log('transaction.refunded', 'Refunded transaction #' . $row['tx_id']);
-            },
-            'staff.transaction',
-            local('refund_recorded'),
-            ['transaction' => $row['uid']]
-        );
+    /**
+     * Give It Back As Account Credit Instead
+     *
+     * No money moves. The customer keeps the value and a credit note says why.
+     * @param string $transaction Transaction Uid
+     * @return ?string
+     */
+    public function refundToCredit(string $transaction): ?string
+    {
+        return $this->giveBack($transaction, 'credit');
     }
 
     /**
@@ -169,6 +194,50 @@ class TransactionController extends AdminController
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
+
+    /**
+     * The Three Ways Money Comes Back
+     *
+     * One private method because the reading, the validation and the redirect
+     * are identical; three public routes because the ACTS are not, and a single
+     * route taking the choice as a posted field would be one mis-typed value
+     * away from sending real money through a processor.
+     * @param string $transaction Transaction Uid
+     * @param string $how gateway, manual or credit
+     * @return ?string
+     */
+    private function giveBack(string $transaction, string $how): ?string
+    {
+        $row = $this->record(Transaction::find($transaction), 'transaction');
+        $input = Request::inputs();
+
+        $amount = trim((string) ($input['amount'] ?? ''));
+        $amount = $amount !== '' ? $amount : null;
+        $reason = (string) ($input['reason'] ?? '');
+
+        return $this->attempt(
+            function () use ($row, $how, $amount, $reason): void {
+                match ($how) {
+                    'gateway' => Refund::throughGateway((int) $row['tx_id'], $amount, $reason),
+                    'manual'  => Refund::byHand((int) $row['tx_id'], $amount, $reason),
+                    default   => Refund::toCredit((int) $row['tx_id'], $amount, $reason),
+                };
+
+                $this->log(
+                    'transaction.refunded',
+                    match ($how) {
+                        'gateway' => 'Refunded transaction #' . $row['tx_id'] . ' through the gateway.',
+                        'manual'  => 'Recorded a refund made outside the system against transaction #'
+                            . $row['tx_id'] . '.',
+                        default   => 'Credited transaction #' . $row['tx_id'] . ' to the account.',
+                    }
+                );
+            },
+            'staff.transaction',
+            local($how === 'credit' ? 'credit_note_issued' : 'refund_recorded'),
+            ['transaction' => $row['uid']]
+        );
+    }
 
     /**
      * Client Choices

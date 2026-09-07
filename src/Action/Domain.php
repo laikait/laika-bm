@@ -20,7 +20,10 @@ use LBM\Model\ClientModel;
 use LBM\Model\DomainModel;
 use LBM\Model\DomainNameserverModel;
 use LBM\Service\Money;
+use Laika\Service\Vault;
+use Throwable;
 use LBM\Service\Status;
+use RuntimeException;
 use Laika\Service\Uid;
 
 /**
@@ -159,6 +162,85 @@ class Domain extends Action
     }
 
     /**
+     * Create a Domain Record
+     *
+     * The first writer this table has ever had. Until Phase 27.1 `domains` was
+     * a table three screens read and nothing filled, which is why an operator
+     * could open Domains on a working install and find it permanently empty.
+     *
+     * A new domain starts `pending`: the row says the customer has bought the
+     * name, and the registrar module has not yet been told. `Registration`
+     * moves it to `active` on the registry answer, and a domain whose ending
+     * has no registrar module stays pending for whoever registers names by
+     * hand - the same three states a service has.
+     * @param array $input Submitted Data
+     * @return int The new domain id
+     * @throws RuntimeException
+     */
+    public function store(array $input): int
+    {
+        $data = $this->fields($input);
+
+        $name = (string) ($data['domain'] ?? '');
+
+        if ($name === '') {
+            throw new RuntimeException('A domain record needs a name.');
+        }
+
+        if ((int) ($data['client_relid'] ?? 0) <= 0) {
+            throw new RuntimeException('A domain record needs an owner.');
+        }
+
+        // `domain` is UNIQUE. Checked here so the caller gets a sentence it can
+        // put in front of somebody, rather than a driver exception out of a
+        // cron tick - and because the row that already holds the name is the
+        // thing the caller needs to look at next.
+        if ($this->byName($name) !== null) {
+            throw new RuntimeException('That domain is already recorded here.');
+        }
+
+        $data['status_relid'] ??= $this->statusId('pending') ?? 1;
+        $data['type'] ??= 'register';
+
+        return $this->create($data);
+    }
+
+    /**
+     * One Domain By Its Name
+     *
+     * The `domain` column is UNIQUE across the whole install, so this answers
+     * "does anybody already have this" - a different question from "does this
+     * client have it", and the checkout path needs the first one.
+     * @param string $domain Domain Name
+     * @return ?array
+     */
+    public function byName(string $domain): ?array
+    {
+        $domain = strtolower(trim($domain));
+
+        if ($domain === '') {
+            return null;
+        }
+
+        $row = $this->model()->where(['domain' => $domain])->first();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Move a Domain To a Named Status
+     * @param int $domainId Domain ID
+     * @param string $status Status Name
+     * @return int Affected rows
+     */
+    public function setStatus(int $domainId, string $status): int
+    {
+        $id = $this->statusId($status);
+
+        return $id === null ? 0 : $this->update($domainId, ['status_relid' => $id]);
+    }
+
+    /**
      * Update a Domain
      * @param int|string $key Domain ID Or Uid
      * @param array $input Submitted Data
@@ -167,6 +249,58 @@ class Domain extends Action
     public function modify(int|string $key, array $input): int
     {
         return $this->update($key, $this->fields($input));
+    }
+
+    /**
+     * Store An Auth Code, Encrypted
+     *
+     * `domains.epp_code` has said "encrypted" in the schema since Phase 0 and
+     * nothing ever wrote it - 27.1 noted that and left it. This is the writer,
+     * and it is the same Vault the server and service passwords go through.
+     *
+     * An auth code is a bearer credential: whoever holds it can move the name
+     * away. It is written once, never rendered back to anybody, and cleared
+     * the moment the transfer completes - it is spent by then, and a spent
+     * credential kept is a credential that can leak.
+     * @param int $domainId Domain ID
+     * @param ?string $code The Code, Or Null To Clear It
+     * @return int Affected rows
+     */
+    public function setEppCode(int $domainId, ?string $code): int
+    {
+        $code = $code === null ? null : trim($code);
+
+        return $this->update($domainId, [
+            'epp_code' =>  $code === null || $code === '' ? null : Vault::encrypt($code),
+        ]);
+    }
+
+    /**
+     * Read An Auth Code Back
+     *
+     * Null when there is none AND when there is one that will not decrypt,
+     * which happens if the app key changed. ClientService::credential() makes
+     * the same choice for the same reason: a credential that cannot be read is
+     * not a reason to stop a page rendering, and here it is not a reason to
+     * stop a cron tick either - the transfer simply waits for a new code.
+     * @param array $domain Domain Row
+     * @return ?string
+     */
+    public function eppCode(array $domain): ?string
+    {
+        $stored = $domain['epp_code'] ?? null;
+
+        if (!is_string($stored) || $stored === '') {
+            return null;
+        }
+
+        try {
+            $plain = Vault::decrypt($stored);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return is_string($plain) && $plain !== '' ? $plain : null;
     }
 
     /**

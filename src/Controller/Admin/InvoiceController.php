@@ -18,10 +18,12 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use RuntimeException;
 use Laika\Service\Request;
 use LBM\Service\Client;
+use LBM\Service\CreditNote;
 use LBM\Service\Currency;
 use LBM\Service\Invoice;
 use LBM\Service\Mail;
 use LBM\Service\Money;
+use LBM\Service\Refund;
 use LBM\Service\Transaction;
 
 /**
@@ -119,6 +121,14 @@ class InvoiceController extends AdminController
             'tax_bands'    =>  Invoice::taxBreakdown((int) $row['invoice_id']),
             'settled'      =>  Invoice::isSettled($row),
             'overdue'      =>  Invoice::isOverdue($row),
+
+            // Both DERIVED, neither stored. A refund does not reduce
+            // `amount_paid` - see Action\Refund - so the money that came back
+            // is only visible if the screen goes and asks the ledger for it.
+            'refunded'     =>  Refund::refundedOn($id),
+            'credit_notes' =>  CreditNote::forInvoice($id),
+            'credited'     =>  CreditNote::creditedAgainst($id),
+            'creditable'   =>  CreditNote::creditableOn($row),
         ]);
     }
 

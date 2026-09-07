@@ -33,12 +33,16 @@ use LBM\Controller\Admin\InvoiceController;
 use LBM\Controller\Admin\ProductController;
 use LBM\Controller\Admin\ProfileController;
 use LBM\Controller\Admin\AddonController;
+use LBM\Controller\Admin\ConfigOptionController;
+use LBM\Controller\Admin\PromoController;
+use LBM\Controller\Admin\TldController;
 use LBM\Controller\Admin\AnnouncementController;
 use LBM\Controller\Admin\KnowledgeBaseController;
 use LBM\Controller\Admin\ActivityController;
 use LBM\Controller\Admin\CurrencyController;
 use LBM\Controller\Admin\SettingsController;
 use LBM\Controller\Admin\DashboardController;
+use LBM\Controller\Admin\CreditNoteController;
 use LBM\Controller\Admin\TransactionController;
 
 ####################################################################################
@@ -182,6 +186,74 @@ Url::group(ADMIN, function () use ($uid): void {
     Url::post("/addon/{addon:{$uid}}/delete", [AddonController::class, 'delete'])
         ->name('staff.addon.delete')->pipeline([Permission::class . '|perm=product.delete']);
 
+    /**
+     * Configurable options - how one product is sold in more than one size.
+     *
+     * Behind `product` too, and for the addon screens' reason above: this is
+     * catalogue, and 20.5's rule says a group of its own would be invisible
+     * on every install that already exists.
+     *
+     * `/config-options/new` before `/config-option/{option}` - first-match
+     * wins in registration order and $uid matches the literal "new".
+     *
+     * The choice routes hang off the OPTION rather than carrying a sub uid of
+     * their own. A choice has no screen and no permission story separate from
+     * the field it belongs to, and the controller checks the posted sub really
+     * is one of that field's - a route parameter would look like it had made
+     * that check when it had not.
+     */
+    Url::get('/config-options', [ConfigOptionController::class, 'index'])
+        ->name('staff.config.options')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get('/config-options/new', [ConfigOptionController::class, 'create'])
+        ->name('staff.config.option.new')->pipeline([Permission::class . '|perm=product.create']);
+    Url::post('/config-options/new', [ConfigOptionController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=product.create']);
+
+    Url::get("/config-option/{option:{$uid}}", [ConfigOptionController::class, 'show'])
+        ->name('staff.config.option')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get("/config-option/{option:{$uid}}/edit", [ConfigOptionController::class, 'edit'])
+        ->name('staff.config.option.edit')->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/config-option/{option:{$uid}}/edit", [ConfigOptionController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=product.update']);
+
+    Url::post("/config-option/{option:{$uid}}/choice", [ConfigOptionController::class, 'addChoice'])
+        ->name('staff.config.choice.add')->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/config-option/{option:{$uid}}/choice/edit", [ConfigOptionController::class, 'editChoice'])
+        ->name('staff.config.choice.edit')->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/config-option/{option:{$uid}}/choice/delete", [ConfigOptionController::class, 'deleteChoice'])
+        ->name('staff.config.choice.delete')->pipeline([Permission::class . '|perm=product.delete']);
+
+    Url::post("/config-option/{option:{$uid}}/delete", [ConfigOptionController::class, 'delete'])
+        ->name('staff.config.option.delete')->pipeline([Permission::class . '|perm=product.delete']);
+
+    /**
+     * Promotional codes.
+     *
+     * Behind `product` too, for the reason above it: a code is priced beside
+     * the catalogue, and 20.5's rule says a group of its own would be
+     * invisible on every install that already exists.
+     *
+     * `/promos/new` before `/promo/{promo}` - first-match wins in
+     * registration order and $uid matches the literal "new".
+     */
+    Url::get('/promos', [PromoController::class, 'index'])
+        ->name('staff.promos')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get('/promos/new', [PromoController::class, 'create'])
+        ->name('staff.promo.new')->pipeline([Permission::class . '|perm=product.create']);
+    Url::post('/promos/new', [PromoController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=product.create']);
+
+    Url::get("/promo/{promo:{$uid}}/edit", [PromoController::class, 'edit'])
+        ->name('staff.promo.edit')->pipeline([Permission::class . '|perm=product.update']);
+    Url::post("/promo/{promo:{$uid}}/edit", [PromoController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=product.update']);
+
+    Url::post("/promo/{promo:{$uid}}/delete", [PromoController::class, 'delete'])
+        ->name('staff.promo.delete')->pipeline([Permission::class . '|perm=product.delete']);
+
     Url::get('/product-groups', [ProductController::class, 'groups'])
         ->name('staff.product.groups')->pipeline([Permission::class . '|perm=product.read']);
     Url::post('/product-groups', [ProductController::class, 'groupSave'])
@@ -288,6 +360,31 @@ Url::group(ADMIN, function () use ($uid): void {
 
     Url::post("/transaction/{transaction:{$uid}}/refund", [TransactionController::class, 'refund'])
         ->name('staff.transaction.refund')->pipeline([Permission::class . '|perm=transaction.update']);
+
+    // Three routes rather than one taking a posted choice. They are three
+    // different acts - one asks a processor to move real money, one records
+    // money the operator has already moved, and one moves none at all - and a
+    // single route would be one mis-typed field away from picking the wrong.
+    Url::post("/transaction/{transaction:{$uid}}/refund-by-hand", [TransactionController::class, 'refundByHand'])
+        ->name('staff.transaction.refund.manual')->pipeline([Permission::class . '|perm=transaction.update']);
+    Url::post("/transaction/{transaction:{$uid}}/refund-to-credit", [TransactionController::class, 'refundToCredit'])
+        ->name('staff.transaction.refund.credit')->pipeline([Permission::class . '|perm=transaction.update']);
+
+    // Credit notes, behind `transaction` - 20.5's rule. The literal /new
+    // registers before the parameterised sibling below it, because matching is
+    // first-match-wins in registration order and {note} matches "new".
+    Url::get('/credit-notes', [CreditNoteController::class, 'index'])
+        ->name('staff.credit.notes')->pipeline([Permission::class . '|perm=transaction.read']);
+
+    Url::get('/credit-notes/new', [CreditNoteController::class, 'create'])
+        ->name('staff.credit.note.new')->pipeline([Permission::class . '|perm=transaction.create']);
+    Url::post('/credit-notes/new', [CreditNoteController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=transaction.create']);
+
+    Url::get("/credit-note/{note:{$uid}}", [CreditNoteController::class, 'show'])
+        ->name('staff.credit.note')->pipeline([Permission::class . '|perm=transaction.read']);
+    Url::post("/credit-note/{note:{$uid}}/void", [CreditNoteController::class, 'void'])
+        ->name('staff.credit.note.void')->pipeline([Permission::class . '|perm=transaction.update']);
     Url::post("/transaction/{transaction:{$uid}}/delete", [TransactionController::class, 'delete'])
         ->name('staff.transaction.delete')->pipeline([Permission::class . '|perm=transaction.delete']);
 
@@ -321,8 +418,42 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.domain')->pipeline([Permission::class . '|perm=domain.read']);
     Url::get("/domain/{domain:{$uid}}/edit", [DomainController::class, 'edit'])
         ->name('staff.domain.edit')->pipeline([Permission::class . '|perm=domain.update']);
+    // Finishing a transfer the registry has approved. Staff-driven because
+    // RegistrarInterface has no verb to ask a registrar how a transfer is
+    // going - see Action\Transfer - so somebody has to say when it landed.
+    Url::post("/domain/{domain:{$uid}}/complete-transfer", [DomainController::class, 'completeTransfer'])
+        ->name('staff.domain.transfer.complete')->pipeline([Permission::class . '|perm=domain.update']);
+
     Url::post("/domain/{domain:{$uid}}/edit", [DomainController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=domain.update']);
+
+    /*
+     * The domain price list.
+     *
+     * Behind `domain` rather than a group of its own. Unlike the addon screens
+     * this needs no argument from 20.5: the group already exists and is already
+     * granted on every install, because the domain screens have been there
+     * since Phase 8 - it is the TABLE that was empty, not the permission.
+     *
+     * `/tlds/new` registers BEFORE `/tld/{tld}` for the reason every literal
+     * does in this file: matching is first-match-wins in registration order and
+     * the uid pattern would swallow `new`.
+     */
+    Url::get('/tlds', [TldController::class, 'index'])
+        ->name('staff.tlds')->pipeline([Permission::class . '|perm=domain.read']);
+
+    Url::get('/tlds/new', [TldController::class, 'create'])
+        ->name('staff.tld.new')->pipeline([Permission::class . '|perm=domain.create']);
+    Url::post('/tlds/new', [TldController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=domain.create']);
+
+    Url::get("/tld/{tld:{$uid}}/edit", [TldController::class, 'edit'])
+        ->name('staff.tld.edit')->pipeline([Permission::class . '|perm=domain.update']);
+    Url::post("/tld/{tld:{$uid}}/edit", [TldController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=domain.update']);
+
+    Url::post("/tld/{tld:{$uid}}/delete", [TldController::class, 'delete'])
+        ->name('staff.tld.delete')->pipeline([Permission::class . '|perm=domain.delete']);
 
     /*=============================== SERVERS ===============================*/
     Url::get('/servers', [ServerController::class, 'index'])

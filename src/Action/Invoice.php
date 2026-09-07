@@ -344,6 +344,13 @@ class Invoice extends Action
         return array_values(array_filter([
             Status::idOf(self::STATUSES, 'paid'),
             Status::idOf(self::STATUSES, 'cancelled'),
+
+            // Phase 28. A refunded invoice owes nothing: the money arrived and
+            // then went back, and `amount_paid` still records that it arrived,
+            // so its balance is zero and chasing it would be chasing a customer
+            // for a bill the operator has just reversed. Without this it would
+            // appear on the unpaid listing at zero for ever.
+            Status::idOf(self::STATUSES, 'refunded'),
         ]));
     }
 
@@ -690,6 +697,13 @@ class Invoice extends Action
         if ($settled) {
             (new Provision())->forInvoice($invoiceId);
 
+            // Domains, the same way and for the same reason. A separate sweep
+            // rather than a branch inside Provision: a domain has no server, no
+            // provisioning module and no service row, and folding two chains
+            // that share nothing but a trigger into one class is how the next
+            // reader stops being able to tell which rules apply to which.
+            (new Registration())->forInvoice($invoiceId);
+
             // And the other direction: a service this invoice was holding
             // suspended comes back now rather than at the next tick. Dunning
             // checks its own switch and every other condition itself, so this
@@ -743,6 +757,12 @@ class Invoice extends Action
 
         (new Client())->adjustCredit($clientId, '-' . $applied);
 
+        // The balance has moved, so the documents behind it move with it -
+        // oldest note first. Anything left over is credit that was put on the
+        // account by hand, which has no note to mark and is not an error. See
+        // Action\CreditNote::spend().
+        (new CreditNote())->spend($clientId, $applied);
+
         $refreshed = $this->find($invoiceId);
 
         if ($refreshed !== null && $this->isSettled($refreshed)) {
@@ -774,6 +794,7 @@ class Invoice extends Action
         // and staff can reach markPaid() on its own, so both need the nudge or
         // a credit-settled invoice would wait for the next cron tick.
         (new Provision())->forInvoice($invoiceId);
+        (new Registration())->forInvoice($invoiceId);
         (new Dunning())->forInvoice($invoiceId);
 
         return $updated;

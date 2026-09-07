@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Request;
 use LBM\Service\Addon;
+use LBM\Service\ConfigOption;
 use LBM\Service\ClientService;
 use LBM\Service\Server;
 
@@ -82,6 +83,12 @@ class ServiceController extends ClientController
             // at the customer. Written in Phase 8 against a table nothing ever
             // filled, so nobody had seen it until this phase put rows in it.
             'addons'     =>  Addon::detailedFor((int) $row['service_id']),
+
+            // detailedFor() rather than the raw rows, for the reason 26.1
+            // found the hard way: client_service_config_values is three
+            // integers, and a screen reading straight off it prints "#4: #11"
+            // at the customer paying for it.
+            'config'     =>  ConfigOption::detailedFor((int) $row['service_id']),
             'cycles'     =>  ClientService::cycleNames(),
             'credential' =>  ClientService::credential($row),
             'active'     =>  ClientService::isActive($row),

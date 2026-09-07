@@ -16,12 +16,16 @@ namespace LBM\Support;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Job\DomainRenewalJob;
 use LBM\Job\InvoiceGenerateJob;
 use LBM\Job\InvoiceReminderJob;
 use LBM\Job\PruneTokensJob;
 use LBM\Service\Mail;
 use LBM\Service\Dunning;
 use LBM\Service\Provision;
+use LBM\Service\DomainRenewal;
+use LBM\Service\Registration;
+use LBM\Service\Transfer;
 use LBM\Service\Server;
 use LBM\Service\Setting;
 use LBM\Service\Termination;
@@ -192,6 +196,34 @@ class Cron
             return Provision::run();
         });
 
+        // The domain half of the same tick, and separate from it on purpose. A
+        // registry being unreachable is an ordinary afternoon, and one task
+        // failing must not take the reading of "which hosting accounts still
+        // need setting up" down with it.
+        //
+        // It reports `0 recorded, 0 registered` on an install that does not
+        // sell domains, which is the same kind of line dunning prints when it
+        // is switched off: the operator can read what their cron does.
+        $this->task('register paid domains', static function (): string {
+            return Registration::run();
+        });
+
+        // Bringing them in. Its own task rather than a branch inside the one
+        // above, because the two have opposite retry rules: a refused
+        // registration is retried, and a SUBMITTED transfer must never be
+        // sent again. Folding them together is how one becomes the other.
+        $this->task('submit domain transfers', static function (): string {
+            return Transfer::run();
+        });
+
+        // Keeping them, and losing them. Separate from registering for the same
+        // reason dunning is separate from provisioning: one reacts to money and
+        // the other to the calendar, and a registry being unreachable must not
+        // stop dates being read.
+        $this->task('renew and expire domains', static function (): string {
+            return DomainRenewal::run();
+        });
+
         // Every run too, and for the same reason read in the other direction: a
         // customer who has just paid must come back within minutes, not
         // tomorrow. Suspension riding the same tick is a side effect of that and
@@ -231,6 +263,15 @@ class Cron
 
         $this->task('raise due invoices', static function (): string {
             (new InvoiceGenerateJob())->handle();
+
+            return 'done';
+        });
+
+        // Daily, beside the service invoices and for the same reason: raising
+        // an invoice queues an email, and a job that ran every five minutes
+        // would be one bug away from sending the customer 288 of them.
+        $this->task('raise domain renewals', static function (): string {
+            (new DomainRenewalJob())->handle();
 
             return 'done';
         });

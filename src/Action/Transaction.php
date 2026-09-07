@@ -275,9 +275,15 @@ class Transaction extends Action
             throw new RuntimeException('Only a payment can be refunded.');
         }
 
-        $paid = (string) ($original['amount'] ?? '0');
-        $already = $this->refundedAgainst((int) $original['tx_id']);
-        $remaining = Money::sub($paid, $already);
+        // THE BOUND IS Action\Refund's, not this file's own arithmetic.
+        //
+        // What was here read every refund on the INVOICE and subtracted it from
+        // THIS PAYMENT's amount. On the single-payment invoice the product
+        // raises by itself that is right by accident; on an invoice settled by
+        // two payments it locks the operator out, because refunding the first
+        // in full leaves the second with `50 - 50 = 0` to give back for ever.
+        // Found by refunding both halves of one invoice.
+        $remaining = (new Refund())->refundableOn($original);
 
         $amount = $amount === null ? $remaining : (string) $amount;
 
@@ -291,7 +297,7 @@ class Transaction extends Action
             );
         }
 
-        return $this->create([
+        $id = $this->create([
             'client_relid'    =>  $original['client_relid'] ?? null,
             'invoice_relid'   =>  $original['invoice_relid'] ?? null,
             'currency_relid'  =>  $original['currency_relid'] ?? null,
@@ -306,6 +312,18 @@ class Transaction extends Action
                 ? trim($reason)
                 : 'Refund of transaction #' . $original['tx_id'],
         ]);
+
+        // The invoice moves with the ledger, here as in pay(). An invoice whose
+        // whole receipts have gone back is `refunded`, which is a status seeded
+        // since Phase 0 that nothing could reach - and remove()'s own docblock
+        // has told operators to "refund or reverse it instead, so the invoice
+        // moves back with it" since Phase 3, of code that did no such thing.
+        //
+        // It is here rather than in the caller so it cannot be forgotten by
+        // one: Action\Refund is not the only way into this method.
+        (new Refund())->restate((int) ($original['invoice_relid'] ?? 0));
+
+        return $id;
     }
 
     /**
@@ -340,7 +358,24 @@ class Transaction extends Action
     }
 
     /**
-     * How Much Has Already Been Refunded Against a Payment
+     * How Much Has Been Refunded On The INVOICE This Payment Is Against
+     *
+     * The name says "against a payment" and the query has always answered a
+     * different question - every refund on the invoice, whichever payment it
+     * reverses - because there is no column tying a refund to one charge.
+     * Phase 28 kept the arithmetic, which is the bound that matters, and moved
+     * it to Action\Refund so there is one implementation rather than two that
+     * can drift.
+     *
+     * `Refund::refundableOn()` is what a caller asking "can I refund this
+     * payment, and by how much" should use: this figure on its own, subtracted
+     * from a single payment's amount, locks an operator out of the second
+     * payment on any invoice settled by two.
+     *
+     * The old guard here - `$invoiceId === null` - could never fire: the model
+     * casts `invoice_relid` to int, so a stored NULL arrives as 0 and the check
+     * fell through to a query for invoice zero. `Refund::refundedOn()` asks
+     * `> 0`, which is the test that works through a cast.
      * @param int $transactionId Original Payment ID
      * @return string Decimal string
      */
@@ -348,25 +383,9 @@ class Transaction extends Action
     {
         $original = $this->find($transactionId);
 
-        if ($original === null) {
-            return '0';
-        }
-
-        $invoiceId = $original['invoice_relid'] ?? null;
-
-        if ($invoiceId === null) {
-            return '0';
-        }
-
-        $rows = $this->all([
-            'invoice_relid' =>  (int) $invoiceId,
-            'type'          =>  self::REFUND,
-        ]);
-
-        return Money::sum(array_map(
-            static fn(array $row): string => (string) ($row['amount'] ?? '0'),
-            $rows
-        ));
+        return $original === null
+            ? '0'
+            : (new Refund())->refundedOn((int) ($original['invoice_relid'] ?? 0));
     }
 
     /**

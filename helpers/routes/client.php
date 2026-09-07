@@ -19,6 +19,7 @@ use LBM\Filter\ActivityFilter;
 use LBM\Controller\Client\AuthController;
 use LBM\Controller\Client\DomainController;
 use LBM\Controller\Client\TicketController;
+use LBM\Controller\Client\CreditNoteController;
 use LBM\Controller\Client\InvoiceController;
 use LBM\Controller\Client\ProfileController;
 use LBM\Controller\Client\ServiceController;
@@ -66,11 +67,27 @@ Url::group(PANEL, function () use ($uid): void {
     Url::post("/invoice/{invoice:{$uid}}/checkout", [InvoiceController::class, 'checkout'])
         ->name('client.invoice.checkout');
 
+    // Credit notes, read only. There is nothing here a customer could press:
+    // a note is issued by the operator and spent automatically against the
+    // next invoice. It is on this side at all because it is the CUSTOMER'S
+    // document - the thing their own books need to explain an invoice settled
+    // for less than it says.
+    Url::get('/credit-notes', [CreditNoteController::class, 'index'])->name('client.credit.notes');
+    Url::get("/credit-note/{note:{$uid}}", [CreditNoteController::class, 'show'])
+        ->name('client.credit.note');
+
     /*================================ DOMAINS ==============================*/
     Url::get('/domains', [DomainController::class, 'index'])->name('client.domains');
     Url::get("/domain/{domain:{$uid}}", [DomainController::class, 'show'])->name('client.domain');
     Url::post("/domain/{domain:{$uid}}/nameservers", [DomainController::class, 'nameservers'])
         ->name('client.domain.nameservers');
+
+    // Where the customer hands over the auth code for a transfer they have
+    // paid for. POST only and never rendered back: it is a bearer credential -
+    // whoever holds it can move the name - so it is stored encrypted and the
+    // screen says whether one is on file, never what it is.
+    Url::post("/domain/{domain:{$uid}}/auth-code", [DomainController::class, 'authCode'])
+        ->name('client.domain.authcode');
 
     /*================================ SUPPORT ==============================*/
     Url::get('/tickets', [TicketController::class, 'index'])->name('client.tickets');

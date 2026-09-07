@@ -31,6 +31,16 @@ class OrderItemSchema extends SchemaAbstract
             $t->unsignedInteger('addon_relid')->nullable()->default(NULL)->comment('product_addons -> addon_id');
             $t->string('billing_cycle', 30)->nullable()->default(NULL);
             $t->string('domain')->nullable()->default(NULL);
+
+            // What is being DONE to that domain - `register` or `transfer` -
+            // and NULL on every line that is not a domain at all.
+            //
+            // A varchar and not an enum, deliberately. The two supported
+            // engines express an enum differently, and src/Migration has to
+            // add this column to every install that predates Phase 27.3: an
+            // ADD COLUMN of a nullable varchar is the same statement on both,
+            // while widening an enum is two different problems.
+            $t->string('domain_action', 20)->nullable()->default(NULL)->comment('register or transfer');
             $t->unsignedInteger('quantity')->default(1);
             $t->decimal('amount', 18, 4);
             $t->unsignedBigInteger('service_relid')->nullable()->default(NULL)->comment('client_services -> service_id. populated after provisioning');

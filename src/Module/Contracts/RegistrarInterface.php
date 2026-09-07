@@ -30,6 +30,32 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 interface RegistrarInterface
 {
     /**
+     * Ask The Registry Whether a Domain Can Be Registered
+     *
+     * Added in Phase 27.1, and its absence until then was a real hole rather
+     * than an omission: without it the shop takes money for a name and finds
+     * out at the registry that somebody else already has it, which is a refund
+     * and an apology on every single one.
+     *
+     * `available` is DELIBERATELY nullable, and the three answers are three
+     * different things:
+     *
+     *   - true  - it can be registered.
+     *   - false - it cannot; somebody has it.
+     *   - null  - the registrar could not say. A lookup that timed out is not
+     *             a domain that is taken, and treating it as one turns a slow
+     *             afternoon at the registry into a shop that sells nothing.
+     *
+     * `success` is about the CALL, `available` about the domain. A driver that
+     * cannot reach its API returns success false and available null.
+     *
+     * @param string $domain The name being asked about, including its ending
+     * @param array $context See register()
+     * @return array{success: bool, available: ?bool, message: ?string, raw: array}
+     */
+    public function available(string $domain, array $context = []): array;
+
+    /**
      * Register a Domain
      *
      * @param array $domain The `domains` row

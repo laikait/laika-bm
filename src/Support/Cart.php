@@ -20,9 +20,13 @@ use Laika\Session\SessionManager;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Currency;
 use LBM\Service\Money;
+use LBM\Service\Domain;
 use LBM\Service\Addon;
+use LBM\Service\ConfigOption;
 use LBM\Service\Product;
+use LBM\Service\Promo;
 use LBM\Service\Tax;
+use LBM\Service\Tld;
 
 /**
  * The shopping cart - what a visitor has chosen, before there is an order.
@@ -61,6 +65,19 @@ class Cart
     /** @var string Session Key Holding The Lines */
     public const KEY = 'items';
 
+    /**
+     * @var string Session Key Holding The Promotional Code
+     *
+     * The CODE, and nothing else. Not the discount, not the promo id, not
+     * whether it was valid when it was typed - this class stores identifiers
+     * and the database answers everything else at the moment it is asked. A
+     * code that expires while a cart is open stops applying, and says so.
+     */
+    public const PROMO = 'promo';
+
+    /** @var int Longest a Code May Be - the column is varchar(100) */
+    public const MAX_CODE = 100;
+
     /** @var int Most Lines One Cart May Hold */
     public const MAX_LINES = 20;
 
@@ -74,6 +91,25 @@ class Cart
      * row, and nothing else bounds how many a script can post.
      */
     public const MAX_ADDONS = 20;
+
+    /**
+     * @var int Most Configurable Answers On One Line
+     *
+     * MAX_ADDONS' reasoning again. resolve() checks every answer against
+     * what the product actually offers, but that happens at render time -
+     * this is what stops a posted array of ten thousand reaching the session
+     * row in the first place.
+     */
+    public const MAX_CONFIG = 20;
+
+    /**
+     * @var int Longest Domain Term The Cart Will Hold
+     *
+     * `Tld::TERMS` is the real gate and priceFor() enforces it against the
+     * operator own range. This is only here so a posted `years` of 4000 cannot
+     * reach a session row at all - the same reasoning as MAX_QUANTITY.
+     */
+    public const MAX_YEARS = 3;
 
     ####################################################################################
     /*=================================== READING ====================================*/
@@ -107,6 +143,51 @@ class Cart
                 continue;
             }
 
+            // A cart written before Phase 27.1 has no `type` at all, and every
+            // line in it is a product. Defaulting rather than discarding is
+            // what keeps an open cart working across an upgrade.
+            if ((string) ($item['type'] ?? 'product') === 'domain') {
+                $domain = self::cleanDomain($item['domain'] ?? null);
+                $tld    = (int) ($item['tld'] ?? 0);
+
+                if ($domain === null || $tld <= 0) {
+                    continue;
+                }
+
+                // The product keys are carried at neutral values rather than
+                // left out. Every reader of a stored line predates domains, and
+                // a missing key is a warning the error handler turns fatal.
+                // Anything that is not the literal `transfer` is a
+                // registration, which is what every domain line written
+                // before Phase 27.3 was. A line whose intent cannot be read
+                // must not become a transfer by default: a transfer needs an
+                // auth code the customer has to go and fetch.
+                $action = (string) ($item['action'] ?? 'register') === 'transfer'
+                    ? 'transfer'
+                    : 'register';
+
+                $items[(string) $key] = [
+                    'type'     =>  'domain',
+                    'action'   =>  $action,
+                    'domain'   =>  $domain,
+                    'tld'      =>  $tld,
+
+                    // A transfer adds exactly one year at the registry and
+                    // the contract has no term to pass, so a stored term of
+                    // three on a transfer line is a figure nothing can honour.
+                    'years'    =>  $action === 'transfer'
+                        ? 1
+                        : self::clampYears((int) ($item['years'] ?? 1)),
+                    'product'  =>  0,
+                    'cycle'    =>  0,
+                    'quantity' =>  1,
+                    'addons'   =>  [],
+                    'config'   =>  [],
+                ];
+
+                continue;
+            }
+
             $product = (int) ($item['product'] ?? 0);
             $cycle   = (int) ($item['cycle'] ?? 0);
 
@@ -115,6 +196,8 @@ class Cart
             }
 
             $items[(string) $key] = [
+                'type'     =>  'product',
+                'action'   =>  'register',
                 'product'  =>  $product,
                 'cycle'    =>  $cycle,
                 'quantity' =>  self::clampQuantity((int) ($item['quantity'] ?? 1)),
@@ -125,10 +208,95 @@ class Cart
                 // release has no `addons` at all, and one written by hand could
                 // have anything in it.
                 'addons'   =>  self::cleanAddons($item['addons'] ?? []),
+
+                // Same treatment, same reason. A cart written before this
+                // release has no `config` at all, and one written by hand
+                // could have anything in it.
+                'config'   =>  self::cleanConfig($item['config'] ?? []),
+                'tld'      =>  0,
+                'years'    =>  0,
             ];
         }
 
         return $items;
+    }
+
+    /**
+     * The Promotional Code On This Cart, If Any
+     * @return string Empty when there is none
+     */
+    public static function promoCode(): string
+    {
+        if (!SessionManager::isConfigured()) {
+            return '';
+        }
+
+        $code = Session::get(self::PROMO, '', self::SCOPE);
+
+        return is_string($code) ? mb_substr(trim($code), 0, self::MAX_CODE) : '';
+    }
+
+    /**
+     * Put a Code On The Cart
+     *
+     * Nothing here checks that it is real. The caller does, because it is the
+     * caller that has a screen to say so on - and lines() asks again at render
+     * time, which is the check that protects an order.
+     * @param string $code Submitted Code
+     * @return void
+     */
+    public static function setPromo(string $code): void
+    {
+        if (!SessionManager::isConfigured()) {
+            return;
+        }
+
+        Session::set(self::PROMO, mb_substr(trim($code), 0, self::MAX_CODE), self::SCOPE);
+    }
+
+    /**
+     * Take The Code Off Again
+     * @return void
+     */
+    public static function clearPromo(): void
+    {
+        if (SessionManager::isConfigured()) {
+            Session::set(self::PROMO, '', self::SCOPE);
+        }
+    }
+
+    /**
+     * The Code, The Row Behind It, And Why It Cannot Be Used
+     *
+     * Asked fresh every time the cart is rendered, so a code that ran out or
+     * expired between the customer typing it and paying stops applying - and
+     * the screen can say which of five things went wrong rather than quietly
+     * charging them more than the page said a moment ago.
+     * @param int $currencyId Currency To Price In
+     * @return array{code:string,promo:?array,refusal:?string}
+     */
+    public static function promoState(int $currencyId): array
+    {
+        $code = self::promoCode();
+
+        if ($code === '') {
+            return ['code' => '', 'promo' => null, 'refusal' => null];
+        }
+
+        $promo = Promo::byCode($code);
+        $refusal = Promo::refusal($promo, $currencyId);
+
+        return [
+            // The code as the OPERATOR wrote it once it has matched, and only
+            // what the customer typed while it has not. A cart echoing back
+            // "welcome20" against a poster reading "WELCOME20" is somebody
+            // wondering whether it took.
+            'code'    =>  $refusal === null && is_array($promo)
+                ? (string) $promo['promo_code']
+                : $code,
+            'promo'   =>  $refusal === null ? $promo : null,
+            'refusal' =>  $refusal,
+        ];
     }
 
     /**
@@ -182,6 +350,66 @@ class Cart
             $lines[] = self::line($key, $item, $currencyId, $cycles, $client);
         }
 
+        return self::discounted($lines, $currencyId);
+    }
+
+    /**
+     * Apply The Promotional Code, Then Tax What Is Actually Being Charged
+     *
+     * A fixed code is shared across every line it covers, so the discount
+     * cannot be decided one line at a time - which is why this happens here
+     * rather than inside line(), and why the tax waits for it.
+     *
+     * Only lines that RESOLVED are eligible. A line with a problem contributes
+     * nothing to the total, so discounting it would quietly spend part of a
+     * limited code on something the customer cannot buy.
+     * @param array $lines Lines From line()
+     * @param int $currencyId Currency To Price In
+     * @return array
+     */
+    private static function discounted(array $lines, int $currencyId): array
+    {
+        $state = self::promoState($currencyId);
+        $discounts = [];
+
+        if (is_array($state['promo'])) {
+            $eligible = [];
+
+            foreach ($lines as $i => $line) {
+                if (($line['ok'] ?? false) !== true) {
+                    continue;
+                }
+
+                $eligible[$i] = [
+                    'type'    =>  (string) $line['type'],
+                    'product' =>  (int) ($line['product_id'] ?? 0),
+
+                    // The setup fee is in this, because it is money the
+                    // customer is being asked for today and a code that took
+                    // nothing off it would be a discount the arithmetic on the
+                    // page did not support.
+                    'amount'  =>  Money::add($line['subtotal'], $line['setup_total']),
+                ];
+            }
+
+            $discounts = Promo::discountFor($state['promo'], $eligible);
+        }
+
+        foreach ($lines as $i => $line) {
+            if (($line['ok'] ?? false) !== true) {
+                continue;
+            }
+
+            $lines[$i]['discount'] = Money::round((string) ($discounts[$i] ?? '0'));
+
+            $gross = Money::sub(
+                Money::add($line['subtotal'], $line['setup_total']),
+                $lines[$i]['discount']
+            );
+
+            $lines[$i]['tax'] = self::taxOn($gross, (string) $line['tax_rate']);
+        }
+
         return $lines;
     }
 
@@ -192,13 +420,14 @@ class Cart
      * with a problem contributes nothing, which keeps the number honest while
      * checkout is still refusing to accept the cart at all.
      * @param array $lines Lines From lines()
-     * @return array{recurring:string,setup:string,total:string}
+     * @return array{recurring:string,setup:string,discount:string,total:string}
      */
     public static function total(array $lines): array
     {
         $recurring = '0';
         $setup     = '0';
         $tax       = '0';
+        $discount  = '0';
 
         foreach ($lines as $line) {
             if (($line['ok'] ?? false) !== true) {
@@ -208,9 +437,14 @@ class Cart
             $recurring = Money::add($recurring, (string) $line['subtotal']);
             $setup     = Money::add($setup, (string) $line['setup_total']);
             $tax       = Money::add($tax, (string) ($line['tax'] ?? '0'));
+            $discount  = Money::add($discount, (string) ($line['discount'] ?? '0'));
         }
 
-        $quoted    = Money::add($recurring, $setup);
+        // The discount comes off BEFORE tax, which is already true of the tax
+        // figure above - discounted() worked each line's tax out on what is
+        // actually being charged for it. Taking it off again here would be the
+        // same money twice.
+        $quoted    = Money::sub(Money::add($recurring, $setup), $discount);
         $inclusive = Tax::inclusive();
 
         // `total` is what the customer pays, and it means that whichever way
@@ -224,6 +458,7 @@ class Cart
         return [
             'recurring' =>  Money::round($recurring),
             'setup'     =>  Money::round($setup),
+            'discount'  =>  Money::round($discount),
             'tax'       =>  Money::round($tax),
             'inclusive' =>  $inclusive,
             'total'     =>  Money::round($inclusive ? $quoted : Money::add($quoted, $tax)),
@@ -275,6 +510,7 @@ class Cart
      * @param int $quantity How Many
      * @param ?string $domain Domain, For Products Ordered Against One
      * @param int[] $addons Addon Ids Chosen With It
+     * @param array $config Configurable Answers, Keyed By Option ID
      * @return string The line key
      */
     public static function add(
@@ -282,21 +518,85 @@ class Cart
         int $cycleId,
         int $quantity = 1,
         ?string $domain = null,
-        array $addons = []
+        array $addons = [],
+        array $config = []
     ): string {
         $domain = self::cleanDomain($domain);
         $addons = self::cleanAddons($addons);
-        $key    = self::key($productId, $cycleId, $domain, $addons);
+        $config = self::cleanConfig($config);
+        $key    = self::key($productId, $cycleId, $domain, $addons, $config);
         $items  = self::items();
 
         $existing = (int) ($items[$key]['quantity'] ?? 0);
 
         $items[$key] = [
+            'type'     =>  'product',
             'product'  =>  $productId,
             'cycle'    =>  $cycleId,
             'quantity' =>  self::clampQuantity($existing + self::clampQuantity($quantity)),
             'domain'   =>  $domain,
             'addons'   =>  $addons,
+            'config'   =>  $config,
+        ];
+
+        self::put($items);
+
+        return $key;
+    }
+
+    /**
+     * Put a Domain Registration In The Cart
+     *
+     * KEYED ON THE NAME ALONE, and not on the term with it. A domain can be
+     * registered exactly once, so the same name at one year and at two years is
+     * not two lines a customer could want - it is somebody changing their mind
+     * about the term, and the second choice replaces the first. That is the
+     * opposite of a product line, where the same plan on two cycles is two
+     * genuine purchases, and the difference is worth the separate key.
+     *
+     * Nothing here checks that the ending is sold, that the term is offered or
+     * that the name is still free. lines() checks all three at render time,
+     * which is the check that actually protects an order - and the caller
+     * checks too, because it is the caller that has a screen to say so on.
+     *
+     * @param string $domain The Name, Including Its Ending
+     * @param int $tldId The TLD Row It Was Priced Against
+     * @param int $years Term
+     * @return ?string The line key, or null when the name is not a domain
+     */
+    public static function addDomain(
+        string $domain,
+        int $tldId,
+        int $years = 1,
+        string $action = 'register'
+    ): ?string {
+        $domain = self::cleanDomain($domain);
+
+        if ($domain === null || $tldId <= 0) {
+            return null;
+        }
+
+        $action = $action === 'transfer' ? 'transfer' : 'register';
+
+        // STILL KEYED ON THE NAME ALONE, and the action is deliberately not
+        // part of it. A name can be registered or transferred, never both, so
+        // somebody who searched to register and then chose to transfer has
+        // changed their mind rather than added a second thing - and two lines
+        // for one name would fail at checkout on a UNIQUE column with nothing
+        // on the page explaining why.
+        $key   = self::domainKey($domain);
+        $items = self::items();
+
+        $items[$key] = [
+            'type'   =>  'domain',
+            'action' =>  $action,
+            'domain' =>  $domain,
+            'tld'    =>  $tldId,
+            // No transfer special-case here. items() normalises every line
+            // on the way back OUT and forces a transfer to one year there,
+            // which is the read every caller goes through - so a clamp on the
+            // way IN as well was provably dead: sabotaging it changed nothing.
+            'years'  =>  self::clampYears($years),
         ];
 
         self::put($items);
@@ -389,20 +689,32 @@ class Cart
         array $cycles,
         ?array $client = null
     ): array {
+        if ((string) ($item['type'] ?? 'product') === 'domain') {
+            return self::domainLine($key, $item, $currencyId, $client);
+        }
+
         $quantity = (int) $item['quantity'];
 
         $line = [
             'key'         =>  $key,
+            'type'        =>  'product',
             'product_id'  =>  $item['product'],
             'cycle_id'    =>  $item['cycle'],
+            'action'      =>  'register',
             'quantity'    =>  $quantity,
             'domain'      =>  $item['domain'],
             'name'        =>  '',
             'cycle'       =>  $cycles[$item['cycle']] ?? '',
-            'price'       =>  '0',
-            'setup_fee'   =>  '0',
-            'subtotal'    =>  '0',
-            'setup_total' =>  '0',
+            'discount'     =>  '0',
+            'price'        =>  '0',
+            'setup_fee'    =>  '0',
+            'config'       =>  [],
+            'config_price' =>  '0',
+            'config_setup' =>  '0',
+            'unit_price'   =>  '0',
+            'unit_setup'   =>  '0',
+            'subtotal'     =>  '0',
+            'setup_total'  =>  '0',
             'tax_rate'    =>  '0',
             'tax'         =>  '0',
             'addons'      =>  [],
@@ -445,8 +757,38 @@ class Cart
         $line['price']     = Money::round((string) ($price['price'] ?? '0'));
         $line['setup_fee'] = Money::round((string) ($price['setup_fee'] ?? '0'));
 
-        $line['subtotal']    = Money::round(Money::mul((string) $quantity, $line['price']));
-        $line['setup_total'] = Money::round(Money::mul((string) $quantity, $line['setup_fee']));
+        // The configuration is priced HERE, out of the database, like every
+        // other figure on this line. A choice the operator has withdrawn, or
+        // never priced on this cycle, makes the LINE a problem - it does not
+        // quietly disappear and it does not become free. Same rule as the
+        // addons below, and 22.2's reason for it.
+        $config = ConfigOption::resolve(
+            $item['config'],
+            (int) $product['pid'],
+            $currencyId,
+            $item['cycle']
+        );
+
+        if ($config === null) {
+            $line['problem'] = 'config_unavailable';
+
+            return $line;
+        }
+
+        $line['config']       = $config;
+        $line['config_price'] = ConfigOption::priceOf($config);
+        $line['config_setup'] = ConfigOption::setupOf($config);
+
+        // WHAT ONE OF THIS LINE COSTS, CONFIGURED. The order line carries
+        // this rather than the catalogue price, and that is what makes the
+        // chosen sizes reach client_services.amount and renew with it. A
+        // configurable option is part of the plan's price, not a line of its
+        // own - see Action\ConfigOption for why that differs from an addon.
+        $line['unit_price'] = Money::round(Money::add($line['price'], $line['config_price']));
+        $line['unit_setup'] = Money::round(Money::add($line['setup_fee'], $line['config_setup']));
+
+        $line['subtotal']    = Money::round(Money::mul((string) $quantity, $line['unit_price']));
+        $line['setup_total'] = Money::round(Money::mul((string) $quantity, $line['unit_setup']));
 
         // An extra the product no longer offers, or one the operator has never
         // priced on this cycle, makes the LINE a problem - it does not quietly
@@ -482,11 +824,130 @@ class Cart
         // The cart and the invoice have to reach the same rate or the customer
         // agrees to one number and is billed another - which is the whole
         // reason this is computed here rather than left to checkout.
+        // The RATE is settled here; the AMOUNT is not, because a promotional
+        // code has not been applied yet and a discount comes off before tax.
+        // discounted() finishes the sum - see Invoice's docblock, where
+        // itemTotal() is quantity * unit_price - discount and the tax is
+        // worked out on that.
         $line['tax_rate'] = $client === null ? '0' : Tax::rateFor($client, $product);
-        $line['tax'] = self::taxOn(
-            Money::add($line['subtotal'], $line['setup_total']),
-            (string) $line['tax_rate']
-        );
+
+        $line['ok'] = true;
+
+        return $line;
+    }
+
+    /**
+     * Resolve One Stored Domain Line Against The Database
+     *
+     * Three things can have changed since the name went in the cart, and they
+     * are three different messages: the ending stopped being sold, the term or
+     * the currency stopped being priced, and - the one that matters - somebody
+     * else registered the name.
+     *
+     * THAT LAST CHECK IS WHY THIS READS `domains` AT ALL. `domains.domain` is
+     * UNIQUE across the install, so a name taken between filling the cart and
+     * paying cannot be recorded at checkout. Catching it here, at render time
+     * and again at checkout, is what turns "your payment went through and you
+     * cannot have the name" into "this one has gone, choose another".
+     *
+     * A DOMAIN IS A RECURRING LINE, not a setup fee. The whole term is charged
+     * once up front, which looks one-off - but it renews, and putting it in the
+     * one-off bucket would quote a renewal of zero.
+     *
+     * @param string $key Line Key
+     * @param array $item Stored Line
+     * @param int $currencyId Currency To Price In
+     * @param ?array $client Signed-In Client, When There Is One
+     * @return array<string,mixed>
+     */
+    private static function domainLine(string $key, array $item, int $currencyId, ?array $client): array
+    {
+        $name   = (string) $item['domain'];
+        $years  = (int) $item['years'];
+        $action = (string) ($item['action'] ?? 'register');
+
+        $line = [
+            'key'         =>  $key,
+            'type'        =>  'domain',
+            'action'      =>  $action,
+            'product_id'  =>  0,
+            'cycle_id'    =>  0,
+            'quantity'    =>  1,
+            'domain'      =>  $name,
+            'name'        =>  $name,
+            'years'       =>  $years,
+            'tld_id'      =>  (int) $item['tld'],
+            'tld'         =>  '',
+            'cycle'       =>  '',
+            'discount'     =>  '0',
+            'price'        =>  '0',
+            'setup_fee'    =>  '0',
+            'config'       =>  [],
+            'config_price' =>  '0',
+            'config_setup' =>  '0',
+            'unit_price'   =>  '0',
+            'unit_setup'   =>  '0',
+            'subtotal'     =>  '0',
+            'setup_total'  =>  '0',
+            'tax_rate'    =>  '0',
+            'tax'         =>  '0',
+            'addons'      =>  [],
+            'ok'          =>  false,
+            'problem'     =>  null,
+        ];
+
+        $tld = Tld::find((int) $item['tld']);
+
+        if (!is_array($tld)) {
+            $line['problem'] = 'unavailable';
+
+            return $line;
+        }
+
+        $line['tld'] = (string) $tld['tld'];
+
+        // The row is still there, but does it still claim this name? An
+        // operator who edits `.co` into `.com` leaves every cart line that was
+        // priced against it pointing at an ending its own name does not end
+        // with - and match() is the one place that question is answered.
+        $matched = Tld::match($name);
+
+        if (!is_array($matched) || (int) $matched['tld_id'] !== (int) $tld['tld_id']) {
+            $line['problem'] = 'unavailable';
+
+            return $line;
+        }
+
+        // A transfer is priced from its own column and never by term - see
+        // Tld::transferPrice(). Both refusals mean the same thing to the
+        // customer and share the message.
+        $price = $action === 'transfer'
+            ? Tld::transferPrice($tld, $currencyId)
+            : Tld::priceFor($tld, $currencyId, $years, 'register');
+
+        // Not sold on this term, or not priced in the currency this customer is
+        // checking out in. Tld::priceFor() makes the argument for why the
+        // second one is a refusal rather than a conversion.
+        if ($price === null) {
+            $line['problem'] = 'no_price';
+
+            return $line;
+        }
+
+        if (Domain::byName($name) !== null) {
+            $line['problem'] = 'domain_taken';
+
+            return $line;
+        }
+
+        $line['cycle']      = (string) (Tld::cycleForYears($years) ?? '');
+        $line['price']      = $price;
+        $line['unit_price'] = $price;
+        $line['subtotal']   = $price;
+
+        // The rate only - discounted() works out the amount once any promo has
+        // come off. See line() above.
+        $line['tax_rate'] = $client === null ? '0' : Tax::rateFor($client, null);
 
         $line['ok'] = true;
 
@@ -642,13 +1103,20 @@ class Cart
      * @param int $cycleId Billing Cycle ID
      * @param ?string $domain Domain
      * @param int[] $addons Addon Ids, Already Normalised
+     * @param array $config Configurable Answers, Already Normalised
      * @return string
      */
-    private static function key(int $productId, int $cycleId, ?string $domain, array $addons = []): string
-    {
+    private static function key(
+        int $productId,
+        int $cycleId,
+        ?string $domain,
+        array $addons = [],
+        array $config = []
+    ): string {
         return $productId . '-' . $cycleId
             . '-' . ($domain === null ? '' : md5($domain))
-            . '-' . ($addons === [] ? '' : md5(implode(',', $addons)));
+            . '-' . ($addons === [] ? '' : md5(implode(',', $addons)))
+            . '-' . ($config === [] ? '' : md5(json_encode($config)));
     }
 
     /**
@@ -680,6 +1148,100 @@ class Cart
         sort($ids);
 
         return array_slice($ids, 0, self::MAX_ADDONS);
+    }
+
+    /**
+     * Normalise Submitted Configurable Answers
+     *
+     * CANONICAL, because the line key is built from a json_encode of this.
+     * The same answers given in the other order have to land on the same
+     * line, or somebody who opens a dropdown and puts it back where it was
+     * ends up with two lines for one plan. Hence the ksort and the sort.
+     *
+     * Scalars are kept as STRINGS and multi-answers as sorted int lists.
+     * Nothing here decides whether an answer is offered, priced, or even
+     * numeric - ConfigOption::resolve() asks the database all of that at
+     * render time. This only bounds what may reach a session row at all.
+     * @param mixed $config Submitted Answers
+     * @return array<int,string|int[]>
+     */
+    private static function cleanConfig(mixed $config): array
+    {
+        if (!is_array($config)) {
+            return [];
+        }
+
+        $clean = [];
+
+        foreach ($config as $optionId => $answer) {
+            $optionId = (int) $optionId;
+
+            if ($optionId <= 0) {
+                continue;
+            }
+
+            if (is_array($answer)) {
+                $ids = [];
+
+                foreach ($answer as $id) {
+                    $id = (int) $id;
+
+                    if ($id > 0) {
+                        $ids[$id] = $id;
+                    }
+                }
+
+                $ids = array_values($ids);
+                sort($ids);
+
+                if ($ids !== []) {
+                    $clean[$optionId] = array_slice($ids, 0, self::MAX_CONFIG);
+                }
+
+                continue;
+            }
+
+            $value = trim((string) $answer);
+
+            // An empty answer is stored as nothing at all rather than as an
+            // empty string. A required option left blank has to be REFUSED by
+            // resolve(), and it can only tell the two apart if a blank never
+            // reaches it looking like an answer.
+            if ($value !== '') {
+                $clean[$optionId] = mb_substr($value, 0, ConfigOption::maxText());
+            }
+        }
+
+        ksort($clean);
+
+        return array_slice($clean, 0, self::MAX_CONFIG, true);
+    }
+
+    /**
+     * Keep a Domain Term Inside What a Domain Row Can Record
+     * @param int $years Submitted Term
+     * @return int
+     */
+    private static function clampYears(int $years): int
+    {
+        if ($years < 1) {
+            return 1;
+        }
+
+        return min($years, self::MAX_YEARS);
+    }
+
+    /**
+     * The Key One Domain Line Is Stored Under
+     *
+     * The name and nothing else - see addDomain(). Prefixed so a domain line
+     * can never collide with a product line, whose keys are digits and dashes.
+     * @param string $domain Normalised Domain
+     * @return string
+     */
+    private static function domainKey(string $domain): string
+    {
+        return 'd-' . md5($domain);
     }
 
     /**

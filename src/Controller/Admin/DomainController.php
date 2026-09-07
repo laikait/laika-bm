@@ -20,6 +20,7 @@ use Laika\Service\Request;
 use LBM\Service\Client;
 use LBM\Service\Currency;
 use LBM\Service\Domain;
+use LBM\Service\Transfer;
 
 /**
  * Domains.
@@ -68,7 +69,100 @@ class DomainController extends AdminController
             'nameservers' =>  Domain::nameservers((int) $row['domain_id']),
             'expired'     =>  Domain::isExpired($row),
             'days'        =>  Domain::daysToExpiry($row),
+
+            // What the registrar sweeps have and have not managed. A renewal
+            // that keeps failing is quiet in a dangerous direction - nobody
+            // complains about a domain that has not been renewed until it is
+            // gone - so it is put on the screen rather than left to three lines
+            // in the activity log. Phase 23 learned this about suspensions.
+            'registrar'   =>  $this->registrarState($row),
         ]);
+    }
+
+    /**
+     * What The Registrar Sweeps Have Recorded On One Domain
+     *
+     * `registrar_data` is a serialize column, so this reads it through the
+     * model and never through a bare Model - casts run on READ only, and a raw
+     * query hands back the serialized string.
+     * @param array $domain Domain Row
+     * @return array<string,mixed>
+     */
+    private function registrarState(array $domain): array
+    {
+        $data = $domain['registrar_data'] ?? null;
+        $data = is_array($data) ? $data : [];
+
+        return [
+            'reference'       =>  (string) ($data['reference'] ?? ''),
+            'renewed_through' =>  (string) ($data['renewed_through'] ?? ''),
+            'last_error'      =>  (string) ($data['last_error'] ?? ''),
+            'attempts'        =>  (int) ($data['register_attempts'] ?? 0)
+                + (int) ($data['renew_attempts'] ?? 0)
+                + (int) ($data['transfer_attempts'] ?? 0),
+            'expiry_unknown'  =>  !empty($data['expiry_unknown']),
+
+            // A transfer submitted and never finished is the quietest failure
+            // in the product: the customer has paid, the registry has been
+            // told, and nothing on any screen changes again until somebody
+            // asks. The DATE is what makes it actionable - a transfer sent
+            // this morning is fine and one sent three weeks ago is not.
+            'transfer'        =>  (string) ($domain['type'] ?? '') === 'transfer',
+            'submitted'       =>  !empty($data['transfer_submitted']),
+            'sent_at'         =>  (string) ($data['transfer_sent_at'] ?? ''),
+        ];
+    }
+
+    /**
+     * Finish a Transfer The Registry Has Approved
+     *
+     * Staff-driven, and that is a limitation rather than a preference.
+     * RegistrarInterface has five verbs and none of them answers "how is that
+     * transfer going", so once a module has reported `pending` there is no way
+     * to ask again - see Action\Transfer. Somebody has to say when it landed,
+     * and this is where they say it.
+     *
+     * The expiry is OPTIONAL and is whatever the registry told them. Left
+     * blank, the domain is billed a year out rather than never billed at all -
+     * 27.2's split between a registry fact and our own schedule.
+     * @param string $domain Domain Uid
+     * @return ?string
+     */
+    public function completeTransfer(string $domain): ?string
+    {
+        $row = $this->record(Domain::find($domain), 'domain');
+        $back = ['domain' => $row['uid']];
+
+        if ((string) ($row['type'] ?? '') !== 'transfer') {
+            return $this->done('staff.domain', local('domain_not_a_transfer'), false, $back);
+        }
+
+        $expiry = trim((string) Request::input('expiry_date', ''));
+        $when = $expiry === '' ? null : strtotime($expiry);
+
+        // A date the database would refuse becomes NO date rather than an
+        // error: the transfer really has completed, and refusing to record
+        // that over a mistyped date leaves the customer's name in limbo.
+        $parsed = $when === false || $when === null ? null : date('Y-m-d H:i:s', $when);
+
+        return $this->attempt(
+            function () use ($row, $parsed): void {
+                Transfer::complete((int) $row['domain_id'], $parsed);
+
+                // Spent. Whoever holds an auth code can move the name, and the
+                // transfer it was for is done - so it is cleared rather than
+                // kept encrypted for ever against nothing.
+                Domain::setEppCode((int) $row['domain_id'], null);
+
+                $this->log(
+                    'domain.transfer.completed',
+                    'Marked the transfer of ' . $row['domain'] . ' complete.'
+                );
+            },
+            'staff.domain',
+            local('domain_transfer_completed'),
+            $back
+        );
     }
 
     /**

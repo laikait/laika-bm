@@ -17,6 +17,7 @@ use Laika\Route\Url;
 use LBM\Pipeline\Install;
 use LBM\Pipeline\GlobalPipeline;
 use LBM\Controller\Front\CartController;
+use LBM\Controller\Front\DomainController;
 use LBM\Controller\Front\HomeController;
 use LBM\Controller\Front\ErrorController;
 use LBM\Controller\Front\SupportController;
@@ -112,6 +113,36 @@ Url::post('/cart/update', [CartController::class, 'update'])->name('front.cart.u
 Url::post('/cart/remove', [CartController::class, 'remove'])->name('front.cart.remove');
 Url::post('/cart/clear', [CartController::class, 'clear'])->name('front.cart.clear');
 Url::post('/cart/checkout', [CartController::class, 'checkout'])->name('front.cart.checkout');
+
+// One route for applying a code and for taking it off, because they are the
+// same act with a different argument - and a customer who clears the box has
+// removed the code, which a separate route would have to be told about twice.
+Url::post('/cart/promo', [CartController::class, 'promo'])->name('front.cart.promo');
+
+// A domain is added on its own route rather than through /cart/add, because it
+// is a different thing being bought: no product, no cycle id, no quantity and
+// no addons, and a term in years where a product has none of that. Folding both
+// into one action would mean a branch on a `type` field posted by the browser,
+// which is exactly the input this application does not let decide anything.
+Url::post('/cart/domain', [CartController::class, 'domain'])->name('front.cart.domain');
+
+// And a transfer on its own route again, for the same reason one layer down:
+// it takes no term and no quantity, and the checks it makes are the domain
+// ones read the other way round. One route branching on a posted `action`
+// would be one handler deciding which of two sets of refusals to give.
+Url::post('/cart/transfer', [CartController::class, 'transfer'])->name('front.cart.transfer');
+
+/*==================================== DOMAINS ===================================*/
+//
+// The public domain search. A GET, because it IS a search: the answer is a URL
+// somebody can send on or come back to, and nothing about typing a name into a
+// box changes anything. Ordering one is the POST above.
+//
+// /domains rather than /domain/{name} - a name is a query, not a resource this
+// site owns, and putting it in the path would make every search a page that
+// looks like it should be indexable.
+
+Url::get('/domains', [DomainController::class, 'index'])->name('front.domains');
 
 /*================================= KNOWLEDGEBASE ================================*/
 //

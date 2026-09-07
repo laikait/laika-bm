@@ -526,6 +526,208 @@ must_exist(
     'Where an addon is priced per currency and cycle. Without it an addon can be created and never sold.'
 );
 
+// Phase 26.2. Without these, five more tables from Phase 0 stay unreadable and
+// a plan can only be sold in one size: `product_config_groups`,
+// `product_config_options`, `product_config_option_subs`,
+// `product_config_option_pricing` and `client_service_config_values` had no
+// reader anywhere, and there was no table at all saying which product offered
+// which option.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/ConfigOption.php',
+    'Prices what a customer picks and copies it onto the service. Without it a plan is sold in one size and nothing else.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/ConfigOption.php',
+    'The facade the cart, the order form and both service screens reach it through. Its absence is a RelayException on /cart, not a missing feature.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/ConfigOptionController.php',
+    'The only screen an option, its choices or their prices can be created on. Without it they can only be written by hand into the database.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Schema/ProductConfigGroupMapSchema.php',
+    'The table saying which product offers which option. Phase 0 shipped without it, so every option would belong to no product and appear on no order form.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Schema/OrderItemConfigValueSchema.php',
+    'Where a choice lives between checkout and provisioning. Without it a paid order reaches Provision with nothing saying what was configured.'
+);
+must_exist(
+    'template/admin/bootstrap/config-options.twig',
+    'The option list. Without it /admin/config-options is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/config-option.twig',
+    'Where the choices and their prices are set. Without it an option can be created and never sold.'
+);
+must_exist(
+    'template/admin/bootstrap/config-option-form.twig',
+    'Where an option is named and given its field type. Without it the list has nothing to link to.'
+);
+
+// Phase 27.1. Without these the whole domain half of the product is screens
+// over tables nothing fills: `tlds` had ZERO callers before this, `domains` had
+// three screens reading it and no writer at all, and RegistrarInterface - from
+// Phase 9 - had no call site anywhere.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Tld.php',
+    'The domain price list. Without it no ending has a price and no domain can be ordered at any term.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Registration.php',
+    'Turns a paid domain line into a domains row and then calls the registrar. Without it a customer pays and nothing is recorded.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Support/RegistersDomains.php',
+    'The only place a registrar module name is resolved. Without it Registration and the client nameserver form are both fatal.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/TldController.php',
+    'The only screen an ending can be priced on. Without it domain pricing can only be written by hand into the database.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Front/DomainController.php',
+    'The public domain search. Without it /domains is a RelayException for every visitor.'
+);
+must_exist(
+    'template/admin/bootstrap/tlds.twig',
+    'The price list screen. Without it /admin/tlds is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/tld-form.twig',
+    'Where an ending is added or repriced. Without it the list has nothing to link to.'
+);
+must_exist(
+    'template/front/bootstrap/domains.twig',
+    'The search a visitor types a name into. Without it the shop sells no domains at all.'
+);
+
+// Phase 27.2. Without these a registered domain is never billed again: 27.1
+// wrote a next_due_date that nothing read, RegistrarInterface::renew() had no
+// caller, and four of the nine seeded domain statuses were unreachable.
+must_exist(
+    'vendor/laikait/laika-bm/src/Job/DomainRenewalJob.php',
+    'Raises the invoice that keeps a domain. Without it every domain the shop sells lapses in silence at the end of its term.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/DomainRenewal.php',
+    'Applies a paid renewal at the registry and moves domains past their dates. Without it a paid renewal invoice reaches nobody.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/DomainRenewal.php',
+    'The facade cron reaches it through. Its absence is a fatal on every cron tick, not a missing feature.'
+);
+
+// Phase 28. Without these `credit_notes` goes back to being a pair of tables
+// with no reader anywhere, and - worse - the admin Refund button goes back to
+// writing a ledger row and telling the payment processor nothing, so the books
+// say the customer was paid back and their card was never touched.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/CreditNote.php',
+    'Issues, draws down and voids credit notes. Without it the credit_notes table has no writer and the four seeded statuses are unreachable again.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/CreditNote.php',
+    'The facade the invoice screen and the panel reach it through. Its absence is a RelayException on /admin/invoice, not a missing feature.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Refund.php',
+    'The only caller GatewayInterface::refund() has. Without it money is recorded as refunded and never leaves the merchant account.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/Refund.php',
+    'The facade the transaction and invoice screens reach it through.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/CreditNoteController.php',
+    'The only screen a credit note can be issued on. Without it they can only be written by hand into the database.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Client/CreditNoteController.php',
+    'A credit note belongs to the customer as much as to the operator. Without this they are issued one they can never see.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Migration/M202609070100AddCreditNoteInvoice.php',
+    'Adds credit_notes.invoice_relid to an install that predates Phase 28. Without it every credit note on an upgraded install is a number with no document behind it.'
+);
+must_exist(
+    'template/admin/bootstrap/credit-notes.twig',
+    'The credit note list. Without it /admin/credit-notes is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/credit-note-form.twig',
+    'Where a credit note is issued. Without it the list has nothing to link to.'
+);
+must_exist(
+    'template/admin/bootstrap/credit-note.twig',
+    'One credit note, and the only place it can be voided.'
+);
+must_exist(
+    'template/panel/bootstrap/credit-notes.twig',
+    'Credit notes as the customer sees them. Without it a sidebar link they can see leads to a Twig error.'
+);
+must_exist(
+    'template/panel/bootstrap/credit-note.twig',
+    'One credit note as the customer sees it - the document their own books need.'
+);
+
+// A gateway that refunds anything it is handed, and logs nothing anywhere an
+// operator would look. scratchpad/refundwalk.php plants it and removes it; this
+// is the check that notices when a run died before its teardown.
+must_not_exist(
+    'modules/gateways/RefundProbe',
+    'Test fixture from refundwalk.php. It refunds whatever it is asked to - shipping it would put a way to move money onto a live install.'
+);
+
+// Phase 27.4. Without these `promo_codes` goes back to being a table with no
+// reader anywhere and `orders.promo_relid` to a column written as NULL by
+// every order the product has ever placed.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Promo.php',
+    'Decides what a code takes off, and spends one of its uses. Without it a code can be created and never applied to anything.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/Promo.php',
+    'The facade the cart and the order reach it through. Its absence is a RelayException on /cart, not a missing feature.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/PromoController.php',
+    'The only screen a code can be created on. Without it codes can only be written by hand into the database.'
+);
+must_exist(
+    'template/admin/bootstrap/promos.twig',
+    'The code list. Without it /admin/promos is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/promo-form.twig',
+    'Where a code is written and dated. Without it the list has nothing to link to.'
+);
+
+// Phase 27.3. Without these RegistrarInterface::transfer() goes back to having
+// no caller anywhere, `domains.type = transfer` to being a value nothing
+// writes, and `tlds.transfer_price` and `epp_required` to being columns
+// nothing reads.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Transfer.php',
+    'Submits a paid transfer to the registrar and finishes it. Without it a customer pays to move a name and nothing is ever sent.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/Transfer.php',
+    'The facade cron and both domain screens reach it through. Its absence is a fatal on every cron tick, not a missing feature.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Migration/M202609060100AddOrderItemDomainAction.php',
+    'Adds order_items.domain_action to installs that predate 27.3. Without it every paid transfer on an upgraded install is recorded as a registration.'
+);
+
+// The registrar fixture. It reports names available and registers them for
+// nothing, so it belongs nowhere near a release - the same arrangement as the
+// Probe gateway from 22.3 and the Probe server from 22.4.
+must_not_exist(
+    'modules/registrars/Probe',
+    'Test fixture from domainwalk.php. It answers every availability check and registers anything it is handed.'
+);
+
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.
 foreach ([

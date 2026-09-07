@@ -352,6 +352,54 @@ class EmailTemplateSchema extends SchemaAbstract
                 ],
             ],
 
+            // The two domain messages. A renewal notice and an expiry notice are
+            // not the same message with a different date on it: one asks for
+            // money while there is still time, the other says the time has run
+            // out and what can still be done about it. Sending the first shape
+            // for the second situation is how somebody reads "your invoice is
+            // ready" and does not understand they are about to lose the name.
+            'domain-renewal' => [
+                'name'    =>  'domain_renewal',
+                'subject' =>  '{{domain}} is due for renewal',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>Your domain <strong>{{domain}}</strong> is due to expire on '
+                    . '<strong>{{expiry_date}}</strong>.</p>'
+                    . '<p>Invoice <strong>{{invoice_number}}</strong> for '
+                    . '<strong>{{total}}</strong> is now waiting, due {{due_date}}. '
+                    . 'Once it is paid the domain is renewed automatically.</p>'
+                    . '<p>If you would rather let it go, you can switch off automatic '
+                    . 'renewal from your account and ignore this invoice.</p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'     =>  'The client\'s first name.',
+                    'last_name'      =>  'The client\'s last name.',
+                    'domain'         =>  'The domain being renewed.',
+                    'expiry_date'    =>  'When it expires, already formatted.',
+                    'invoice_number' =>  'The renewal invoice number.',
+                    'total'          =>  'What is owed, already formatted.',
+                    'due_date'       =>  'When the invoice is due, already formatted.',
+                ],
+            ],
+
+            'domain-expired' => [
+                'name'    =>  'domain_expired',
+                'subject' =>  '{{domain}} has expired',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>Your domain <strong>{{domain}}</strong> expired on '
+                    . '<strong>{{expiry_date}}</strong> and is no longer working.</p>'
+                    . '<p>It can still be renewed for a short while. After that the '
+                    . 'registry releases it and anybody may register it.</p>'
+                    . '<p>{{invoice_line}}</p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'   =>  'The client\'s first name.',
+                    'last_name'    =>  'The client\'s last name.',
+                    'domain'       =>  'The domain that expired.',
+                    'expiry_date'  =>  'When it expired, already formatted.',
+                    'invoice_line' =>  'What to do next, naming the unpaid invoice when there is one.',
+                ],
+            ],
+
             'service-terminated' => [
                 'name'    =>  'service_terminated',
                 'subject' =>  'Your {{service_name}} service has been removed',

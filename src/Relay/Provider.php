@@ -95,6 +95,14 @@ class Provider extends RelayProvider
             'action.termination'    =>  Action\Termination::class,
             'action.tax'            =>  Action\Tax::class,
             'action.addon'          =>  Action\Addon::class,
+            'action.tld'            =>  Action\Tld::class,
+            'action.registration'   =>  Action\Registration::class,
+            'action.domain.renewal' =>  Action\DomainRenewal::class,
+            'action.config.option'  =>  Action\ConfigOption::class,
+            'action.transfer'       =>  Action\Transfer::class,
+            'action.promo'          =>  Action\Promo::class,
+            'action.credit.note'    =>  Action\CreditNote::class,
+            'action.refund'         =>  Action\Refund::class,
         ] as $accessor => $class) {
             $this->registry->singleton($accessor, $class);
         }

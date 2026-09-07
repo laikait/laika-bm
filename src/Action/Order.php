@@ -47,7 +47,7 @@ class Order extends Action
     /** @var string[] Columns An Item Form May Write */
     public const ITEM_FIELDS = [
         'type', 'product_relid', 'addon_relid', 'billing_cycle', 'domain',
-        'quantity', 'amount',
+        'domain_action', 'quantity', 'amount',
     ];
 
     /** @var string[] What An Order Line Can Be */
@@ -239,6 +239,7 @@ class Order extends Action
     public function replaceItems(int $orderId, array $items): void
     {
         (new OrderItemModel())->transaction(function (OrderItemModel $m) use ($orderId, $items): void {
+            $this->forgetConfig($orderId);
             $m->where(['order_relid' => $orderId])->delete();
 
             foreach ($items as $item) {
@@ -257,11 +258,25 @@ class Order extends Action
     public function recalculate(int $orderId): string
     {
         $total = '0';
+        $items = $this->items($orderId);
 
-        foreach ($this->items($orderId) as $item) {
+        foreach ($items as $item) {
             $total = Money::add(
                 $total,
                 Money::mul((string) ($item['quantity'] ?? '1'), (string) ($item['amount'] ?? '0'))
+            );
+        }
+
+        // Less whatever the code on this order takes off, so the figure on the
+        // order screen is the figure on the invoice. An order total that is
+        // higher than the invoice raised from it is a discrepancy somebody
+        // reports as a bug in the invoice.
+        $order = $this->find($orderId);
+
+        if (is_array($order)) {
+            $total = Money::sub(
+                $total,
+                (new Promo())->totalOf($this->promoDiscounts($order, $items))
             );
         }
 
@@ -328,7 +343,14 @@ class Order extends Action
 
         $items = [];
 
-        foreach ($lines as $line) {
+        // The order records WHICH code; the money is derived here, once, from
+        // the same method the cart quoted from. Storing the discount on the
+        // order as well would be the same figure in two places, and 22.2's
+        // whole argument is that a number the browser had a hand in is a
+        // number somebody can change.
+        $discounts = $this->promoDiscounts($order, $lines);
+
+        foreach ($lines as $index => $line) {
             $productId = (int) ($line['product_relid'] ?? 0);
 
             if ($productId > 0 && !array_key_exists($productId, $products)) {
@@ -352,6 +374,12 @@ class Order extends Action
                 // customer was shown, by a route the invoice can state.
                 'unit_price'    =>  $inclusive ? $tax->netOf($amount, $rate) : $amount,
                 'tax'           =>  $rate,
+
+                // Phase 25 already made this tax-correct: itemTotal() is
+                // quantity * unit_price - discount, and bands() taxes that -
+                // so a discounted line is taxed on what was actually charged
+                // for it with nothing here to get right.
+                'discount'      =>  $discounts[$index] ?? '0',
                 'service_relid' =>  $line['service_relid'] ?? null,
                 'domain_relid'  =>  $line['domain_relid'] ?? null,
             ];
@@ -414,6 +442,7 @@ class Order extends Action
         $affected = 0;
 
         $this->model()->transaction(function (OrderModel $m) use ($id, &$affected): void {
+            $this->forgetConfig($id);
             (new OrderItemModel())->where(['order_relid' => $id])->delete();
 
             $affected = $m->where([$m->id => $id])->delete();
@@ -471,6 +500,53 @@ class Order extends Action
     }
 
     /**
+     * What The Code On An Order Takes Off Each Of Its Lines
+     *
+     * Keyed the way the lines were passed in, so the caller can put each
+     * figure back on the line it came from. Empty when the order carries no
+     * code, which is every order this product placed before Phase 27.4.
+     *
+     * The promo row is read FRESH rather than snapshotted, and that is the
+     * right way round for the moment an invoice is raised: it is the last
+     * point at which the discount is still being decided. Afterwards the
+     * invoice holds the figures and nothing re-derives them - Phase 25's rule,
+     * and the reason recalculate() on an INVOICE does not go near this.
+     * @param array $order Order Row
+     * @param array $lines Order Lines
+     * @return array<int|string,string>
+     */
+    private function promoDiscounts(array $order, array $lines): array
+    {
+        $promoId = (int) ($order['promo_relid'] ?? 0);
+
+        if ($promoId <= 0) {
+            return [];
+        }
+
+        $promos = new Promo();
+        $promo = $promos->find($promoId);
+
+        if ($promo === null) {
+            return [];
+        }
+
+        $eligible = [];
+
+        foreach ($lines as $index => $line) {
+            $eligible[$index] = [
+                'type'    =>  (string) ($line['type'] ?? 'product'),
+                'product' =>  (int) ($line['product_relid'] ?? 0),
+                'amount'  =>  Money::mul(
+                    (string) ($line['quantity'] ?? '1'),
+                    (string) ($line['amount'] ?? '0')
+                ),
+            ];
+        }
+
+        return $promos->discountFor($promo, $eligible);
+    }
+
+    /**
      * Insert One Order Line
      * @param int $orderId Order ID
      * @param array $item Submitted Line
@@ -480,7 +556,7 @@ class Order extends Action
     {
         $data = $this->nullable(
             $this->only($item, self::ITEM_FIELDS),
-            ['product_relid', 'addon_relid', 'billing_cycle', 'domain']
+            ['product_relid', 'addon_relid', 'billing_cycle', 'domain', 'domain_action']
         );
 
         $type = (string) ($data['type'] ?? 'product');
@@ -492,12 +568,26 @@ class Order extends Action
 
         $model = new OrderItemModel();
 
-        return (int) $model->insert([
+        $itemId = (int) $model->insert([
             ...$data,
             $model->uid                =>  Uid::make(),
             'order_item_created_at'    =>  $this->now(),
             'order_item_updated_at'    =>  $this->now(),
         ]);
+
+        // The configuration rides in on the item rather than in ITEM_FIELDS,
+        // because it is not a column on this table - only() has already
+        // dropped it. It is written HERE, inside the caller's transaction, so
+        // a line whose choices did not get recorded cannot survive: a plan
+        // provisioned with nothing anywhere saying what size was ordered is
+        // worse than an order that failed outright.
+        $config = $item['config'] ?? null;
+
+        if (is_array($config) && $config !== []) {
+            (new ConfigOption())->attachToItem($itemId, $config);
+        }
+
+        return $itemId;
     }
 
     /**
@@ -510,7 +600,23 @@ class Order extends Action
         $type = (string) ($line['type'] ?? 'product');
 
         if ($type === 'domain') {
-            return 'Domain: ' . (string) ($line['domain'] ?? 'domain registration');
+            $name = (string) ($line['domain'] ?? 'domain registration');
+            $years = (new Tld())->yearsForCycle((string) ($line['billing_cycle'] ?? ''));
+
+            // A transfer says so. The two cost different money, take different
+            // time and can fail for different reasons, and an invoice line that
+            // called both "Domain" would leave staff guessing which the
+            // customer is asking about.
+            $label = (string) ($line['domain_action'] ?? '') === 'transfer'
+                ? 'Domain transfer: '
+                : 'Domain: ';
+
+            // The TERM, not the cycle name. A line reading "Domain: x.com
+            // (biennial)" next to a figure covering two years invites reading
+            // the figure as the yearly one; "2 years" cannot be read that way.
+            return $years > 0
+                ? $label . $name . ' (' . $years . ' year' . ($years === 1 ? '' : 's') . ')'
+                : $label . $name;
         }
 
         $product = null;
@@ -536,7 +642,36 @@ class Order extends Action
             return $cycle === '' ? $label : "{$label} ({$cycle})";
         }
 
-        return $cycle === '' ? $name : "{$name} ({$cycle})";
+        $label = $cycle === '' ? $name : "{$name} ({$cycle})";
+
+        // The configuration is IN the price of this line rather than beside
+        // it, so the description is the only place an invoice can say what
+        // was actually bought. "VPS Hosting (monthly) 65.00" where 20 of it
+        // is RAM is a line somebody rings up about and staff cannot answer.
+        $config = new ConfigOption();
+        $choices = $config->describeChoices(
+            $config->detailedForItem((int) ($line['order_item_id'] ?? 0))
+        );
+
+        return $choices === '' ? $label : $label . ' - ' . $choices;
+    }
+
+    /**
+     * Forget The Configuration On Every Line Of One Order
+     *
+     * order_item_config_values keys on the LINE, and a line being deleted
+     * takes its answers with it. Left behind they are unreachable from every
+     * screen and still copyable onto a service by anything reading by id.
+     * @param int $orderId Order ID
+     * @return void
+     */
+    private function forgetConfig(int $orderId): void
+    {
+        $config = new ConfigOption();
+
+        foreach ($this->items($orderId) as $line) {
+            $config->detachFromItem((int) ($line['order_item_id'] ?? 0));
+        }
     }
 
     /**
