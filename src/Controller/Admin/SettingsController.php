@@ -59,7 +59,7 @@ class SettingsController extends AdminController
             return $this->save('general', 'staff.settings');
         }
 
-        return $this->tab('general', 'Settings', [
+        return $this->tab('general', local('app'), [
             'front_templates' =>  $this->templateChoices(FRONT),
             'admin_templates' =>  $this->templateChoices(ADMIN),
             'panel_templates' =>  $this->templateChoices(PANEL),
@@ -76,7 +76,7 @@ class SettingsController extends AdminController
             return $this->save('localisation', 'staff.settings.localisation');
         }
 
-        return $this->tab('localisation', 'Localisation', [
+        return $this->tab('localisation', local('localisation'), [
             'languages'   =>  language_choices(),
             'timezones'   =>  $this->timezoneChoices(),
             'currencies'  =>  $this->currencyChoices(),
@@ -96,7 +96,7 @@ class SettingsController extends AdminController
             return $this->save('billing', 'staff.settings.billing');
         }
 
-        return $this->tab('billing', 'Billing');
+        return $this->tab('billing', local('billing'));
     }
 
     /**
@@ -109,7 +109,7 @@ class SettingsController extends AdminController
             return $this->save('security', 'staff.settings.security');
         }
 
-        return $this->tab('security', 'Security');
+        return $this->tab('security', local('security'));
     }
 
     ####################################################################################
@@ -126,7 +126,7 @@ class SettingsController extends AdminController
             return $this->save('mail', 'staff.settings.mail');
         }
 
-        return $this->tab('mail', 'Mail', [
+        return $this->tab('mail', local('smtp'), [
             'drivers'     =>  ['smtp' => 'SMTP', 'sendmail' => 'Sendmail', 'mail' => local('php_mail'), 'qmail' => 'qmail'],
             'encryptions' =>  ['tls' => 'TLS', 'ssl' => 'SSL', '' => 'None'],
             'queued'      =>  count(Mail::pending()),
@@ -361,7 +361,7 @@ class SettingsController extends AdminController
             return $this->saveStatuses();
         }
 
-        return $this->screen('settings-statuses', 'Statuses', [
+        return $this->screen('settings-statuses', local('statuses'), [
             'tab'    =>  'statuses',
             'tables' =>  $this->statusTables(),
         ]);
@@ -384,7 +384,7 @@ class SettingsController extends AdminController
             return $this->save('tax', 'staff.settings.tax');
         }
 
-        return $this->tab('tax', 'Tax', [
+        return $this->tab('tax', local('tax'), [
             'rules'     =>  Tax::listing(),
             'countries' =>  Country::choices(),
         ]);

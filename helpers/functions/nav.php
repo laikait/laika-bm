@@ -89,7 +89,7 @@ function nav_admin(?string $current = null): array
     // see - and of the icons that do exist, a cog is the only one that means
     // configuration. Two cogs in different groups beats one wrong glyph.
     nav_item('config_options', 'staff.config.options', 'settings',     staff_has_access('product.read'),     $billing);
-    nav_item('promos',       'staff.promos',       'megaphone',    staff_has_access('product.read'),     $billing);
+    nav_item('promos',       'staff.promos',       'megaphone',    staff_has_access('product.read'),     $billing, 'promo_codes');
     nav_item('orders',       'staff.orders',       'orders',       staff_has_access('order.read'),       $billing);
     // 'folder' rather than a services glyph, because there is not one: Icon::svg()
     // falls back silently on an unknown name, so a made-up icon name would ship a
@@ -229,13 +229,13 @@ function nav_settings(?string $current = null): array
 {
     Nav::flush();
 
-    nav_item('general',      'staff.settings',              'settings', true, null, null, 14);
+    nav_item('general',      'staff.settings',              'settings', true, null, 'app', 14);
     nav_item('localisation', 'staff.settings.localisation', 'domains',  true, null, null, 14);
     nav_item('billing',      'staff.settings.billing',      'invoices', true, null, null, 14);
     nav_item('tax',          'staff.settings.tax',          'currency', true, null, null, 14);
     nav_item('security',     'staff.settings.security',     'key',      true, null, null, 14);
-    nav_item('mail',         'staff.settings.mail',         'mail',     true, null, null, 14);
-    nav_item('templates',    'staff.settings.templates',    'edit',     true, null, null, 14);
+    nav_item('mail',         'staff.settings.mail',         'mail',     true, null, 'smtp', 14);
+    nav_item('templates',    'staff.settings.templates',    'edit',     true, null, 'email_templates', 14);
     nav_item('statuses',     'staff.settings.statuses',     'activity', true, null, null, 14);
 
     return nav_finish('settings', $current);
