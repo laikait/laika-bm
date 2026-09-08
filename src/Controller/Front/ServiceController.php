@@ -18,6 +18,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Model\Model;
 use LBM\Model\BillingCycleModel;
 use LBM\Service\Product;
+use LBM\Service\ProductType;
 use LBM\Service\Addon;
 use LBM\Service\ConfigOption;
 use LBM\Service\Currency;
@@ -108,6 +109,14 @@ class ServiceController extends FrontController
         return $this->screen('service', (string) $product['product_name'], [
             'meta_description' =>  $this->summary($product),
             'product'          =>  $product,
+
+            // Whether this kind of thing is ordered AGAINST a domain. The
+            // field is the whole of Phase 33 on this page - everything behind
+            // it, from Cart::add()'s $domain parameter to
+            // client_services.domain, has been in place and unreachable since
+            // Phase 0 because nothing ever posted one.
+            'needs_domain'     =>  ProductType::productNeedsDomain((int) $product['pid']),
+
             'group'            =>  $product['group_relid']
                 ? Product::group((int) $product['group_relid'])
                 : null,

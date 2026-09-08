@@ -16,6 +16,8 @@ namespace LBM\Support;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Action\ErrorLog as ErrorLogAction;
+use LBM\Support\ErrorLog;
 use LBM\Job\DomainRenewalJob;
 use LBM\Job\InvoiceGenerateJob;
 use LBM\Job\InvoiceReminderJob;
@@ -101,6 +103,12 @@ class Cron
      */
     public function run(): int
     {
+        // Before anything, and before the lock: a cron run is the one process
+        // in this product with nobody watching it, so a fatal here is the
+        // failure most likely to go unnoticed for weeks. cron.php runs no
+        // pipeline, so this is the only place it can be installed.
+        ErrorLog::install();
+
         $lock = $this->lock();
 
         if ($lock === false) {
@@ -302,6 +310,17 @@ class Cron
             return Mail::prune($days) . ' removed';
         });
 
+        // Rule three of the error log: it must prune. A table that only grows
+        // is one an operator eventually empties by hand, losing the entry they
+        // were looking for along with everything else.
+        //
+        // Inside task(), so a failure here is recorded and the run continues -
+        // and the irony is deliberate rather than lost: a tidy-up that threw
+        // would stop the day's remaining work over housekeeping.
+        $this->task('prune error log', static function (): string {
+            return (new ErrorLogAction())->prune();
+        });
+
         // Only stamped when the block actually ran. Stamping it up front would
         // mean a crash halfway through skipped the rest of the day's work
         // entirely, which is the one failure mode worth a repeated run.
@@ -334,6 +353,12 @@ class Cron
         } catch (Throwable $e) {
             $this->errors[] = $name . ': ' . $e->getMessage();
             $this->out($name . ': FAILED - ' . $e->getMessage() . $this->took($started));
+
+            // Until Phase 32 this line was the whole record, and it went to
+            // stdout - which on a real install is cron's mail, if the host
+            // sends any, and /dev/null in the crontab line this product's own
+            // documentation recommends.
+            ErrorLog::record($e, 'cron');
         }
     }
 

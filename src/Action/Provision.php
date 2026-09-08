@@ -16,6 +16,7 @@ namespace LBM\Action;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Support\ErrorLog;
 use Laika\Model\Model;
 use LBM\Model\BillingCycleModel;
 use LBM\Model\ClientServiceModel;
@@ -395,15 +396,34 @@ class Provision extends Action
         } catch (Throwable $e) {
             // A module that throws is a module that failed, not a fatal for the
             // cron run. The message is recorded so staff can see it.
+            $this->logProvisioning($service, 'create', $server, false, $e->getMessage());
+            ErrorLog::record($e, 'module', $this->moduleIdFor($server));
+
             return $this->failed($service, 'The module raised an error: ' . $e->getMessage());
         }
 
         if (!is_array($result) || ($result['success'] ?? false) !== true) {
-            return $this->failed(
-                $service,
-                trim((string) ($result['message'] ?? '')) ?: 'The module reported a failure.'
-            );
+            $why = trim((string) ($result['message'] ?? '')) ?: 'The module reported a failure.';
+
+            $this->logProvisioning($service, 'create', $server, false, $why, (array) $result);
+
+            // note(), not record(): nothing threw. A control panel refusing an
+            // account is the module working correctly and delivering bad news,
+            // and an operator does different things about that than about a
+            // module that is broken.
+            ErrorLog::note($why, 'module', $this->moduleIdFor($server));
+
+            return $this->failed($service, $why);
         }
+
+        $this->logProvisioning(
+            $service,
+            'create',
+            $server,
+            true,
+            (string) ($result['message'] ?? ''),
+            $result
+        );
 
         $services = new ClientService();
 

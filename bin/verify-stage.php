@@ -802,6 +802,76 @@ must_not_exist(
     'Test fixture from modulewalk.php. It exists only to keep the enabled list non-empty.'
 );
 
+// ---------------------------------------------------------------------------
+// Phase 32. The error log a shipped install has never had.
+// ---------------------------------------------------------------------------
+//
+// THIS IS THE ONE THE RELEASE BUILD ITSELF CAUSES. Handler::log() opens with
+// if (!DEBUG) return; and this very script forces DEBUG to a literal false a
+// few steps earlier - so the archive is precisely the artefact on which the
+// framework writes no log at all. Shipping the gap while shipping the fix is
+// the failure worth blocking a build over.
+must_exist(
+    'vendor/laikait/laika-bm/src/Schema/ErrorLogSchema.php',
+    'Without the error_logs table nothing has anywhere to record a failure, on the one build where the framework records none either.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Support/ErrorLog.php',
+    'The writer. GlobalPipeline, Cron and three Actions all call it; without it the package does not load at all.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Model/ErrorLogModel.php',
+    'The writer builds on it.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/ErrorLog.php',
+    'The reading half. Without it the log screen is a 500.'
+);
+must_exist(
+    'template/admin/bootstrap/util-logs.twig',
+    'The log screen. A table nobody can read is a table nobody looks at.'
+);
+
+// logwalk's fixture. Its whole purpose is to fail: one route throws, one is a
+// deliberate 404, and one includes a file that CANNOT BE COMPILED - which ends
+// the request before any page can render. Shipping it would put four broken
+// public URLs on an operator's site.
+must_not_exist(
+    'modules/fraud/Boom',
+    'Test fixture from logwalk.php. Every route on it fails on purpose, one of them fatally.'
+);
+
+// ---------------------------------------------------------------------------
+// Phase 33. Product types, and the domain an order is placed against.
+// ---------------------------------------------------------------------------
+//
+// The migration is the half that matters on an UPGRADE. `product_types` has
+// existed since Phase 0, so up() will not add a column to it - which is the
+// whole reason Phase 21 built migrations. Ship the feature without this and
+// every existing install has a product type table with no requires_domain
+// column, and Action\ProductType answers false for everything: the field never
+// appears, and shared hosting is ordered against no domain at all.
+must_exist(
+    'vendor/laikait/laika-bm/src/Migration/M202609080200AddProductTypeDomain.php',
+    'Adds product_types.requires_domain and display_name to installs that predate Phase 33.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/ProductType.php',
+    'The one place that decides whether an order needs a domain. Without it the cart, the order form and the product form all fail to resolve.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/ProductTypeController.php',
+    'The product types screen. Without it three registered routes point at a class that is not there.'
+);
+must_exist(
+    'template/admin/bootstrap/product-types.twig',
+    'The product types listing.'
+);
+must_exist(
+    'template/admin/bootstrap/product-type-form.twig',
+    'The product type form - the only place requires_domain can be switched.'
+);
+
 // lf-app sample code. The directories stay (PSR-4 App\ is mapped there); the
 // framework skeleton's demo classes do not.
 foreach ([

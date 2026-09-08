@@ -37,6 +37,32 @@ use LBM\Module\ModuleManager;
 defined('FRONT') || define('FRONT', 'front');
 
 ####################################################################################
+/*------------------------------ THE FATAL HOOK ----------------------------------*/
+####################################################################################
+//
+// Here rather than in GlobalPipeline with the rest of the error log, and it is a
+// matter of ORDER rather than of importance.
+//
+// Shutdown functions run in the order they were registered, and laika-core
+// registers one in ITS loader - which composer runs AFTER this file. That one
+// renders the error page, and on a DEBUG install it renders through Whoops,
+// which calls exit() from inside the shutdown sequence. Everything registered
+// after it is never reached.
+//
+// So this cannot wait for the pipeline. A shutdown function registered there is
+// registered too late to see a fatal at all, and Phase 32's first draft did
+// exactly that: it looked correct, and the one class of failure that leaves a
+// request unfinished - a real E_ERROR or E_COMPILE_ERROR, which no exception
+// handler can ever see - was also the one class that left no record.
+//
+// Registering here costs nothing. The function does nothing unless
+// error_get_last() reports a fatal, and it carries its own try/catch because at
+// this point in the boot there is no database, no option() and possibly no
+// schema at all.
+
+register_shutdown_function([LBM\Support\ErrorLog::class, 'shutdown']);
+
+####################################################################################
 /*--------------------------------- LBM RESOURCES --------------------------------*/
 ####################################################################################
 //

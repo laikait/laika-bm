@@ -22,6 +22,7 @@ use Laika\Core\Exceptions\HttpException;
 use LBM\Controller\Controller;
 use LBM\Pipeline\Auth;
 use LBM\Service\Activity;
+use LBM\Support\ErrorLog;
 
 /**
  * Base for every admin screen.
@@ -172,8 +173,17 @@ abstract class AdminController extends Controller
         try {
             $work();
         } catch (HttpException $e) {
+            // A deliberate 404 or 403 is an answer, not a fault. Logging these
+            // would fill the table with every mistyped URL and bury the rows
+            // somebody actually needs.
             throw $e;
         } catch (Throwable $e) {
+            // The flash tells whoever pressed the button. Nothing told anybody
+            // else, and a message on a screen is gone the moment it is read -
+            // so "it failed once last Tuesday" was, until Phase 32,
+            // unanswerable on a shipped install.
+            ErrorLog::record($e, 'app');
+
             return $this->done($route, $e->getMessage(), false, $params);
         }
 

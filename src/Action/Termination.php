@@ -16,6 +16,7 @@ namespace LBM\Action;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Support\ErrorLog;
 use RuntimeException;
 use Laika\Model\Model;
 use LBM\Model\ClientServiceModel;
@@ -493,15 +494,33 @@ class Termination extends Action
                 'options' =>  ['reason' => $reason],
             ]);
         } catch (Throwable $e) {
+            $this->logProvisioning($service, 'terminate', $server, false, $e->getMessage());
+            ErrorLog::record($e, 'module', $this->moduleIdFor($server));
+
             return ['success' => false, 'message' => 'The module raised an error: ' . $e->getMessage()];
         }
 
         if (!is_array($result) || ($result['success'] ?? false) !== true) {
-            return [
-                'success' =>  false,
-                'message' =>  trim((string) ($result['message'] ?? '')) ?: 'The module reported a failure.',
-            ];
+            $why = trim((string) ($result['message'] ?? '')) ?: 'The module reported a failure.';
+
+            $this->logProvisioning($service, 'terminate', $server, false, $why, (array) $result);
+            ErrorLog::note($why, 'module', $this->moduleIdFor($server));
+
+            return ['success' => false, 'message' => $why];
         }
+
+        // The one entry in this log that records something being DESTROYED.
+        // Terminate is the only action in the product with no way back, so an
+        // operator asked "what happened to that account" needs a row saying it
+        // was this installation that did it, when, and on whose instruction.
+        $this->logProvisioning(
+            $service,
+            'terminate',
+            $server,
+            true,
+            (string) ($result['message'] ?? ''),
+            $result
+        );
 
         return ['success' => true, 'message' => (string) ($result['message'] ?? 'Done.')];
     }

@@ -18,7 +18,9 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use RuntimeException;
 use Laika\Core\Exceptions\HttpException;
 use Laika\Service\Request;
+use LBM\Action\ErrorLog as ActionErrorLog;
 use LBM\Install\Installer;
+use LBM\Service\ErrorLog;
 use LBM\Service\Setting;
 use LBM\Service\Todo;
 use LBM\Support\Health;
@@ -239,6 +241,42 @@ class UtilController extends AdminController
     {
         return $this->screen('util-automation', local('automation_status'), [
             'automation' =>  (new Health())->automation(),
+        ]);
+    }
+
+    ####################################################################################
+    /*=================================== ERROR LOG ==================================*/
+    ####################################################################################
+
+    /**
+     * What Has Gone Wrong
+     *
+     * The screen this whole phase exists for. `Handler::log()` opens with
+     * `if (!DEBUG) return;` and the gate forces DEBUG false in every release,
+     * so until Phase 32 an operator whose site 500'd had nothing to look at at
+     * all: the exception was rendered and then dropped on the floor.
+     *
+     * GET with the filters in the query string, so one member of staff can send
+     * another a link to exactly what they are looking at.
+     * @return string
+     */
+    public function logs(): string
+    {
+        $source = trim((string) Request::input('source', ''));
+        $level = trim((string) Request::input('level', ''));
+
+        return $this->screen('util-logs', local('error_log'), [
+            'logs'      =>  ErrorLog::browseLog(
+                $source === '' ? null : $source,
+                $level === '' ? null : $level,
+                $this->search()
+            ),
+            'counts'    =>  ErrorLog::countsBySource(),
+            'sources'   =>  ActionErrorLog::SOURCES,
+            'levels'    =>  ActionErrorLog::LEVELS,
+            'source'    =>  $source,
+            'level'     =>  $level,
+            'retention' =>  ErrorLog::retentionDays(),
         ]);
     }
 

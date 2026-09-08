@@ -23,6 +23,7 @@ use LBM\Service\Addon;
 use LBM\Service\ConfigOption;
 use LBM\Service\Currency;
 use LBM\Service\Product;
+use LBM\Service\ProductType;
 
 /**
  * Products, their groups and their prices.
@@ -416,25 +417,17 @@ class ProductController extends AdminController
      * Read from the table rather than hardcoded: product_types is seeded data
      * an operator can extend, and a fixed list here would quietly ignore
      * anything they added.
+     * Through the ACTION since Phase 33, which is what finally gave that table a
+     * screen. This used to build the list off a bare Model and title-case
+     * `type_name` itself - a second opinion about what a type is called, which
+     * stopped being harmless the moment a type gained a `display_name` an
+     * operator can set: the dropdown would have gone on saying "Shared Hosting"
+     * while every other screen said whatever they had typed.
      * @return array<int,string>
      */
     private function typeChoices(): array
     {
-        $model = (new Model())->table('product_types');
-        $choices = [];
-
-        foreach ($model->get() as $row) {
-            $id = (int) ($row['product_type_id'] ?? $row['type_id'] ?? 0);
-
-            if ($id === 0) {
-                continue;
-            }
-
-            $name = (string) ($row['product_type_name'] ?? $row['type_name'] ?? $row['name'] ?? '');
-            $choices[$id] = ucwords(str_replace('_', ' ', $name));
-        }
-
-        return $choices;
+        return ProductType::choices();
     }
 
     /**

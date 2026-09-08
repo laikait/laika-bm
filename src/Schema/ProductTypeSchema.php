@@ -28,7 +28,32 @@ class ProductTypeSchema extends SchemaAbstract
         Schema::on($this->connection)->createIfNotExists($this->table, function (Blueprint $t) {
             $t->id('product_type_id');
             $t->uid('uid');
+            // The IDENTIFIER, unique and matched on by seeds and by code:
+            // `shared_hosting`, never "Shared Hosting".
             $t->string('type_name');
+
+            // What an operator reads. Until Phase 33 there was no such column
+            // and `type_name` was rendered raw, so the product form's type
+            // dropdown literally said `shared_hosting`. Nullable, because a
+            // type somebody adds without one falls back to a title-cased
+            // `type_name` rather than to nothing.
+            $t->string('display_name', 100)->nullable()->default(NULL);
+
+            // WHETHER AN ORDER FOR THIS KIND OF THING NEEDS A DOMAIN NAME.
+            //
+            // Hosting, a VPS and a dedicated server are ordered AGAINST a
+            // domain - it is what the account is created for. An SSL
+            // certificate is ISSUED FOR one. A domain registration is not on
+            // that list and must not be: it has its own route and its own
+            // price list, and asking for a domain to put a domain on is
+            // nonsense.
+            //
+            // Defaults to `no`, which is the only safe answer for a type this
+            // product knows nothing about - an operator's own type cannot be
+            // guessed at, and guessing `yes` would make it unorderable until
+            // somebody worked out why.
+            $t->enum('requires_domain', ['yes', 'no'])->default('no');
+
             $t->enum('is_default', ['yes', 'no'])->default('no');
 
             // Indexes
@@ -58,14 +83,17 @@ class ProductTypeSchema extends SchemaAbstract
         $model = new ProductTypeModel();
         $model->transaction(function (ProductTypeModel $m) {
             try {
+                // The same values M202609080200AddProductTypeDomain writes on
+                // an installation that already exists. An install should not
+                // behave differently because of WHEN it was created.
                 $default = [
-                    ['type_name' => 'shared_hosting', 'is_default' => 'yes'],
-                    ['type_name' => 'vps', 'is_default' => 'yes'],
-                    ['type_name' => 'dedicated', 'is_default' => 'yes'],
-                    ['type_name' => 'domain', 'is_default' => 'yes'],
-                    ['type_name' => 'ssl', 'is_default' => 'yes'],
-                    ['type_name' => 'software', 'is_default' => 'yes'],
-                    ['type_name' => 'other', 'is_default' => 'yes']
+                    ['type_name' => 'shared_hosting', 'display_name' => 'Shared Hosting',    'requires_domain' => 'yes', 'is_default' => 'yes'],
+                    ['type_name' => 'vps',            'display_name' => 'VPS',               'requires_domain' => 'yes', 'is_default' => 'yes'],
+                    ['type_name' => 'dedicated',      'display_name' => 'Dedicated Server',  'requires_domain' => 'yes', 'is_default' => 'yes'],
+                    ['type_name' => 'domain',         'display_name' => 'Domain',            'requires_domain' => 'no',  'is_default' => 'yes'],
+                    ['type_name' => 'ssl',            'display_name' => 'SSL Certificate',   'requires_domain' => 'yes', 'is_default' => 'yes'],
+                    ['type_name' => 'software',       'display_name' => 'Software',          'requires_domain' => 'no',  'is_default' => 'yes'],
+                    ['type_name' => 'other',          'display_name' => 'Other',             'requires_domain' => 'no',  'is_default' => 'yes']
                 ];
                 $m->insert(Uid::stamp($default));
             } catch (\Throwable $e) {

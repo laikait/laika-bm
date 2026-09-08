@@ -88,6 +88,8 @@ class Provider extends RelayProvider
             'action.announcement'   =>  Action\Announcement::class,
             'action.knowledgebase'  =>  Action\KnowledgeBase::class,
             'action.todo'           =>  Action\Todo::class,
+            'action.errorlog'       =>  Action\ErrorLog::class,
+            'action.producttype'    =>  Action\ProductType::class,
             'action.gateway'        =>  Action\Gateway::class,
             'action.gateway.callback' =>  Action\GatewayCallback::class,
             'action.provision'      =>  Action\Provision::class,

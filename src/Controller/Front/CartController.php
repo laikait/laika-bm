@@ -28,6 +28,7 @@ use LBM\Service\Order;
 use LBM\Service\Tax;
 use LBM\Service\Product;
 use LBM\Service\Promo;
+use LBM\Service\ProductType;
 use LBM\Service\Tld;
 use LBM\Support\Cart;
 
@@ -141,6 +142,20 @@ class CartController extends FrontController
         // just been told the thing was added.
         if (Product::price((int) $product['pid'], (int) ($currency['currency_id'] ?? 0), $cycle) === null) {
             return $this->done('front.cart', local('cart_no_price'), false);
+        }
+
+        // A DOMAIN, IF THIS KIND OF PRODUCT NEEDS ONE. Same door-and-render
+        // pair as everything else here: Cart::line() checks again and is what
+        // protects the order, and this is what tells the visitor which field
+        // to fill in while the form is still in front of them.
+        //
+        // cleanDomain() is what decides whether what they typed is a domain at
+        // all - it is called through Cart::add() anyway, so asking it here is
+        // the only way to tell "they left it blank" from "they typed a
+        // sentence", both of which arrive as null further in.
+        if (ProductType::productNeedsDomain((int) $product['pid'])
+            && Cart::cleanDomainInput($input['domain'] ?? null) === null) {
+            return $this->done('front.cart', local('cart_needs_domain'), false);
         }
 
         // Checked HERE as well as at render time, for the same reason the price

@@ -16,6 +16,7 @@ namespace LBM\Action;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Support\ErrorLog;
 use Laika\Model\Model;
 use LBM\Model\ClientServiceModel;
 use LBM\Model\InvoiceItemModel;
@@ -638,15 +639,29 @@ class Dunning extends Action
             // A module that throws and a module that returns false are two
             // shapes of the same event. Catching here is what stops one
             // unreachable control panel taking down the whole cron run.
+            $this->logProvisioning($service, $verb, $server, false, $e->getMessage());
+            ErrorLog::record($e, 'module', $this->moduleIdFor($server));
+
             return ['success' => false, 'message' => 'The module raised an error: ' . $e->getMessage()];
         }
 
         if (!is_array($result) || ($result['success'] ?? false) !== true) {
-            return [
-                'success' =>  false,
-                'message' =>  trim((string) ($result['message'] ?? '')) ?: 'The module reported a failure.',
-            ];
+            $why = trim((string) ($result['message'] ?? '')) ?: 'The module reported a failure.';
+
+            $this->logProvisioning($service, $verb, $server, false, $why, (array) $result);
+            ErrorLog::note($why, 'module', $this->moduleIdFor($server));
+
+            return ['success' => false, 'message' => $why];
         }
+
+        $this->logProvisioning(
+            $service,
+            $verb,
+            $server,
+            true,
+            (string) ($result['message'] ?? ''),
+            $result
+        );
 
         return ['success' => true, 'message' => (string) ($result['message'] ?? 'Done.')];
     }

@@ -27,6 +27,7 @@ use Laika\Route\Contracts\PipelineInterface;
 use LBM\Support\Clock;
 use LBM\Module\ModuleManager;
 use LBM\Action\Module as ModuleAction;
+use LBM\Support\ErrorLog;
 
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
@@ -181,6 +182,19 @@ class GlobalPipeline implements PipelineInterface
         // write, once, and the modules load from the next request onward -
         // rather than a cleared cache quietly disabling every module forever.
         $this->cacheModules();
+
+        // 5. The error log.
+        //
+        // LAST, deliberately: everything above has to work for this to have
+        // anywhere to write. It chains onto laika-core's exception handler
+        // rather than replacing it, so rendering is untouched and LBM only
+        // adds a row on the way past.
+        //
+        // It cannot be done in a loader. laika-core registers its handler in
+        // ITS loader, which composer runs AFTER LBM's, so a handler installed
+        // there is replaced a moment later - and there would be no database
+        // open to write to anyway.
+        ErrorLog::install();
     }
 
     /**

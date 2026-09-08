@@ -31,6 +31,7 @@ use LBM\Controller\Admin\ServiceController;
 use LBM\Controller\Admin\TicketController;
 use LBM\Controller\Admin\InvoiceController;
 use LBM\Controller\Admin\ProductController;
+use LBM\Controller\Admin\ProductTypeController;
 use LBM\Controller\Admin\ProfileController;
 use LBM\Controller\Admin\AddonController;
 use LBM\Controller\Admin\ConfigOptionController;
@@ -138,6 +139,31 @@ Url::group(ADMIN, function () use ($uid): void {
     /*=============================== PRODUCTS ==============================*/
     Url::get('/products', [ProductController::class, 'index'])
         ->name('staff.products')->pipeline([Permission::class . '|perm=product.read']);
+
+    /*---------------------------- Product Types ---------------------------*/
+    //
+    // Registered before `/product/{product}` below, and literal-before-
+    // parameterised is not a formality here: matching is first-match-wins in
+    // registration order with no specificity ranking, and $uid is
+    // [a-zA-Z0-9\-]+, which matches the word "types" perfectly well.
+    //
+    // Gated on `product` rather than a group of its own - 20.5's rule, and a
+    // product type IS catalogue.
+    Url::get('/products/types', [ProductTypeController::class, 'index'])
+        ->name('staff.product.types')->pipeline([Permission::class . '|perm=product.read']);
+
+    Url::get('/products/types/new', [ProductTypeController::class, 'create'])
+        ->name('staff.product.type.new')->pipeline([Permission::class . '|perm=product.create']);
+    Url::post('/products/types/new', [ProductTypeController::class, 'save'])
+        ->pipeline([Permission::class . '|perm=product.create']);
+
+    Url::get("/products/type/{type:{$uid}}", [ProductTypeController::class, 'edit'])
+        ->name('staff.product.type')->pipeline([Permission::class . '|perm=product.read']);
+    Url::post("/products/type/{type:{$uid}}", [ProductTypeController::class, 'save'])
+        ->pipeline([Permission::class . '|perm=product.update']);
+
+    Url::post("/products/type/{type:{$uid}}/delete", [ProductTypeController::class, 'delete'])
+        ->name('staff.product.type.delete')->pipeline([Permission::class . '|perm=product.delete']);
 
     Url::get('/products/new', [ProductController::class, 'create'])
         ->name('staff.product.new')->pipeline([Permission::class . '|perm=product.create']);
@@ -566,6 +592,13 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.util.automation')->pipeline([Permission::class . '|perm=settings.read']);
     Url::get('/utils/update', [UtilController::class, 'update'])
         ->name('staff.util.update')->pipeline([Permission::class . '|perm=settings.read']);
+    // The error log. GET, with the filters in the query string, so one member
+    // of staff can send another a link to exactly what they are looking at -
+    // and behind settings.read like every other utility, because 20.5's rule
+    // still holds: a new permission group is invisible on every install that
+    // already has roles.
+    Url::get('/utils/logs', [UtilController::class, 'logs'])
+        ->name('staff.util.logs')->pipeline([Permission::class . '|perm=settings.read']);
     Url::get('/utils/todos', [UtilController::class, 'todos'])
         ->name('staff.util.todos')->pipeline([Permission::class . '|perm=settings.read']);
 

@@ -24,6 +24,7 @@ use LBM\Service\Domain;
 use LBM\Service\Addon;
 use LBM\Service\ConfigOption;
 use LBM\Service\Product;
+use LBM\Service\ProductType;
 use LBM\Service\Promo;
 use LBM\Service\Tax;
 use LBM\Service\Tld;
@@ -754,6 +755,24 @@ class Cart
             return $line;
         }
 
+        /*
+         * THE DOMAIN, IF THIS KIND OF PRODUCT NEEDS ONE.
+         *
+         * Checked HERE as well as at the door, and this is the copy that
+         * protects an order: a cart sits open for hours, and an operator can
+         * switch `requires_domain` on for a type - or move a product to a
+         * type that has it on - while one does.
+         *
+         * A problem, not a silent drop. 22.2 found a checkout that quietly
+         * dropped an unorderable line, which invoices the customer for part
+         * of what they chose and refuses them the rest.
+         */
+        if (ProductType::productNeedsDomain($item['product']) && ($item['domain'] ?? null) === null) {
+            $line['problem'] = 'needs_domain';
+
+            return $line;
+        }
+
         $line['price']     = Money::round((string) ($price['price'] ?? '0'));
         $line['setup_fee'] = Money::round((string) ($price['setup_fee'] ?? '0'));
 
@@ -1268,6 +1287,22 @@ class Cart
      * @param mixed $domain Submitted Domain
      * @return ?string
      */
+    /**
+     * The Public Name For The Same Rules
+     *
+     * `CartController::add()` has to tell "they left the domain blank" from
+     * "they typed something that is not a domain", and both arrive as null
+     * once cleanDomain() has had them. A second copy of the rules in the
+     * controller would be two answers to one question, and the first person to
+     * change one of them would not know about the other.
+     * @param mixed $domain Submitted Value
+     * @return ?string Null when it is not a domain name
+     */
+    public static function cleanDomainInput(mixed $domain): ?string
+    {
+        return self::cleanDomain($domain);
+    }
+
     private static function cleanDomain(mixed $domain): ?string
     {
         if (!is_string($domain)) {
