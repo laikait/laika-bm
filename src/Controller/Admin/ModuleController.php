@@ -29,7 +29,7 @@ class ModuleController extends AdminController
 {
     protected function nav(): string
     {
-        return 'modules';
+        return 'settings';
     }
 
     /**

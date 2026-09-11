@@ -84,8 +84,11 @@ class ModuleManager
      *
      * `plugins` is gone (2026-09-03) - addons fill that role - and so is
      * `widgets`, which was an empty directory the loader never knew about.
+     *
+     * `lookup` arrived in Phase 36: a module that answers whether a domain is
+     * free without registering anything. Laika Whois ships as one.
      */
-    public const TYPES = ['fraud', 'addons', 'gateways', 'servers', 'registrars'];
+    public const TYPES = ['fraud', 'addons', 'gateways', 'servers', 'registrars', 'lookup'];
 
     /**
      * @var array<string,?string> The Contract Each Resource Kind Must Satisfy
@@ -386,7 +389,7 @@ class ModuleManager
                 'resources' =>  $registered,
 
                 // The class implementing this kind's contract - GatewayInterface,
-                // ServerInterface or RegistrarInterface. modules/README.md has
+                // ServerInterface, RegistrarInterface or LookupInterface. modules/README.md has
                 // documented this key since Phase 9 and nothing read it until
                 // Phase 22 needed to find a gateway driver, so a module could
                 // declare one and be quietly ignored. Recorded raw: whether it

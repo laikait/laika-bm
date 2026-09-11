@@ -30,7 +30,7 @@ class ServerController extends AdminController
 {
     protected function nav(): string
     {
-        return 'servers';
+        return 'settings';
     }
 
     /**

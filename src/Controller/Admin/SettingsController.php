@@ -42,7 +42,29 @@ class SettingsController extends AdminController
 {
     protected function nav(): string
     {
-        return 'general_settings';
+        return 'settings';
+    }
+
+    ####################################################################################
+    /*===================================== HUB ======================================*/
+    ####################################################################################
+
+    /**
+     * The Settings Hub
+     *
+     * Every settings screen as a card. The route carries no permission of its
+     * own: each card keeps the one its screen has always had, and
+     * settings_cards() leaves out what this member of staff cannot open - so a
+     * role with none gets an empty page, and the sidebar never offered it the
+     * entry in the first place.
+     * @return string
+     */
+    public function index(): string
+    {
+        return $this->screen('settings', local('settings'), [
+            'cards'        =>  settings_cards(),
+            'settings_hub' =>  true,
+        ]);
     }
 
     ####################################################################################
@@ -174,7 +196,6 @@ class SettingsController extends AdminController
         $model = new EmailTemplateModel();
 
         return $this->screen('settings-email-templates', local('email_templates'), [
-            'tab'       =>  'templates',
             'templates' =>  $model->order('name', 'ASC')->get(),
         ]);
     }
@@ -246,7 +267,6 @@ class SettingsController extends AdminController
         }
 
         return $this->screen('settings-email-template-new', local('add_template'), [
-            'tab' =>  'templates',
         ]);
     }
 
@@ -338,7 +358,6 @@ class SettingsController extends AdminController
         }
 
         return $this->screen('settings-email-template', $row['name'], [
-            'tab'      =>  'templates',
             'template' =>  $row,
         ]);
     }
@@ -362,7 +381,6 @@ class SettingsController extends AdminController
         }
 
         return $this->screen('settings-statuses', local('statuses'), [
-            'tab'    =>  'statuses',
             'tables' =>  $this->statusTables(),
         ]);
     }
@@ -457,7 +475,6 @@ class SettingsController extends AdminController
     private function tab(string $group, string $title, array $vars = []): string
     {
         return $this->screen('settings-' . $group, $title, array_merge([
-            'tab'      =>  $group,
             'settings' =>  Setting::group($group),
         ], $vars));
     }

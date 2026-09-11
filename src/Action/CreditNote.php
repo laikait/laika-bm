@@ -386,7 +386,8 @@ class CreditNote extends Action
      * @param array $input {
      *     @type int    $client_relid   Who is being credited. Required
      *     @type int    $invoice_relid  Which invoice, or 0/absent for none
-     *     @type int    $currency_relid Currency. Defaults to the invoice's own
+     *     @type int    $currency_relid Currency. Defaults to the invoice's, then the
+     *                                  client's, then the install's default
      *     @type string $amount         Gross amount. Required, greater than zero
      *     @type string $reason         Why, for the customer to read
      * }
@@ -439,39 +440,32 @@ class CreditNote extends Action
             }
         }
 
-        $currencyId = (int) ($input['currency_relid'] ?? 0);
-
-        if ($currencyId <= 0) {
-            // The invoice's currency before the client's: a note against a
-            // document has to be in the document's money, and a client whose
-            // default was changed since would otherwise credit the wrong one.
-            $currencyId = (int) ($invoice['currency_relid'] ?? $client['currency_relid'] ?? 0);
-        }
-
+        $currencyId = $this->currencyFor((int) ($input['currency_relid'] ?? 0), $invoice, $client);
         $reason = trim((string) ($input['reason'] ?? ''));
 
-        $id = $this->create([
-            'client_relid'   =>  $clientId,
-            'invoice_relid'  =>  $invoiceId > 0 ? $invoiceId : null,
-            'currency_relid' =>  $currencyId,
-            'amount'         =>  $amount,
-            'used_amount'    =>  '0',
-            'reason'         =>  $reason !== '' ? $reason : null,
-            'status_relid'   =>  $this->statusId('open') ?? 1,
-        ]);
+        // The document and the money in ONE transaction. Written apart, a
+        // failure between them left a note with no credit behind it - a
+        // document promising money the account never received.
+        return (int) $this->model()->transaction(function () use ($clientId, $invoiceId, $currencyId, $amount, $reason): int {
+            $id = $this->create([
+                'client_relid'   =>  $clientId,
+                'invoice_relid'  =>  $invoiceId > 0 ? $invoiceId : null,
+                'currency_relid' =>  $currencyId,
+                'amount'         =>  $amount,
+                'used_amount'    =>  '0',
+                'reason'         =>  $reason !== '' ? $reason : null,
+                'status_relid'   =>  $this->statusId('open') ?? 1,
+            ]);
 
-        // The money, second. The document exists first so a ledger entry can
-        // never point at a note that was not written - and a failure here
-        // leaves a note with no credit behind it, which is visible on the
-        // screen, rather than credit with no note, which is not.
-        (new Transaction())->credit(
-            $clientId,
-            $amount,
-            $reason !== '' ? $reason : ('Credit note ' . $this->number($id)),
-            $currencyId > 0 ? $currencyId : null
-        );
+            (new Transaction())->credit(
+                $clientId,
+                $amount,
+                $reason !== '' ? $reason : ('Credit note ' . $this->number($id)),
+                $currencyId
+            );
 
-        return $id;
+            return $id;
+        });
     }
 
     /**
@@ -581,20 +575,67 @@ class CreditNote extends Action
             );
         }
 
-        $affected = $voided === null ? 0 : $this->update((int) $note['credit_note_id'], [
-            'status_relid' =>  $voided,
-        ]);
+        if ($voided === null) {
+            throw new RuntimeException('There is no voided status to mark this note with.');
+        }
 
+        // Taken back in the NOTE's currency - the money the credit was given
+        // in - never the client's current one. The client's used to be read
+        // here, and a client with no currency on file made this write fail.
+        $currencyId = $this->currencyFor((int) ($note['currency_relid'] ?? 0), null, $client);
+        $noteId = (int) $note['credit_note_id'];
+
+        // The money and the document in ONE transaction. The old code marked the
+        // note void and then failed to take the credit back, so the note said
+        // void while the credit was still on the account.
+        //
         // The ledger records the reversal as its own entry rather than deleting
         // the credit: Action\Transaction is append-only in spirit, and an
         // accounts history that can be quietly rewritten is not a history.
-        (new Transaction())->credit(
-            $clientId,
-            '-' . $amount,
-            'Credit note ' . $this->number((int) $note['credit_note_id']) . ' voided'
-        );
+        return (int) $this->model()->transaction(function () use ($clientId, $amount, $currencyId, $noteId, $voided): int {
+            (new Transaction())->credit(
+                $clientId,
+                '-' . $amount,
+                'Credit note ' . $this->number($noteId) . ' voided',
+                $currencyId
+            );
 
-        return $affected;
+            return $this->update($noteId, ['status_relid' => $voided]);
+        });
+    }
+
+    /**
+     * The Currency a Note Is In
+     *
+     * The first of: what was asked for, the invoice's, the client's, and the
+     * install's default. The invoice's before the client's, because a note
+     * against a document has to be in the document's money. The default is
+     * last because `clients.currency_relid` is nullable, and a goodwill note
+     * to a client with no currency on file still has to be in something.
+     * @param int $given Currency Asked For, Or 0
+     * @param ?array $invoice Invoice Row
+     * @param ?array $client Client Row
+     * @return int Currency ID
+     * @throws RuntimeException When nothing resolves
+     */
+    private function currencyFor(int $given, ?array $invoice, ?array $client): int
+    {
+        foreach ([$given, (int) ($invoice['currency_relid'] ?? 0), (int) ($client['currency_relid'] ?? 0)] as $id) {
+            if ($id > 0) {
+                return $id;
+            }
+        }
+
+        $default = (int) ((new Currency())->default()['currency_id'] ?? 0);
+
+        if ($default > 0) {
+            return $default;
+        }
+
+        throw new RuntimeException(
+            'This credit note has no currency: the client has none on file and the install has no '
+            . 'default currency. Set a default currency first.'
+        );
     }
 
     /**

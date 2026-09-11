@@ -45,7 +45,7 @@ class ConfigOptionController extends AdminController
 {
     protected function nav(): string
     {
-        return 'config_options';
+        return 'settings';
     }
 
     /**

@@ -15,12 +15,11 @@ namespace LBM\Controller\Front;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
-use Throwable;
 use Laika\Service\Request;
 use LBM\Service\Currency;
 use LBM\Service\Domain;
+use LBM\Service\Lookup;
 use LBM\Service\Tld;
-use LBM\Support\RegistersDomains;
 
 /**
  * The public domain search - what a visitor types a name into.
@@ -35,10 +34,11 @@ use LBM\Support\RegistersDomains;
  * Available, taken, and NOT KNOWN - and the third is the one that has to be
  * shown honestly rather than folded into one of the others.
  *
- *   - An install with no registrar module cannot ask anybody. Every name comes
- *     back unknown, and the visitor is told the operator will check. That is a
- *     supported way to run this shop, exactly as a product with no provisioning
- *     module is: Phase 22.4 settled the same question the same way.
+ *   - An install with no lookup module and no registrar module cannot ask
+ *     anybody. Every name comes back unknown, and the visitor is told the
+ *     operator will check. That is a supported way to run this shop, exactly
+ *     as a product with no provisioning module is: Phase 22.4 settled the same
+ *     question the same way.
  *   - A lookup that failed is not a name that is taken. Showing it as taken
  *     turns a bad afternoon at the registry into a shop that refuses to sell
  *     anything, and nobody watching the screen would know why.
@@ -46,8 +46,11 @@ use LBM\Support\RegistersDomains;
  * A name already in this install `domains` table is TAKEN whatever a registry
  * says, because the column is UNIQUE and the order could not be recorded.
  *
+ * Who is asked is `Action\Lookup`'s business, not this screen's - since Phase
+ * 36 a lookup module first and the TLD's registrar second.
+ *
  * ---------------------------------------------------------------------------
- * THE LOOKUPS ARE BOUNDED
+ * THE LOOKUPS ARE BOUNDED - IN NUMBER AND IN TIME
  * ---------------------------------------------------------------------------
  * Every TLD checked is a call over somebody else network. An operator with
  * forty TLDs on the price list would otherwise turn one search box into
@@ -55,13 +58,20 @@ use LBM\Support\RegistersDomains;
  * MAX_LOOKUPS is the cap; TLDs past it are still listed with their price and
  * an unknown availability, which is the same state a missing module produces
  * and needs no second explanation on the screen.
+ *
+ * A count alone is not a bound, and Phase 36 is what made that matter: ten
+ * WHOIS queries against a registry that has stopped answering is ten timeouts
+ * back to back. LOOKUP_BUDGET is the whole search's allowance, each question
+ * is handed what is LEFT of it so a module can bound its own wait, and once it
+ * is spent the rest of the list is shown unknown, exactly as past the cap.
  */
 class DomainController extends FrontController
 {
-    use RegistersDomains;
-
-    /** @var int Most TLDs One Search Will Ask a Registrar About */
+    /** @var int Most TLDs One Search Will Ask About */
     public const MAX_LOOKUPS = 10;
+
+    /** @var float Seconds One Search May Spend Asking, Across Every TLD */
+    public const LOOKUP_BUDGET = 8.0;
 
     /**
      * Which Top-Nav Item Is Current
@@ -148,6 +158,7 @@ class DomainController extends FrontController
      * TLD. That order matters: somebody who typed `example.com` wants to
      * know about `example.com`, and burying it among suggestions in
      * alphabetical order is how a search box stops answering the question.
+     * It also puts the one name they asked about first in the time budget.
      * @param string $query What Was Typed
      * @param array $tlds Active TLD Rows
      * @param int $currencyId Currency ID
@@ -186,6 +197,7 @@ class DomainController extends FrontController
 
         $results = [];
         $asked = 0;
+        $started = microtime(true);
 
         foreach ($ordered as $tld) {
             $tldName = Tld::normaliseTld((string) $tld['tld']);
@@ -238,8 +250,10 @@ class DomainController extends FrontController
                 continue;
             }
 
-            if ($asked < self::MAX_LOOKUPS) {
-                $row['available'] = $this->ask($tld, $name);
+            $left = self::LOOKUP_BUDGET - (microtime(true) - $started);
+
+            if ($asked < self::MAX_LOOKUPS && $left > 0) {
+                $row['available'] = Lookup::available($tld, $name, $left);
                 $asked++;
             }
 
@@ -257,46 +271,6 @@ class DomainController extends FrontController
         }
 
         return $results;
-    }
-
-    /**
-     * Ask One Registrar Whether a Name Is Free
-     *
-     * Null for every way of not knowing - no module, a driver that threw, a
-     * driver that reported failure, a driver that answered with something other
-     * than a boolean. The contract makes the same distinction and for the same
-     * reason: an unanswered question must never read as a refusal.
-     * @param array $tld TLD Row
-     * @param string $name The Name Being Asked About
-     * @return ?bool
-     */
-    private function ask(array $tld, string $name): ?bool
-    {
-        $registrar = $this->registrarRow((int) ($tld['registrar_relid'] ?? 0));
-
-        if (!is_array($registrar)) {
-            return null;
-        }
-
-        $driver = $this->registrarDriver($registrar);
-
-        if ($driver === null) {
-            return null;
-        }
-
-        try {
-            $result = $driver->available($name);
-        } catch (Throwable) {
-            return null;
-        }
-
-        if (!is_array($result) || empty($result['success'])) {
-            return null;
-        }
-
-        $available = $result['available'] ?? null;
-
-        return is_bool($available) ? $available : null;
     }
 
     /**

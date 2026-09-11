@@ -154,7 +154,7 @@ $ExcludeDirs = @(
 #
 # 'laika' and 'worker' are the CLI entrypoints, and they are developer tools.
 # The operator path is the web wizard, a scheduled cron.php, and the update
-# utility at /admin/utils/update - which runs Installer::migrate() in process
+# utility at /admin/settings/utils/update - which runs Installer::migrate() in process
 # precisely so there is nothing to shell out to. verify-stage.php asserts both
 # are absent from the stage, so an edit here cannot quietly put them back.
 $ExcludeFiles = @(

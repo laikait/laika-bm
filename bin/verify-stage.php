@@ -227,7 +227,7 @@ must_not_exist('.git', 'Development artefact.');
 must_not_exist('composer.phar', 'Development artefact.');
 
 // The CLI entrypoints. Developer tools: the operator path is the web wizard, a
-// scheduled cron.php, and /admin/utils/update, which runs Installer::migrate()
+// scheduled cron.php, and /admin/settings/utils/update, which runs Installer::migrate()
 // in process. Asserted rather than left to the exclude list, because that list
 // is one line in a PowerShell array and this is the only thing that would
 // notice it being edited back.
@@ -635,11 +635,61 @@ must_exist(
 );
 must_exist(
     'template/admin/bootstrap/registrars.twig',
-    'The registrar list. Without it /admin/registrars is a Twig error for every member of staff.'
+    'The registrar list. Without it /admin/settings/registrars is a Twig error for every member of staff.'
 );
 must_exist(
     'template/admin/bootstrap/registrar-form.twig',
     'Where a registrar is added and its credentials typed. Without it the list has nothing to link to.'
+);
+
+// Phase 36. A lookup module answers "is this name free" without a registrar.
+// Without the contract nothing can implement one; without the action and its
+// facade the public domain search is a fatal for every visitor, because it asks
+// through them; without Laika Whois a shop that registers names by hand goes
+// back to answering "we will check" about every name it is asked.
+must_exist(
+    'vendor/laikait/laika-bm/src/Module/Contracts/LookupInterface.php',
+    'The lookup contract. Without it no lookup module can load, Laika Whois included.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Lookup.php',
+    'Decides who is asked whether a name is free. The public domain search goes through it.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/Lookup.php',
+    'The facade the public domain search and the registrars screen reach it through. Its absence is a fatal on both.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Support/LooksUpDomains.php',
+    'The only place a lookup module name becomes a driver.'
+);
+must_exist(
+    'modules/lookup/LaikaWhois/module.php',
+    'Laika Whois ships switched on. Without it a fresh install answers no domain search unless a registrar module can.'
+);
+must_exist(
+    'modules/lookup/LaikaWhois/src/LaikaWhois.php',
+    'The Laika Whois manifest points at this class. A manifest without its driver is a module that never answers.'
+);
+
+// The lookup fixture from lookupwalk.php answers whatever the walk last told
+// it to - on a live install, a shop selling names somebody else owns.
+must_not_exist(
+    'modules/lookup/Probe',
+    'Test fixture from lookupwalk.php. It reports whatever it was scripted to, which on a live install sells taken names.'
+);
+
+// Phase 38. Settings is one sidebar entry opening a hub of cards, and the hub is
+// the only way between settings screens - the tab strip is gone. Without the
+// hub the Settings entry is a Twig error; without the breadcrumb every settings
+// screen is, because the admin layout includes it on all of them.
+must_exist(
+    'template/admin/bootstrap/settings.twig',
+    'The Settings hub. Without it the one Settings entry in the sidebar is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/partials/settings-crumb.twig',
+    'The breadcrumb the admin layout renders on every settings screen. Without it every settings screen is a Twig error.'
 );
 
 // Phase 29. Without these `domain_contacts` goes back to being a table with no

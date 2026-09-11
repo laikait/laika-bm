@@ -52,7 +52,7 @@ class TldController extends AdminController
 
     protected function nav(): string
     {
-        return 'tlds';
+        return 'settings';
     }
 
     /**

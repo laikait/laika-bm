@@ -200,7 +200,7 @@ class StaffController extends AdminController
             // nav() is per-controller and this one serves Staff as well, so the
             // roles screens name their own entry. screen() merges $vars last,
             // so this wins over $this->nav() with no signature change.
-            'nav'     =>  'roles',
+            'nav'     =>  'settings',
             'roles'   =>  $roles,
             'groups'  =>  Staff::permissionGroups(),
             'actions' =>  Staff::permissionActions(),
@@ -306,7 +306,7 @@ class StaffController extends AdminController
     private function roleForm(?array $role, string $title): string
     {
         return $this->screen('role-form', $title, [
-            'nav'     =>  'roles',
+            'nav'     =>  'settings',
             'role'    =>  $role,
             'groups'  =>  Staff::permissionGroups(),
             'actions' =>  Staff::permissionActions(),

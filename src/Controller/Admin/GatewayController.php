@@ -53,7 +53,7 @@ class GatewayController extends AdminController
      */
     protected function nav(): string
     {
-        return 'gateways';
+        return 'settings';
     }
 
     ####################################################################################

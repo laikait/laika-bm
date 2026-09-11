@@ -99,6 +99,7 @@ class Provider extends RelayProvider
             'action.addon'          =>  Action\Addon::class,
             'action.tld'            =>  Action\Tld::class,
             'action.registrar'      =>  Action\Registrar::class,
+            'action.lookup'         =>  Action\Lookup::class,
             'action.registration'   =>  Action\Registration::class,
             'action.domain.renewal' =>  Action\DomainRenewal::class,
             'action.config.option'  =>  Action\ConfigOption::class,

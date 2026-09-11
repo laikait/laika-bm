@@ -30,7 +30,7 @@ class CurrencyController extends AdminController
 {
     protected function nav(): string
     {
-        return 'currencies';
+        return 'settings';
     }
 
     /**

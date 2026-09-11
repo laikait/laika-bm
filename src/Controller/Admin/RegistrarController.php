@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Request;
 use LBM\Service\Activity;
+use LBM\Service\Lookup;
 use LBM\Service\Registrar;
 
 /**
@@ -36,12 +37,19 @@ use LBM\Service\Registrar;
  * Activity::changes() diffs the columns a form posted against the row, so it
  * is given the five plain columns and nothing else. A credential's old and new
  * values are not something an audit trail should hold in either form.
+ *
+ * ---------------------------------------------------------------------------
+ * AND WHICH LOOKUP MODULE IS ASKED FIRST - PHASE 36
+ * ---------------------------------------------------------------------------
+ * A card above the list, because the two answer one question between them: a
+ * public search asks the chosen lookup module, then the registrar a TLD points
+ * at. Choosing is `domain.update`, the same as editing a registrar.
  */
 class RegistrarController extends AdminController
 {
     protected function nav(): string
     {
-        return 'registrars';
+        return 'settings';
     }
 
     /**
@@ -64,6 +72,7 @@ class RegistrarController extends AdminController
         return $this->screen('registrars', local('registrars'), [
             'registrars' =>  $entries,
             'modules'    =>  Registrar::modules(),
+            'lookup'     =>  $this->lookupCard(),
         ]);
     }
 
@@ -143,6 +152,28 @@ class RegistrarController extends AdminController
         );
     }
 
+    /**
+     * Choose Which Lookup Module a Search Asks First - Phase 36
+     * @return ?string
+     */
+    public function lookup(): ?string
+    {
+        $posted = (string) Request::input('lookup_module', '');
+        $before = Lookup::chosen() ?? 'none';
+
+        return $this->attempt(
+            function () use ($posted, $before): void {
+                $after = Lookup::choose($posted);
+
+                if ($after !== $before) {
+                    $this->log('lookup.chosen', "Domain lookup changed from {$before} to {$after}.");
+                }
+            },
+            'staff.registrars',
+            local('lookup_saved')
+        );
+    }
+
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
@@ -209,6 +240,37 @@ class RegistrarController extends AdminController
         $current = trim((string) ($registrar['module_name'] ?? ''));
 
         return $current === '' ? '' : (Registrar::installedModule($current) ?? $current);
+    }
+
+    /**
+     * What The Lookup Card Shows
+     *
+     * The chosen module is ALWAYS among the choices, installed or not - the
+     * same select trap moduleChoices() describes, one card up.
+     * @return array{value:string,name:?string,state:string,choices:array<string,string>}
+     */
+    private function lookupCard(): array
+    {
+        $chosen = Lookup::chosen();
+
+        $choices = ['none' => local('lookup_registrars_only')];
+
+        foreach (Lookup::modules() as $directory => $module) {
+            $choices[(string) $directory] = $module['enabled']
+                ? $module['name']
+                : local('module_named_off', $module['name']);
+        }
+
+        if ($chosen !== null && Lookup::installedModule($chosen) === null) {
+            $choices[$chosen] = local('module_named_missing', $chosen);
+        }
+
+        return [
+            'value'   =>  $chosen === null ? 'none' : (Lookup::installedModule($chosen) ?? $chosen),
+            'name'    =>  Lookup::name(),
+            'state'   =>  Lookup::state(),
+            'choices' =>  $choices,
+        ];
     }
 
     /**

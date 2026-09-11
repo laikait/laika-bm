@@ -57,7 +57,7 @@ class UtilController extends AdminController
 
     protected function nav(): string
     {
-        return 'utils';
+        return 'settings';
     }
 
     /**

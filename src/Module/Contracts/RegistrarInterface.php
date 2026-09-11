@@ -62,8 +62,13 @@ interface RegistrarInterface
      * `success` is about the CALL, `available` about the domain. A driver that
      * cannot reach its API returns success false and available null.
      *
+     * Since Phase 36 a registrar is asked in the slot a LOOKUP module could not
+     * fill, so it is handed the same context one is: `timeout`, the seconds left
+     * of the search's budget, and `tld`. See LookupInterface - the two verbs are
+     * kept identical on purpose.
+     *
      * @param string $domain The name being asked about, including its TLD
-     * @param array $context See register()
+     * @param array $context `timeout` and `tld`, as LookupInterface::available()
      * @return array{success: bool, available: ?bool, message: ?string, raw: array}
      */
     public function available(string $domain, array $context = []): array;

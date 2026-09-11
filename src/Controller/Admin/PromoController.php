@@ -41,7 +41,7 @@ class PromoController extends AdminController
 {
     protected function nav(): string
     {
-        return 'promos';
+        return 'settings';
     }
 
     /**

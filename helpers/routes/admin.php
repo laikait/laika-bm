@@ -229,30 +229,30 @@ Url::group(ADMIN, function () use ($uid): void {
      * is one of that field's - a route parameter would look like it had made
      * that check when it had not.
      */
-    Url::get('/config-options', [ConfigOptionController::class, 'index'])
+    Url::get('/settings/config-options', [ConfigOptionController::class, 'index'])
         ->name('staff.config.options')->pipeline([Permission::class . '|perm=product.read']);
 
-    Url::get('/config-options/new', [ConfigOptionController::class, 'create'])
+    Url::get('/settings/config-options/new', [ConfigOptionController::class, 'create'])
         ->name('staff.config.option.new')->pipeline([Permission::class . '|perm=product.create']);
-    Url::post('/config-options/new', [ConfigOptionController::class, 'create'])
+    Url::post('/settings/config-options/new', [ConfigOptionController::class, 'create'])
         ->pipeline([Permission::class . '|perm=product.create']);
 
-    Url::get("/config-option/{option:{$uid}}", [ConfigOptionController::class, 'show'])
+    Url::get("/settings/config-option/{option:{$uid}}", [ConfigOptionController::class, 'show'])
         ->name('staff.config.option')->pipeline([Permission::class . '|perm=product.read']);
 
-    Url::get("/config-option/{option:{$uid}}/edit", [ConfigOptionController::class, 'edit'])
+    Url::get("/settings/config-option/{option:{$uid}}/edit", [ConfigOptionController::class, 'edit'])
         ->name('staff.config.option.edit')->pipeline([Permission::class . '|perm=product.update']);
-    Url::post("/config-option/{option:{$uid}}/edit", [ConfigOptionController::class, 'edit'])
+    Url::post("/settings/config-option/{option:{$uid}}/edit", [ConfigOptionController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=product.update']);
 
-    Url::post("/config-option/{option:{$uid}}/choice", [ConfigOptionController::class, 'addChoice'])
+    Url::post("/settings/config-option/{option:{$uid}}/choice", [ConfigOptionController::class, 'addChoice'])
         ->name('staff.config.choice.add')->pipeline([Permission::class . '|perm=product.update']);
-    Url::post("/config-option/{option:{$uid}}/choice/edit", [ConfigOptionController::class, 'editChoice'])
+    Url::post("/settings/config-option/{option:{$uid}}/choice/edit", [ConfigOptionController::class, 'editChoice'])
         ->name('staff.config.choice.edit')->pipeline([Permission::class . '|perm=product.update']);
-    Url::post("/config-option/{option:{$uid}}/choice/delete", [ConfigOptionController::class, 'deleteChoice'])
+    Url::post("/settings/config-option/{option:{$uid}}/choice/delete", [ConfigOptionController::class, 'deleteChoice'])
         ->name('staff.config.choice.delete')->pipeline([Permission::class . '|perm=product.delete']);
 
-    Url::post("/config-option/{option:{$uid}}/delete", [ConfigOptionController::class, 'delete'])
+    Url::post("/settings/config-option/{option:{$uid}}/delete", [ConfigOptionController::class, 'delete'])
         ->name('staff.config.option.delete')->pipeline([Permission::class . '|perm=product.delete']);
 
     /**
@@ -265,20 +265,20 @@ Url::group(ADMIN, function () use ($uid): void {
      * `/promos/new` before `/promo/{promo}` - first-match wins in
      * registration order and $uid matches the literal "new".
      */
-    Url::get('/promos', [PromoController::class, 'index'])
+    Url::get('/settings/promos', [PromoController::class, 'index'])
         ->name('staff.promos')->pipeline([Permission::class . '|perm=product.read']);
 
-    Url::get('/promos/new', [PromoController::class, 'create'])
+    Url::get('/settings/promos/new', [PromoController::class, 'create'])
         ->name('staff.promo.new')->pipeline([Permission::class . '|perm=product.create']);
-    Url::post('/promos/new', [PromoController::class, 'create'])
+    Url::post('/settings/promos/new', [PromoController::class, 'create'])
         ->pipeline([Permission::class . '|perm=product.create']);
 
-    Url::get("/promo/{promo:{$uid}}/edit", [PromoController::class, 'edit'])
+    Url::get("/settings/promo/{promo:{$uid}}/edit", [PromoController::class, 'edit'])
         ->name('staff.promo.edit')->pipeline([Permission::class . '|perm=product.update']);
-    Url::post("/promo/{promo:{$uid}}/edit", [PromoController::class, 'edit'])
+    Url::post("/settings/promo/{promo:{$uid}}/edit", [PromoController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=product.update']);
 
-    Url::post("/promo/{promo:{$uid}}/delete", [PromoController::class, 'delete'])
+    Url::post("/settings/promo/{promo:{$uid}}/delete", [PromoController::class, 'delete'])
         ->name('staff.promo.delete')->pipeline([Permission::class . '|perm=product.delete']);
 
     Url::get('/product-groups', [ProductController::class, 'groups'])
@@ -474,20 +474,20 @@ Url::group(ADMIN, function () use ($uid): void {
      * does in this file: matching is first-match-wins in registration order and
      * the uid pattern would swallow `new`.
      */
-    Url::get('/tlds', [TldController::class, 'index'])
+    Url::get('/settings/tlds', [TldController::class, 'index'])
         ->name('staff.tlds')->pipeline([Permission::class . '|perm=domain.read']);
 
-    Url::get('/tlds/new', [TldController::class, 'create'])
+    Url::get('/settings/tlds/new', [TldController::class, 'create'])
         ->name('staff.tld.new')->pipeline([Permission::class . '|perm=domain.create']);
-    Url::post('/tlds/new', [TldController::class, 'create'])
+    Url::post('/settings/tlds/new', [TldController::class, 'create'])
         ->pipeline([Permission::class . '|perm=domain.create']);
 
-    Url::get("/tld/{tld:{$uid}}/edit", [TldController::class, 'edit'])
+    Url::get("/settings/tld/{tld:{$uid}}/edit", [TldController::class, 'edit'])
         ->name('staff.tld.edit')->pipeline([Permission::class . '|perm=domain.update']);
-    Url::post("/tld/{tld:{$uid}}/edit", [TldController::class, 'edit'])
+    Url::post("/settings/tld/{tld:{$uid}}/edit", [TldController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=domain.update']);
 
-    Url::post("/tld/{tld:{$uid}}/delete", [TldController::class, 'delete'])
+    Url::post("/settings/tld/{tld:{$uid}}/delete", [TldController::class, 'delete'])
         ->name('staff.tld.delete')->pipeline([Permission::class . '|perm=domain.delete']);
 
     /*
@@ -497,49 +497,54 @@ Url::group(ADMIN, function () use ($uid): void {
      * granted on every install - and `/registrars/new` before
      * `/registrar/{registrar}` for the reason every literal is first here.
      */
-    Url::get('/registrars', [RegistrarController::class, 'index'])
+    Url::get('/settings/registrars', [RegistrarController::class, 'index'])
         ->name('staff.registrars')->pipeline([Permission::class . '|perm=domain.read']);
 
-    Url::get('/registrars/new', [RegistrarController::class, 'create'])
+    Url::get('/settings/registrars/new', [RegistrarController::class, 'create'])
         ->name('staff.registrar.new')->pipeline([Permission::class . '|perm=domain.create']);
-    Url::post('/registrars/new', [RegistrarController::class, 'create'])
+    Url::post('/settings/registrars/new', [RegistrarController::class, 'create'])
         ->pipeline([Permission::class . '|perm=domain.create']);
 
-    Url::get("/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
+    Url::get("/settings/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
         ->name('staff.registrar.edit')->pipeline([Permission::class . '|perm=domain.update']);
-    Url::post("/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
+    Url::post("/settings/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=domain.update']);
 
-    Url::post("/registrar/{registrar:{$uid}}/delete", [RegistrarController::class, 'delete'])
+    Url::post("/settings/registrar/{registrar:{$uid}}/delete", [RegistrarController::class, 'delete'])
         ->name('staff.registrar.delete')->pipeline([Permission::class . '|perm=domain.delete']);
 
+    // Phase 36. Which lookup module a public search asks before the registrar.
+    // A write, so `update` - the same gate as editing a registrar.
+    Url::post('/settings/registrars/lookup', [RegistrarController::class, 'lookup'])
+        ->name('staff.registrars.lookup')->pipeline([Permission::class . '|perm=domain.update']);
+
     /*=============================== SERVERS ===============================*/
-    Url::get('/servers', [ServerController::class, 'index'])
+    Url::get('/settings/servers', [ServerController::class, 'index'])
         ->name('staff.servers')->pipeline([Permission::class . '|perm=server.read']);
 
-    Url::get('/servers/new', [ServerController::class, 'create'])
+    Url::get('/settings/servers/new', [ServerController::class, 'create'])
         ->name('staff.server.new')->pipeline([Permission::class . '|perm=server.create']);
-    Url::post('/servers/new', [ServerController::class, 'create'])
+    Url::post('/settings/servers/new', [ServerController::class, 'create'])
         ->pipeline([Permission::class . '|perm=server.create']);
 
-    Url::get("/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
+    Url::get("/settings/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
         ->name('staff.server.edit')->pipeline([Permission::class . '|perm=server.update']);
-    Url::post("/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
+    Url::post("/settings/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=server.update']);
 
-    Url::post("/server/{server:{$uid}}/test", [ServerController::class, 'test'])
+    Url::post("/settings/server/{server:{$uid}}/test", [ServerController::class, 'test'])
         ->name('staff.server.test')->pipeline([Permission::class . '|perm=server.update']);
-    Url::post("/server/{server:{$uid}}/delete", [ServerController::class, 'delete'])
+    Url::post("/settings/server/{server:{$uid}}/delete", [ServerController::class, 'delete'])
         ->name('staff.server.delete')->pipeline([Permission::class . '|perm=server.delete']);
 
     /*============================== CURRENCIES =============================*/
-    Url::get('/currencies', [CurrencyController::class, 'index'])
+    Url::get('/settings/currencies', [CurrencyController::class, 'index'])
         ->name('staff.currencies')->pipeline([Permission::class . '|perm=currency.read']);
-    Url::post('/currencies', [CurrencyController::class, 'save'])
+    Url::post('/settings/currencies', [CurrencyController::class, 'save'])
         ->pipeline([Permission::class . '|perm=currency.update']);
-    Url::post("/currency/{currency:{$uid}}/default", [CurrencyController::class, 'makeDefault'])
+    Url::post("/settings/currency/{currency:{$uid}}/default", [CurrencyController::class, 'makeDefault'])
         ->name('staff.currency.default')->pipeline([Permission::class . '|perm=currency.update']);
-    Url::post("/currency/{currency:{$uid}}/delete", [CurrencyController::class, 'delete'])
+    Url::post("/settings/currency/{currency:{$uid}}/delete", [CurrencyController::class, 'delete'])
         ->name('staff.currency.delete')->pipeline([Permission::class . '|perm=currency.delete']);
 
     /*================================ STAFF ================================*/
@@ -563,21 +568,21 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.staff.delete')->pipeline([Permission::class . '|perm=staff.delete']);
 
     /*-------------------------- Roles & Permissions ------------------------*/
-    Url::get('/roles', [StaffController::class, 'roles'])
+    Url::get('/settings/roles', [StaffController::class, 'roles'])
         ->name('staff.roles')->pipeline([Permission::class . '|perm=role.read']);
 
-    Url::get('/roles/new', [StaffController::class, 'roleCreate'])
+    Url::get('/settings/roles/new', [StaffController::class, 'roleCreate'])
         ->name('staff.role.new')->pipeline([Permission::class . '|perm=role.create']);
-    Url::post('/roles/new', [StaffController::class, 'roleCreate'])
+    Url::post('/settings/roles/new', [StaffController::class, 'roleCreate'])
         ->pipeline([Permission::class . '|perm=role.create']);
 
     /** The group x action permission matrix (Permission instructions 1-2). */
-    Url::get("/role/{role:{$uid}}/edit", [StaffController::class, 'roleEdit'])
+    Url::get("/settings/role/{role:{$uid}}/edit", [StaffController::class, 'roleEdit'])
         ->name('staff.role.edit')->pipeline([Permission::class . '|perm=role.update']);
-    Url::post("/role/{role:{$uid}}/edit", [StaffController::class, 'roleEdit'])
+    Url::post("/settings/role/{role:{$uid}}/edit", [StaffController::class, 'roleEdit'])
         ->pipeline([Permission::class . '|perm=role.update']);
 
-    Url::post("/role/{role:{$uid}}/delete", [StaffController::class, 'roleDelete'])
+    Url::post("/settings/role/{role:{$uid}}/delete", [StaffController::class, 'roleDelete'])
         ->name('staff.role.delete')->pipeline([Permission::class . '|perm=role.delete']);
 
     /*=============================== REPORTS ===============================*/
@@ -608,37 +613,37 @@ Url::group(ADMIN, function () use ($uid): void {
     // Reading is settings.read; anything that changes the installation is
     // settings.update - and that split is the whole reason the migrate and the
     // version check are separate routes rather than one screen with two buttons.
-    Url::get('/utils', [UtilController::class, 'index'])
+    Url::get('/settings/utils', [UtilController::class, 'index'])
         ->name('staff.utils')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::get('/utils/system', [UtilController::class, 'system'])
+    Url::get('/settings/utils/system', [UtilController::class, 'system'])
         ->name('staff.util.system')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::get('/utils/automation', [UtilController::class, 'automation'])
+    Url::get('/settings/utils/automation', [UtilController::class, 'automation'])
         ->name('staff.util.automation')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::get('/utils/update', [UtilController::class, 'update'])
+    Url::get('/settings/utils/update', [UtilController::class, 'update'])
         ->name('staff.util.update')->pipeline([Permission::class . '|perm=settings.read']);
     // The error log. GET, with the filters in the query string, so one member
     // of staff can send another a link to exactly what they are looking at -
     // and behind settings.read like every other utility, because 20.5's rule
     // still holds: a new permission group is invisible on every install that
     // already has roles.
-    Url::get('/utils/logs', [UtilController::class, 'logs'])
+    Url::get('/settings/utils/logs', [UtilController::class, 'logs'])
         ->name('staff.util.logs')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::get('/utils/todos', [UtilController::class, 'todos'])
+    Url::get('/settings/utils/todos', [UtilController::class, 'todos'])
         ->name('staff.util.todos')->pipeline([Permission::class . '|perm=settings.read']);
 
-    Url::post('/utils/update/check', [UtilController::class, 'check'])
+    Url::post('/settings/utils/update/check', [UtilController::class, 'check'])
         ->name('staff.util.check')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post('/utils/update/migrate', [UtilController::class, 'migrate'])
+    Url::post('/settings/utils/update/migrate', [UtilController::class, 'migrate'])
         ->name('staff.util.migrate')->pipeline([Permission::class . '|perm=settings.update']);
 
     // The literal route registers before its parameterised sibling: matching is
     // first-match-wins in registration order with no specificity ranking, and
     // {todo} matches the literal word "add" perfectly well.
-    Url::post('/utils/todos/add', [UtilController::class, 'addTodo'])
+    Url::post('/settings/utils/todos/add', [UtilController::class, 'addTodo'])
         ->name('staff.util.todo.add')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::post("/utils/todo/{todo:{$uid}}/toggle", [UtilController::class, 'toggleTodo'])
+    Url::post("/settings/utils/todo/{todo:{$uid}}/toggle", [UtilController::class, 'toggleTodo'])
         ->name('staff.util.todo.toggle')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::post("/utils/todo/{todo:{$uid}}/delete", [UtilController::class, 'deleteTodo'])
+    Url::post("/settings/utils/todo/{todo:{$uid}}/delete", [UtilController::class, 'deleteTodo'])
         ->name('staff.util.todo.delete')->pipeline([Permission::class . '|perm=settings.read']);
 
     /*========================== PAYMENT GATEWAYS ===========================*/
@@ -647,23 +652,23 @@ Url::group(ADMIN, function () use ($uid): void {
     // group, because Permission::GROUPS is granted to a role only when the role
     // is CREATED, so a new group would be invisible on every installation that
     // already exists. The same decision the utilities screens above took.
-    Url::get('/gateways', [GatewayController::class, 'index'])
+    Url::get('/settings/gateways', [GatewayController::class, 'index'])
         ->name('staff.gateways')->pipeline([Permission::class . '|perm=settings.read']);
 
     // Before /gateway/{gateway}/... for the usual reason, and before
     // /gateways/configure is irrelevant because that one is a POST. A GET
     // listing, so it is filterable and bookmarkable.
-    Url::get('/gateways/callbacks', [GatewayController::class, 'callbacks'])
+    Url::get('/settings/gateways/callbacks', [GatewayController::class, 'callbacks'])
         ->name('staff.gateway.callbacks')->pipeline([Permission::class . '|perm=settings.read']);
     // Literal before parameterised: matching is first-match-wins in registration
     // order, and {gateway} matches the word "configure" perfectly well.
-    Url::post('/gateways/configure', [GatewayController::class, 'configure'])
+    Url::post('/settings/gateways/configure', [GatewayController::class, 'configure'])
         ->name('staff.gateway.configure')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post("/gateway/{gateway:{$uid}}/settings", [GatewayController::class, 'settings'])
+    Url::post("/settings/gateway/{gateway:{$uid}}/settings", [GatewayController::class, 'settings'])
         ->name('staff.gateway.settings')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post("/gateway/{gateway:{$uid}}/toggle", [GatewayController::class, 'toggle'])
+    Url::post("/settings/gateway/{gateway:{$uid}}/toggle", [GatewayController::class, 'toggle'])
         ->name('staff.gateway.toggle')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post("/gateway/{gateway:{$uid}}/delete", [GatewayController::class, 'delete'])
+    Url::post("/settings/gateway/{gateway:{$uid}}/delete", [GatewayController::class, 'delete'])
         ->name('staff.gateway.delete')->pipeline([Permission::class . '|perm=settings.update']);
 
     /*============================== ACTIVITIES =============================*/
@@ -671,13 +676,13 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.activities')->pipeline([Permission::class . '|perm=activity.read']);
 
     /*=============================== MODULES ===============================*/
-    Url::get('/modules', [ModuleController::class, 'index'])
+    Url::get('/settings/modules', [ModuleController::class, 'index'])
         ->name('staff.modules')->pipeline([Permission::class . '|perm=module.read']);
     // POST /module/upload was here until Phase 31. It is GONE rather than
     // disabled: a route that still resolves is a door somebody finds, and the
     // feature behind it wrote executable PHP into the application's own
     // directory from a form on the admin panel.
-    Url::post("/module/{module:{$uid}}/toggle", [ModuleController::class, 'toggle'])
+    Url::post("/settings/module/{module:{$uid}}/toggle", [ModuleController::class, 'toggle'])
         ->name('staff.module.toggle')->pipeline([Permission::class . '|perm=module.update']);
 
     /*============================== SETTINGS ===============================*/
@@ -685,9 +690,20 @@ Url::group(ADMIN, function () use ($uid): void {
     // One GET per tab, one POST per tab. Settings are option rows, and option()
     // memoises per key for the whole request - so every save ends in a redirect
     // rather than re-rendering, or the form would show the value it just replaced.
-    Url::get('/settings', [SettingsController::class, 'general'])
+    // Phase 38. The hub, and the one route in this group with no permission
+    // of its own: it shows each card only to somebody that screen's route
+    // would let in, so gating it on settings.read would strand a
+    // domain.read-only role that reaches Domain pricing and Registrars today.
+    //
+    // Every settings screen lives under /settings/ - the tabs below and the
+    // screens above - so a path says where it is. Names did not change, and
+    // every link in the product is built from a name, so nothing redirects.
+    Url::get('/settings', [SettingsController::class, 'index'])
+        ->name('staff.settings.index');
+
+    Url::get('/settings/general', [SettingsController::class, 'general'])
         ->name('staff.settings')->pipeline([Permission::class . '|perm=settings.read']);
-    Url::post('/settings', [SettingsController::class, 'general'])
+    Url::post('/settings/general', [SettingsController::class, 'general'])
         ->pipeline([Permission::class . '|perm=settings.update']);
 
     Url::get('/settings/localisation', [SettingsController::class, 'localisation'])

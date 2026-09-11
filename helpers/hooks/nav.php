@@ -17,7 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 /*----------------------------------- NAV HOOKS ----------------------------------*/
 ####################################################################################
 //
-// A template cannot call a plain function, so the four trees reach Twig the way
+// A template cannot call a plain function, so the three trees reach Twig the way
 // everything else in this application does - as hooks, read with the `hook`
 // filter laika-core registers:
 //
@@ -46,6 +46,3 @@ add_hook('nav_panel', 'nav_panel', 1000);
 
 /** The public site bar, active entry marked */
 add_hook('nav_front', 'nav_front', 1000);
-
-/** The admin settings tab strip, active tab marked */
-add_hook('nav_settings', 'nav_settings', 1000);

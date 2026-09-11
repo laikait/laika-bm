@@ -21,8 +21,10 @@ use Laika\Model\Connection;
 use Laika\Service\Config;
 use Laika\Service\Infra;
 use Laika\Service\Option;
+use LBM\Action\Module;
 use LBM\Contract\MigrationAbstract;
 use LBM\Model\MigrationModel;
+use LBM\Model\ModuleModel;
 use LBM\Model\StaffModel;
 use LBM\Model\StaffRoleModel;
 use LBM\Model\CurrencyModel;
@@ -723,6 +725,57 @@ class Installer
         }
 
         $this->clearCache();
+
+        // After the cache is cleared, because switching a module on WRITES the
+        // loader's cache - cleared afterwards, the first request of the new
+        // install would load nothing.
+        $this->enableShippedModules();
+    }
+
+    /**
+     * @var string[] Modules That Ship Switched On
+     *
+     * Only ones that read and never write: Laika Whois asks a registry whether a
+     * name is free, registers nothing and holds no credential. The Offline
+     * gateway ships switched OFF - taking payments is a decision.
+     */
+    private const SHIPPED_ENABLED = ['lookup-laikawhois'];
+
+    /**
+     * Switch On The Modules That Ship Switched On - Phase 36
+     *
+     * ONCE. A module with a row in `modules` is one this install has already
+     * met - listed on the modules screen, or switched off by somebody - and is
+     * left exactly as it is. Re-running the installer, which unlock() allows,
+     * must never switch back on what an operator switched off.
+     *
+     * A convenience rather than a step: a module that cannot be switched on
+     * leaves the install working, with a search that asks the registrar, and
+     * the registrars screen saying why. So a failure here is swallowed rather
+     * than leaving an install that cannot be finished.
+     * @return string[] The Uids This Call Switched On
+     */
+    public function enableShippedModules(): array
+    {
+        $this->connect();
+
+        $switched = [];
+
+        foreach (self::SHIPPED_ENABLED as $uid) {
+            try {
+                if ((new ModuleModel())->where(['uid' => $uid])->exists()) {
+                    continue;
+                }
+
+                if ((new Module())->toggle($uid, true)) {
+                    $switched[] = $uid;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return $switched;
     }
 
     /**

@@ -29,9 +29,9 @@ use Laika\Core\Nav\Helper\Item;
 //
 // The trees are read back with items() rather than rendered with Nav::render().
 // That is not a preference. Renderer always emits <nav><ul><li><a>, and not one
-// of LBM's four navs is a list: the two sidebars are flat anchors interleaved
-// with non-linking <div> headings, the front bar is flat anchors, and the
-// settings strip is a row of buttons. Rendering would have changed the markup of
+// of LBM's navs is a list: the two sidebars are flat anchors interleaved with
+// non-linking <div> headings, and the front bar is flat anchors. Rendering
+// would have changed the markup of
 // every page in the app and required three stylesheets to be reworked, to arrive
 // at the same pixels. items() gives the tree, the permission gating, the icons
 // and extend() while leaving the markup exactly where it was.
@@ -42,9 +42,8 @@ use Laika\Core\Nav\Helper\Item;
 // is a behaviour change and a deliberate one - see nav_admin() below.
 //
 // THE SINGLETON. `Nav` is a relay onto one Builder that lives for the whole
-// request, so every function here flushes before it builds. A settings screen
-// renders the sidebar AND the tab strip, and without the flush the second would
-// inherit the first's items.
+// request, so every function here flushes before it builds - without the flush
+// a second tree built in the same request would inherit the first's items.
 //
 // The flush is also why a module cannot call Nav::extend() from a pipeline:
 // flush() drops queued injections along with the items, and every pipeline runs
@@ -111,40 +110,11 @@ function nav_admin(?string $current = null): array
     nav_item('reports',    'staff.reports',    'reports',    staff_has_access('report.read'),   $admin);
     nav_item('staffs',     'staff.staffs',     'staff',      staff_has_access('staff.read'),    $admin, 'staff');
     nav_item('activities', 'staff.activities', 'activity',   staff_has_access('activity.read'), $admin, 'activity');
-
-    // Settings ---------------------------------------------------------------
-    //
-    // Everything that CONFIGURES the installation, in one place. Before Phase
-    // 30.2 these were spread across three groups by the permission each
-    // happened to ride on rather than by what an operator was trying to do,
-    // and the result was seventeen top-level entries with no way to tell
-    // configuration from daily work.
-    //
-    // THE GROUP IS NAMED `settings` AND THE SCREEN IS NAMED `general_settings`,
-    // and they cannot share a name: nav_mark() walks depth-first and returns on
-    // the first match, so a group and a child called the same thing would mark
-    // the group - which renders as a heading with no active state - and the
-    // link below it would never highlight.
-    //
-    // NOT ONE PERMISSION CHANGES HERE. 20.5's rule: a group is granted only
-    // when a role is CREATED, so moving a screen behind a tidier gate would
-    // make it unreachable on every install that already has roles.
-    $settings = nav_group('settings');
-    nav_item('general_settings', 'staff.settings',       'settings',  staff_has_access('settings.read'), $settings, 'general_settings');
-    nav_item('gateways',         'staff.gateways',       'currency',  staff_has_access('settings.read'), $settings, 'payment_gateways');
-    nav_item('servers',          'staff.servers',        'servers',   staff_has_access('server.read'),   $settings);
-    nav_item('tlds',             'staff.tlds',           'currency',  staff_has_access('domain.read'),   $settings, 'domain_pricing');
-    // Phase 35. Beside the price list and behind the same permission, because
-    // a TLD cannot be priced until there is a registrar for it to point at.
-    nav_item('registrars',       'staff.registrars',     'key',       staff_has_access('domain.read'),   $settings);
-    nav_item('modules',          'staff.modules',        'modules',   staff_has_access('module.read'),   $settings);
-    nav_item('config_options',   'staff.config.options', 'settings',  staff_has_access('product.read'),  $settings);
-    nav_item('promos',           'staff.promos',         'megaphone', staff_has_access('product.read'),  $settings, 'promo_codes');
-    nav_item('currencies',       'staff.currencies',     'currency',  staff_has_access('currency.read'), $settings);
-    nav_item('roles',            'staff.roles',          'roles',     staff_has_access('role.read'),     $settings);
-    // Utilities and Gateways share the settings permission rather than carrying
-    // one of their own - 20.5's rule again, and UtilController spells it out.
-    nav_item('utils',            'staff.utils',          'database',  staff_has_access('settings.read'), $settings, 'utilities');
+    // Settings is ONE entry since Phase 38, opening the hub of cards at
+    // /admin/settings. It shows when the reader can open at least one card:
+    // settings_cards() is the very list the hub renders, so the entry and the
+    // page cannot disagree about whether there is anything to see.
+    nav_item('settings', 'staff.settings.index', 'settings', settings_cards() !== [], $admin);
 
     return nav_finish('admin', $current);
 }
@@ -220,34 +190,75 @@ function nav_front(?string $current = null): array
 }
 
 /**
- * The Settings Tab Strip
+ * Every Settings Screen, In The Order The Hub Shows Them
  *
- * Every tab is its own route rather than a query parameter, so each one is a URL
- * somebody can bookmark - and so a save can redirect back to exactly the tab it
- * came from. That redirect is not decoration: option() memoises per key for the
- * whole request, so re-rendering after a save would show the value it replaced.
+ * ONE list, read by the hub and by the sidebar's decision to show the Settings
+ * entry, so the two cannot disagree about whether a role has anything to see.
+ * A new settings screen is a line here.
  *
- * No per-tab permission test. Reaching any settings screen at all needs
- * settings.read, which LBM\Pipeline\Permission has already enforced on the route
- * by the time this renders - a second check here could only ever agree.
+ * Each entry carries the permission its screen's route ALREADY has - not one
+ * changed in Phase 38. 20.5's rule: a permission group is granted only when a
+ * role is CREATED, so moving a screen behind a tidier gate would make it
+ * unreachable on every install that already has roles. It is also why the hub
+ * route has no permission of its own and filters instead: gated on
+ * settings.read, it would strand a domain.read-only role that reaches Domain
+ * pricing and Registrars today.
  *
- * @param ?string $current The tab key the controller passed to the macro
- * @return Item[]
+ * `slug` is what the card is known by, and the path under /admin/settings/.
+ *
+ * @return array<int,array{slug:string,route:string,icon:string,label:string,hint:string,perm:string}>
  */
-function nav_settings(?string $current = null): array
+function settings_sections(): array
 {
-    Nav::flush();
+    return [
+        ['slug' => 'general',         'route' => 'staff.settings',              'icon' => 'settings',  'label' => 'app',               'hint' => 'settings_hint_general',         'perm' => 'settings.read'],
+        ['slug' => 'localisation',    'route' => 'staff.settings.localisation', 'icon' => 'domains',   'label' => 'localisation',      'hint' => 'settings_hint_localisation',    'perm' => 'settings.read'],
+        ['slug' => 'billing',         'route' => 'staff.settings.billing',      'icon' => 'invoices',  'label' => 'billing',           'hint' => 'settings_hint_billing',         'perm' => 'settings.read'],
+        ['slug' => 'tax',             'route' => 'staff.settings.tax',          'icon' => 'currency',  'label' => 'tax',               'hint' => 'settings_hint_tax',             'perm' => 'settings.read'],
+        ['slug' => 'security',        'route' => 'staff.settings.security',     'icon' => 'key',       'label' => 'security',          'hint' => 'settings_hint_security',        'perm' => 'settings.read'],
+        ['slug' => 'mail',            'route' => 'staff.settings.mail',         'icon' => 'mail',      'label' => 'smtp',              'hint' => 'settings_hint_mail',            'perm' => 'settings.read'],
+        ['slug' => 'email-templates', 'route' => 'staff.settings.templates',    'icon' => 'edit',      'label' => 'email_templates',   'hint' => 'settings_hint_email_templates', 'perm' => 'settings.read'],
+        ['slug' => 'statuses',        'route' => 'staff.settings.statuses',     'icon' => 'activity',  'label' => 'statuses',          'hint' => 'settings_hint_statuses',        'perm' => 'settings.read'],
+        ['slug' => 'gateways',        'route' => 'staff.gateways',              'icon' => 'card',      'label' => 'payment_gateways',  'hint' => 'settings_hint_gateways',        'perm' => 'settings.read'],
+        ['slug' => 'servers',         'route' => 'staff.servers',               'icon' => 'servers',   'label' => 'servers',           'hint' => 'settings_hint_servers',         'perm' => 'server.read'],
+        ['slug' => 'tlds',            'route' => 'staff.tlds',                  'icon' => 'domains',   'label' => 'domain_pricing',    'hint' => 'settings_hint_tlds',            'perm' => 'domain.read'],
+        ['slug' => 'registrars',      'route' => 'staff.registrars',            'icon' => 'key',       'label' => 'domain_registrars', 'hint' => 'settings_hint_registrars',      'perm' => 'domain.read'],
+        ['slug' => 'modules',         'route' => 'staff.modules',               'icon' => 'modules',   'label' => 'modules',           'hint' => 'settings_hint_modules',         'perm' => 'module.read'],
+        ['slug' => 'config-options',  'route' => 'staff.config.options',        'icon' => 'products',  'label' => 'config_options',    'hint' => 'settings_hint_config_options',  'perm' => 'product.read'],
+        ['slug' => 'promos',          'route' => 'staff.promos',                'icon' => 'megaphone', 'label' => 'promo_codes',       'hint' => 'settings_hint_promos',          'perm' => 'product.read'],
+        ['slug' => 'currencies',      'route' => 'staff.currencies',            'icon' => 'currency',  'label' => 'currencies',        'hint' => 'settings_hint_currencies',      'perm' => 'currency.read'],
+        ['slug' => 'roles',           'route' => 'staff.roles',                 'icon' => 'roles',     'label' => 'roles',             'hint' => 'settings_hint_roles',           'perm' => 'role.read'],
+        ['slug' => 'utils',           'route' => 'staff.utils',                 'icon' => 'database',  'label' => 'utilities',         'hint' => 'settings_hint_utils',           'perm' => 'settings.read'],
+        ['slug' => 'error-log',       'route' => 'staff.util.logs',             'icon' => 'warning',   'label' => 'error_log',         'hint' => 'settings_hint_error_log',       'perm' => 'settings.read'],
+    ];
+}
 
-    nav_item('general',      'staff.settings',              'settings', true, null, 'app', 14);
-    nav_item('localisation', 'staff.settings.localisation', 'domains',  true, null, null, 14);
-    nav_item('billing',      'staff.settings.billing',      'invoices', true, null, null, 14);
-    nav_item('tax',          'staff.settings.tax',          'currency', true, null, null, 14);
-    nav_item('security',     'staff.settings.security',     'key',      true, null, null, 14);
-    nav_item('mail',         'staff.settings.mail',         'mail',     true, null, 'smtp', 14);
-    nav_item('templates',    'staff.settings.templates',    'edit',     true, null, 'email_templates', 14);
-    nav_item('statuses',     'staff.settings.statuses',     'activity', true, null, null, 14);
+/**
+ * The Cards This Member Of Staff May Open, Ready To Render
+ *
+ * Hiding a card is a courtesy, not a control, exactly as with a sidebar link:
+ * every screen behind one is still refused server-side by its own route.
+ * @return array<int,array{slug:string,route:string,icon:string,title:string,hint:string}>
+ */
+function settings_cards(): array
+{
+    $cards = [];
 
-    return nav_finish('settings', $current);
+    foreach (settings_sections() as $section) {
+        if (!staff_has_access($section['perm'])) {
+            continue;
+        }
+
+        $cards[] = [
+            'slug'  =>  $section['slug'],
+            'route' =>  $section['route'],
+            'icon'  =>  $section['icon'],
+            'title' =>  local($section['label']),
+            'hint'  =>  local($section['hint']),
+        ];
+    }
+
+    return $cards;
 }
 
 ####################################################################################
@@ -335,7 +346,7 @@ function nav_group(string $name): Item
  * core entries under a heading can all be permission-hidden while the module's
  * is allowed.
  *
- * @param string $area Tree Name - admin, panel, front or settings
+ * @param string $area Tree Name - admin, panel or front
  * @param ?string $current Section Key To Mark Active
  * @return Item[]
  */
@@ -399,7 +410,7 @@ function nav_mark(array $items, string $current): bool
  * that would have shown it - is dropped silently, which is the correct outcome:
  * a module must not be able to reveal a section the role does not hold.
  *
- * @param string $area admin, panel, front or settings
+ * @param string $area admin, panel or front
  * @param callable $callback Runs With The Tree Half-Built
  * @param int $priority Hook Priority
  * @return void
