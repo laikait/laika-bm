@@ -16,6 +16,7 @@ namespace LBM\Support;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Action\Registrar;
 use LBM\Model\DomainModel;
 use LBM\Model\DomainRegistrarModel;
 use LBM\Module\Contracts\RegistrarInterface;
@@ -87,8 +88,13 @@ trait RegistersDomains
             return null;
         }
 
+        // Constructed WITH its credentials - Phase 35. Until then this was
+        // `new $class()`, and nothing anywhere read domain_registrars.credentials,
+        // so a real registrar module was never handed its own API key. Every
+        // caller reaches a driver through here, so this one line serves all six
+        // verbs - including the three call sites that pass no context at all.
         try {
-            $driver = new $class();
+            $driver = new $class((new Registrar())->settingsFor($registrar));
         } catch (Throwable) {
             return null;
         }

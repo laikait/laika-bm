@@ -571,7 +571,7 @@ must_exist(
 // Phase 9 - had no call site anywhere.
 must_exist(
     'vendor/laikait/laika-bm/src/Action/Tld.php',
-    'The domain price list. Without it no ending has a price and no domain can be ordered at any term.'
+    'The domain price list. Without it no TLD has a price and no domain can be ordered at any term.'
 );
 must_exist(
     'vendor/laikait/laika-bm/src/Action/Registration.php',
@@ -583,7 +583,7 @@ must_exist(
 );
 must_exist(
     'vendor/laikait/laika-bm/src/Controller/Admin/TldController.php',
-    'The only screen an ending can be priced on. Without it domain pricing can only be written by hand into the database.'
+    'The only screen a TLD can be priced on. Without it domain pricing can only be written by hand into the database.'
 );
 must_exist(
     'vendor/laikait/laika-bm/src/Controller/Front/DomainController.php',
@@ -595,7 +595,7 @@ must_exist(
 );
 must_exist(
     'template/admin/bootstrap/tld-form.twig',
-    'Where an ending is added or repriced. Without it the list has nothing to link to.'
+    'Where a TLD is added or repriced. Without it the list has nothing to link to.'
 );
 must_exist(
     'template/front/bootstrap/domains.twig',
@@ -616,6 +616,30 @@ must_exist(
 must_exist(
     'vendor/laikait/laika-bm/src/Service/DomainRenewal.php',
     'The facade cron reaches it through. Its absence is a fatal on every cron tick, not a missing feature.'
+);
+
+// Phase 35. Without these `domain_registrars` goes back to being a table with no
+// screen - so a fresh install cannot sell a domain without direct SQL - and a
+// registrar module goes back to being built with no credentials at all.
+must_exist(
+    'vendor/laikait/laika-bm/src/Action/Registrar.php',
+    'Stores registrars and seals their credentials. Without it every TLD points at a registrar nobody can create, and no module is handed its API key.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Service/Registrar.php',
+    'The facade the registrars screen, the TLD form and the domain form reach it through. Its absence is a fatal on all three.'
+);
+must_exist(
+    'vendor/laikait/laika-bm/src/Controller/Admin/RegistrarController.php',
+    'The only screen a registrar can be added on. Without it the TLD form offers an empty dropdown.'
+);
+must_exist(
+    'template/admin/bootstrap/registrars.twig',
+    'The registrar list. Without it /admin/registrars is a Twig error for every member of staff.'
+);
+must_exist(
+    'template/admin/bootstrap/registrar-form.twig',
+    'Where a registrar is added and its credentials typed. Without it the list has nothing to link to.'
 );
 
 // Phase 29. Without these `domain_contacts` goes back to being a table with no

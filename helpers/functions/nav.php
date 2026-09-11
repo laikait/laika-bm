@@ -134,6 +134,9 @@ function nav_admin(?string $current = null): array
     nav_item('gateways',         'staff.gateways',       'currency',  staff_has_access('settings.read'), $settings, 'payment_gateways');
     nav_item('servers',          'staff.servers',        'servers',   staff_has_access('server.read'),   $settings);
     nav_item('tlds',             'staff.tlds',           'currency',  staff_has_access('domain.read'),   $settings, 'domain_pricing');
+    // Phase 35. Beside the price list and behind the same permission, because
+    // a TLD cannot be priced until there is a registrar for it to point at.
+    nav_item('registrars',       'staff.registrars',     'key',       staff_has_access('domain.read'),   $settings);
     nav_item('modules',          'staff.modules',        'modules',   staff_has_access('module.read'),   $settings);
     nav_item('config_options',   'staff.config.options', 'settings',  staff_has_access('product.read'),  $settings);
     nav_item('promos',           'staff.promos',         'megaphone', staff_has_access('product.read'),  $settings, 'promo_codes');

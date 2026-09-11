@@ -41,19 +41,19 @@ use LBM\Support\Clock;
  * saying `active`. This is the other half.
  *
  * ---------------------------------------------------------------------------
- * THE PRICE COMES FROM THE ENDING, NOT FROM WHAT THEY PAID LAST TIME
+ * THE PRICE COMES FROM THE TLD, NOT FROM WHAT THEY PAID LAST TIME
  * ---------------------------------------------------------------------------
  * `domains.amount` is what was charged at registration, and a first year is
  * very often discounted - so renewing at it would repeat a promotion the
  * operator meant to give once. `tlds.renew_price` is a separate column for
  * exactly this reason and had never been read by anything.
  *
- * `Tld::renewalPrice()` deliberately ignores whether the ending is still on
+ * `Tld::renewalPrice()` deliberately ignores whether the TLD is still on
  * sale. Withdrawing one means stop selling new names, not abandon the customers
  * already on it.
  *
  * ---------------------------------------------------------------------------
- * AN ENDING THAT CANNOT BE PRICED IS SKIPPED LOUDLY
+ * A TLD THAT CANNOT BE PRICED IS SKIPPED LOUDLY
  * ---------------------------------------------------------------------------
  * If the TLD row has gone, or its currency no longer matches the one the domain
  * is billed in, there is no honest figure to put on an invoice - the last one
@@ -205,7 +205,7 @@ class DomainRenewalJob extends Job
         }
 
         $tlds = new Tld();
-        $tld = $tlds->byEnding((string) ($domain['tld'] ?? ''));
+        $tld = $tlds->byName((string) ($domain['tld'] ?? ''));
         $years = max(1, $tlds->yearsForCycle((string) ($domain['billing_cycle'] ?? 'annual')));
         $currencyId = (int) ($domain['currency_relid'] ?? 0);
 
@@ -217,7 +217,7 @@ class DomainRenewalJob extends Job
             (new Activity())->record(
                 'domain.renewal.unpriced',
                 'Cannot price a renewal for ' . ($domain['domain'] ?? '?')
-                    . '. Its ending is missing or is priced in another currency.'
+                    . '. Its TLD is missing or is priced in another currency.'
             );
 
             return;

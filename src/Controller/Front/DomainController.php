@@ -49,10 +49,10 @@ use LBM\Support\RegistersDomains;
  * ---------------------------------------------------------------------------
  * THE LOOKUPS ARE BOUNDED
  * ---------------------------------------------------------------------------
- * Every ending checked is a call over somebody else network. An operator with
- * forty endings on the price list would otherwise turn one search box into
+ * Every TLD checked is a call over somebody else network. An operator with
+ * forty TLDs on the price list would otherwise turn one search box into
  * forty blocking calls, and the page would time out rather than sell anything.
- * MAX_LOOKUPS is the cap; endings past it are still listed with their price and
+ * MAX_LOOKUPS is the cap; TLDs past it are still listed with their price and
  * an unknown availability, which is the same state a missing module produces
  * and needs no second explanation on the screen.
  */
@@ -60,7 +60,7 @@ class DomainController extends FrontController
 {
     use RegistersDomains;
 
-    /** @var int Most Endings One Search Will Ask a Registrar About */
+    /** @var int Most TLDs One Search Will Ask a Registrar About */
     public const MAX_LOOKUPS = 10;
 
     /**
@@ -82,16 +82,16 @@ class DomainController extends FrontController
         $currency = Currency::default();
         $currencyId = (int) ($currency['currency_id'] ?? 0);
 
-        $endings = Tld::forSale();
+        $tlds = Tld::forSale();
 
         return $this->screen('domains', local('domains'), [
             'meta_description' =>  local('domains_meta', app_name()),
             'query'            =>  $query,
             'currency'         =>  $currency,
-            'endings'          =>  $this->priceList($endings, $currencyId),
-            'results'          =>  $query === '' ? [] : $this->search($query, $endings, $currencyId),
+            'tlds'             =>  $this->priceList($tlds, $currencyId),
+            'results'          =>  $query === '' ? [] : $this->search($query, $tlds, $currencyId),
             'searched'         =>  $query !== '',
-            'invalid'          =>  $query !== '' && Tld::normaliseDomain($this->withEnding($query, $endings)) === null,
+            'invalid'          =>  $query !== '' && Tld::normaliseDomain($this->withTld($query, $tlds)) === null,
         ]);
     }
 
@@ -102,18 +102,18 @@ class DomainController extends FrontController
     /**
      * The Price List, For The Table Under The Search Box
      *
-     * Endings with no price in this currency are dropped rather than shown at
-     * nothing. Tld::priceFor() explains why an unpriced ending is not a free
+     * TLDs with no price in this currency are dropped rather than shown at
+     * nothing. Tld::priceFor() explains why an unpriced TLD is not a free
      * one, and a row reading 0.00 is a promise the shop cannot keep.
-     * @param array $endings Active TLD Rows
+     * @param array $tlds Active TLD Rows
      * @param int $currencyId Currency ID
      * @return array<int,array<string,mixed>>
      */
-    private function priceList(array $endings, int $currencyId): array
+    private function priceList(array $tlds, int $currencyId): array
     {
         $rows = [];
 
-        foreach ($endings as $tld) {
+        foreach ($tlds as $tld) {
             $price = Tld::priceFor($tld, $currencyId, (int) ($tld['min_years'] ?? 1) ?: 1, 'register');
 
             // min_years may be outside what a domain row can record at all, in
@@ -142,27 +142,27 @@ class DomainController extends FrontController
     }
 
     /**
-     * What The Visitor Asked For, Across Every Ending On Sale
+     * What The Visitor Asked For, Across Every TLD On Sale
      *
      * The exact name typed comes first, then the same label on every other
-     * ending. That order matters: somebody who typed `example.com` wants to
+     * TLD. That order matters: somebody who typed `example.com` wants to
      * know about `example.com`, and burying it among suggestions in
      * alphabetical order is how a search box stops answering the question.
      * @param string $query What Was Typed
-     * @param array $endings Active TLD Rows
+     * @param array $tlds Active TLD Rows
      * @param int $currencyId Currency ID
      * @return array<int,array<string,mixed>>
      */
-    private function search(string $query, array $endings, int $currencyId): array
+    private function search(string $query, array $tlds, int $currencyId): array
     {
-        $typed = Tld::normaliseDomain($this->withEnding($query, $endings));
+        $typed = Tld::normaliseDomain($this->withTld($query, $tlds));
 
         if ($typed === null) {
             return [];
         }
 
-        // The label is what is left once a known ending is removed. When the
-        // visitor typed an ending nobody sells, everything before the first dot
+        // The label is what is left once a known TLD is removed. When the
+        // visitor typed a TLD nobody sells, everything before the first dot
         // is the best guess available.
         $split = Tld::split($typed);
         $label = is_array($split) ? $split['name'] : explode('.', $typed)[0];
@@ -174,7 +174,7 @@ class DomainController extends FrontController
         $exact = is_array($split) ? (int) $split['row']['tld_id'] : 0;
         $ordered = [];
 
-        foreach ($endings as $tld) {
+        foreach ($tlds as $tld) {
             if ((int) $tld['tld_id'] === $exact) {
                 array_unshift($ordered, $tld);
 
@@ -188,8 +188,8 @@ class DomainController extends FrontController
         $asked = 0;
 
         foreach ($ordered as $tld) {
-            $ending = Tld::normaliseTld((string) $tld['tld']);
-            $name = $label . $ending;
+            $tldName = Tld::normaliseTld((string) $tld['tld']);
+            $name = $label . $tldName;
 
             $terms = Tld::termsFor($tld);
             $years = $terms === [] ? 0 : $terms[0];
@@ -197,7 +197,7 @@ class DomainController extends FrontController
 
             $row = [
                 'domain'    =>  $name,
-                'tld'       =>  $ending,
+                'tld'       =>  $tldName,
                 'tld_id'    =>  (int) $tld['tld_id'],
                 'exact'     =>  (int) $tld['tld_id'] === $exact,
                 'price'     =>  $price,
@@ -300,17 +300,17 @@ class DomainController extends FrontController
     }
 
     /**
-     * Give a Bare Label An Ending So It Can Be Looked Up
+     * Give a Bare Label A TLD So It Can Be Looked Up
      *
      * Somebody who types `example` and presses the button has asked a real
      * question, and answering it with "that is not a domain" is a search box
-     * refusing to search. The first ending on the price list stands in, and
-     * every other ending is offered beside it anyway.
+     * refusing to search. The first TLD on the price list stands in, and
+     * every other TLD is offered beside it anyway.
      * @param string $query What Was Typed
-     * @param array $endings Active TLD Rows
+     * @param array $tlds Active TLD Rows
      * @return string
      */
-    private function withEnding(string $query, array $endings): string
+    private function withTld(string $query, array $tlds): string
     {
         $query = strtolower(trim($query));
 
@@ -318,7 +318,7 @@ class DomainController extends FrontController
             return $query;
         }
 
-        $first = $endings[0] ?? null;
+        $first = $tlds[0] ?? null;
 
         return is_array($first) ? $query . Tld::normaliseTld((string) $first['tld']) : $query;
     }

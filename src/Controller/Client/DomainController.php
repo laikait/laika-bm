@@ -203,7 +203,7 @@ class DomainController extends ClientController
      * what the customer asked for, which is what staff need in order to apply it
      * by hand. A failure is when that matters most.
      *
-     * WHAT THE REGISTRY HOLDS AFTERWARDS WINS. Many endings refuse a registrant
+     * WHAT THE REGISTRY HOLDS AFTERWARDS WINS. Many TLDs refuse a registrant
      * change outright - it is a trade rather than an edit - so storing the
      * request and calling it done is how a panel comes to disagree with the
      * registry about who owns a name.

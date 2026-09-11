@@ -26,6 +26,19 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
  *
  * `nameservers()` is the one a client can reach, through the client area. The
  * others cost money or move ownership and stay with staff.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT A DRIVER IS CONSTRUCTED WITH
+ * ---------------------------------------------------------------------------
+ * One array: the registrar's credentials from the Registrars screen, opened,
+ * under the names the operator gave them - plus `api_url` from its own column,
+ * always present and never shadowed by a credential of that name.
+ *
+ * The constructor is not declared here, because an interface cannot usefully
+ * fix one; it is the contract anyway. `Support\RegistersDomains` is the only
+ * place a driver is built, so every verb below reaches a driver that has its
+ * credentials. Until Phase 35 drivers were built with no arguments at all, and
+ * nothing in the product read `domain_registrars.credentials`.
  */
 interface RegistrarInterface
 {
@@ -49,7 +62,7 @@ interface RegistrarInterface
      * `success` is about the CALL, `available` about the domain. A driver that
      * cannot reach its API returns success false and available null.
      *
-     * @param string $domain The name being asked about, including its ending
+     * @param string $domain The name being asked about, including its TLD
      * @param array $context See register()
      * @return array{success: bool, available: ?bool, message: ?string, raw: array}
      */
@@ -146,7 +159,7 @@ interface RegistrarInterface
      *
      * Passing null reads. Passing a set replaces it. The return value is WHAT
      * THE REGISTRY HOLDS afterwards, which is not always what was asked for: a
-     * registry may reject a field, normalise a country, or - for many endings -
+     * registry may reject a field, normalise a country, or - for many TLDs -
      * refuse a registrant change outright because that is a trade rather than
      * an edit. Storing the request instead is how a panel comes to disagree
      * with the registry about who owns a name.

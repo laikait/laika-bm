@@ -555,12 +555,12 @@ class Cart
      * opposite of a product line, where the same plan on two cycles is two
      * genuine purchases, and the difference is worth the separate key.
      *
-     * Nothing here checks that the ending is sold, that the term is offered or
+     * Nothing here checks that the TLD is sold, that the term is offered or
      * that the name is still free. lines() checks all three at render time,
      * which is the check that actually protects an order - and the caller
      * checks too, because it is the caller that has a screen to say so on.
      *
-     * @param string $domain The Name, Including Its Ending
+     * @param string $domain The Name, Including Its TLD
      * @param int $tldId The TLD Row It Was Priced Against
      * @param int $years Term
      * @return ?string The line key, or null when the name is not a domain
@@ -859,7 +859,7 @@ class Cart
      * Resolve One Stored Domain Line Against The Database
      *
      * Three things can have changed since the name went in the cart, and they
-     * are three different messages: the ending stopped being sold, the term or
+     * are three different messages: the TLD stopped being sold, the term or
      * the currency stopped being priced, and - the one that matters - somebody
      * else registered the name.
      *
@@ -927,7 +927,7 @@ class Cart
 
         // The row is still there, but does it still claim this name? An
         // operator who edits `.co` into `.com` leaves every cart line that was
-        // priced against it pointing at an ending its own name does not end
+        // priced against it pointing at a TLD its own name does not end
         // with - and match() is the one place that question is answered.
         $matched = Tld::match($name);
 

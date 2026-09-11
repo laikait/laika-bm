@@ -169,7 +169,7 @@ class Transfer extends Action
      *
      * Four conditions, and each one is a different reason to leave a row alone:
      * it is a transfer rather than a registration; it has not been submitted
-     * already; it has an auth code if its ending needs one; and it has not been
+     * already; it has an auth code if its TLD needs one; and it has not been
      * refused too many times.
      * @return array
      */
@@ -243,7 +243,7 @@ class Transfer extends Action
      * Whether a Transfer Still Needs An Auth Code From The Customer
      *
      * `tlds.epp_required` has existed since Phase 0 and this is its first
-     * reader. An ending that does not require one - some ccTLDs do not - is
+     * reader. A TLD that does not require one - some ccTLDs do not - is
      * submitted with an empty code rather than waiting for ever for something
      * the registry will never ask for.
      * @param array $domain Domain Row
@@ -255,9 +255,9 @@ class Transfer extends Action
             return false;
         }
 
-        $tld = (new Tld())->byEnding((string) ($domain['tld'] ?? ''));
+        $tld = (new Tld())->byName((string) ($domain['tld'] ?? ''));
 
-        // No TLD row at all: the operator withdrew the ending after the order.
+        // No TLD row at all: the operator withdrew the TLD after the order.
         // Treated as requiring a code, because the safe answer to "does this
         // registry want one" is to ask the customer rather than to submit a
         // transfer with an empty string and have it refused.

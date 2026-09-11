@@ -16,13 +16,13 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use RuntimeException;
-use Laika\Model\Model;
 use Laika\Service\Request;
 use LBM\Service\Client;
 use LBM\Service\Country;
 use LBM\Service\Currency;
 use LBM\Service\Domain;
 use LBM\Service\DomainContact;
+use LBM\Service\Registrar;
 use LBM\Service\Transfer;
 
 /**
@@ -98,7 +98,7 @@ class DomainController extends AdminController
      * postcode would be worse. This is where that gets fixed.
      *
      * The registry is NOT called from here. Pushing a registrant change is a
-     * trade on many endings, and doing it silently from an admin edit is how an
+     * trade on many TLDs, and doing it silently from an admin edit is how an
      * operator finds out they have transferred ownership. The customer's own
      * screen pushes, because that is somebody correcting their own details.
      * @param string $domain Domain Uid
@@ -315,24 +315,17 @@ class DomainController extends AdminController
 
     /**
      * Registrar Choices
+     *
+     * From Action\Registrar, the one place a registrar is named. Until Phase 35
+     * this was a bare Model guessing at a `registrar_name` column that has
+     * never existed and falling back to "Registrar 3" - a second opinion about
+     * what a registrar is called, which is the arrangement that ends with two
+     * screens disagreeing.
      * @return array<int,string>
      */
     private function registrarChoices(): array
     {
-        $model = (new Model())->table('domain_registrars');
-        $choices = [];
-
-        foreach ($model->get() as $row) {
-            $id = (int) ($row['dr_id'] ?? $row['id'] ?? 0);
-
-            if ($id === 0) {
-                continue;
-            }
-
-            $choices[$id] = (string) ($row['registrar_name'] ?? $row['name'] ?? local('registrar_numbered', $id));
-        }
-
-        return $choices;
+        return Registrar::choices();
     }
 
     /**

@@ -22,7 +22,7 @@ use LBM\Service\Money;
 use RuntimeException;
 
 /**
- * The domain price list - what the shop sells and what each ending costs.
+ * The domain price list - what the shop sells and what each TLD costs.
  *
  * `tlds` has existed since Phase 0 with ZERO callers anywhere in the product:
  * register, renew, transfer and restore prices, a term range, a registrar and a
@@ -114,8 +114,8 @@ class Tld extends Action
     ####################################################################################
 
     /**
-     * Every Ending The Operator Has Set Up
-     * @param bool $activeOnly Only Endings Currently Sold
+     * Every TLD The Operator Has Set Up
+     * @param bool $activeOnly Only TLDs Currently Sold
      * @return array
      */
     public function listing(bool $activeOnly = false): array
@@ -130,7 +130,7 @@ class Tld extends Action
     }
 
     /**
-     * The Endings a Visitor May Order
+     * The TLDs a Visitor May Order
      * @return array
      */
     public function forSale(): array
@@ -139,21 +139,21 @@ class Tld extends Action
     }
 
     /**
-     * The Ending One Domain Name Belongs To
+     * The TLD One Domain Name Belongs To
      *
-     * ONE RULE DOES ALL THE WORK: what is left in front of the ending has to be
+     * ONE RULE DOES ALL THE WORK: what is left in front of the TLD has to be
      * a single label. `.com` matches the tail of `www.example.com` too, and a
      * subdomain is not something anybody can register - so that is a miss
      * rather than a sale.
      *
-     * That rule is also what settles the overlapping-ending case, which is why
+     * That rule is also what settles the overlapping-TLD case, which is why
      * there is no length comparison here. An operator selling both `.uk` and
-     * `.co.uk` has two rows whose endings overlap, and `example.co.uk` must be
+     * `.co.uk` has two rows whose TLDs overlap, and `example.co.uk` must be
      * priced as a `.co.uk` - but `.uk` cannot claim it either, because it would
      * leave `example.co`, which has a dot in it.
      *
-     * That generalises: at most ONE ending can ever pass the guard. If a longer
-     * ending E2 and a shorter E1 were both suffixes of the same name, the label
+     * That generalises: at most ONE TLD can ever pass the guard. If a longer
+     * TLD E2 and a shorter E1 were both suffixes of the same name, the label
      * E1 leaves is the label E2 leaves plus the front of E2 - and E2 begins
      * with a dot, so E1's label always contains one. So the first survivor is
      * the only survivor.
@@ -174,15 +174,15 @@ class Tld extends Action
         }
 
         foreach ($this->forSale() as $row) {
-            $ending = $this->normaliseTld((string) ($row['tld'] ?? ''));
+            $tld = $this->normaliseTld((string) ($row['tld'] ?? ''));
 
-            if ($ending === '' || !str_ends_with($domain, $ending)) {
+            if ($tld === '' || !str_ends_with($domain, $tld)) {
                 continue;
             }
 
-            $label = substr($domain, 0, -strlen($ending));
+            $label = substr($domain, 0, -strlen($tld));
 
-            // Nothing in front of the ending, or a dot in it: `.co.uk` and
+            // Nothing in front of the TLD, or a dot in it: `.co.uk` and
             // `www.example.com` respectively. Neither is a registrable name,
             // and this is the whole of the matching rule - see the docblock.
             if ($label === '' || str_contains($label, '.')) {
@@ -196,31 +196,31 @@ class Tld extends Action
     }
 
     /**
-     * One Ending By Its Name, Sold Or Not
+     * One TLD By Its Name, Sold Or Not
      *
-     * `domains.tld` records the ending as a STRING rather than a link, so this
+     * `domains.tld` records the TLD as a STRING rather than a link, so this
      * is how a domain finds its price list. Deliberately not match(), which
-     * searches only what is on sale: a domain on an ending the operator has
+     * searches only what is on sale: a domain on a TLD the operator has
      * withdrawn still has to be renewable, and match() would answer null and
      * strand it.
-     * @param string $ending Domain Ending, With Or Without Its Dot
+     * @param string $tld TLD, With Or Without Its Dot
      * @return ?array
      */
-    public function byEnding(string $ending): ?array
+    public function byName(string $tld): ?array
     {
-        $ending = $this->normaliseTld($ending);
+        $tld = $this->normaliseTld($tld);
 
-        if ($ending === '') {
+        if ($tld === '') {
             return null;
         }
 
-        $row = $this->model()->where(['tld' => $ending])->first();
+        $row = $this->model()->where(['tld' => $tld])->first();
 
         return is_array($row) ? $row : null;
     }
 
     /**
-     * Split a Domain Into Its Name And Its Ending
+     * Split a Domain Into Its Name And Its TLD
      * @param string $domain Domain Name
      * @return ?array{name:string,tld:string,row:array} Null when nothing sold here matches
      */
@@ -233,17 +233,17 @@ class Tld extends Action
         }
 
         $domain = (string) $this->normaliseDomain($domain);
-        $ending = $this->normaliseTld((string) $row['tld']);
+        $tld = $this->normaliseTld((string) $row['tld']);
 
         return [
-            'name'  =>  substr($domain, 0, -strlen($ending)),
-            'tld'   =>  $ending,
+            'name'  =>  substr($domain, 0, -strlen($tld)),
+            'tld'   =>  $tld,
             'row'   =>  $row,
         ];
     }
 
     /**
-     * The Terms One Ending May Be Ordered For
+     * The Terms One TLD May Be Ordered For
      *
      * The operator range, intersected with what a `domains` row is able to
      * record. See the class docblock: three years is not a policy, it is the
@@ -272,10 +272,10 @@ class Tld extends Action
     }
 
     /**
-     * What One Ending Costs, For a Term, In One Currency
+     * What One TLD Costs, For a Term, In One Currency
      *
      * Null rather than zero for every way of not being sellable - the wrong
-     * currency, a term outside the range, a withdrawn ending. Zero is a price
+     * currency, a term outside the range, a withdrawn TLD. Zero is a price
      * an operator may legitimately set (a free first year), so the two answers
      * have to stay distinguishable. Product::price() draws the same line.
      *
@@ -317,7 +317,7 @@ class Tld extends Action
     }
 
     /**
-     * What Transferring One Ending In Costs
+     * What Transferring One TLD In Costs
      *
      * ONE YEAR, and no term at all. A transfer adds exactly one year at almost
      * every registry whatever the customer would like, and
@@ -325,11 +325,11 @@ class Tld extends Action
      * offering two would be charging for something the call cannot ask for.
      *
      * That is also why this does not go through priceFor(), which checks the
-     * term against the operator's own min_years: an ending sold in twos would
+     * term against the operator's own min_years: a TLD sold in twos would
      * otherwise refuse every transfer of it.
      *
      * The `is_active` gate DOES apply, unlike renewalPrice() below. Withdrawing
-     * an ending means stop taking on new names, and a transfer in IS a new name
+     * a TLD means stop taking on new names, and a transfer in IS a new name
      * to this install - it is only renewals that have to go on being honoured
      * for the customers already on one.
      * @param array $tld TLD Row
@@ -355,10 +355,10 @@ class Tld extends Action
      * priceFor() with the `is_active` gate deliberately removed, and that is
      * the whole reason it is a separate method rather than a flag.
      *
-     * Withdrawing an ending means "stop selling new ones". It cannot mean
+     * Withdrawing a TLD means "stop selling new ones". It cannot mean
      * "abandon the customers already on it" - they have paid for names that
      * renew, and an operator tidying their price list must not silently strand
-     * them. So a renewal reads the price whatever the ending is set to, while
+     * them. So a renewal reads the price whatever the TLD is set to, while
      * `forSale()` and priceFor() go on refusing new orders.
      *
      * The currency is still enforced. A domain carries the currency it was
@@ -405,7 +405,7 @@ class Tld extends Action
     }
 
     /**
-     * Add An Ending To The Price List
+     * Add A TLD To The Price List
      * @param array $input Submitted Data
      * @return int The new tld id
      * @throws RuntimeException
@@ -414,15 +414,15 @@ class Tld extends Action
     {
         $data = $this->clean($input);
 
-        if ($this->endingTaken((string) $data['tld'], null)) {
-            throw new RuntimeException('That ending is already on the price list.');
+        if ($this->tldTaken((string) $data['tld'], null)) {
+            throw new RuntimeException('That TLD is already on the price list.');
         }
 
         return $this->create($data);
     }
 
     /**
-     * Change An Ending
+     * Change A TLD
      * @param int|string $key TLD ID Or Uid
      * @param array $input Submitted Data
      * @return int Affected rows
@@ -433,23 +433,23 @@ class Tld extends Action
         $tld = $this->find($key);
 
         if ($tld === null) {
-            throw new RuntimeException('That ending is no longer on the price list.');
+            throw new RuntimeException('That TLD is no longer on the price list.');
         }
 
         $data = $this->clean($input);
         $id = (int) $tld['tld_id'];
 
-        if ($this->endingTaken((string) $data['tld'], $id)) {
-            throw new RuntimeException('That ending is already on the price list.');
+        if ($this->tldTaken((string) $data['tld'], $id)) {
+            throw new RuntimeException('That TLD is already on the price list.');
         }
 
         return $this->update($id, $data);
     }
 
     /**
-     * Take An Ending Off The Price List
+     * Take A TLD Off The Price List
      *
-     * Refused while domains are registered on it. `domains` records its ending
+     * Refused while domains are registered on it. `domains` records its TLD
      * as a STRING rather than a link, so deleting the row orphans nothing a
      * foreign key would notice - it quietly removes the only place a renewal
      * price for those domains could ever be read from, and the first sign is a
@@ -466,11 +466,11 @@ class Tld extends Action
             return 0;
         }
 
-        $ending = $this->normaliseTld((string) $tld['tld']);
+        $name = $this->normaliseTld((string) $tld['tld']);
 
-        if ((new DomainModel())->where(['tld' => $ending])->count() > 0) {
+        if ((new DomainModel())->where(['tld' => $name])->count() > 0) {
             throw new RuntimeException(
-                'Domains are registered on that ending. Stop selling it instead of deleting it.'
+                'Domains are registered on that TLD. Stop selling it instead of deleting it.'
             );
         }
 
@@ -506,12 +506,12 @@ class Tld extends Action
     }
 
     /**
-     * Put a Submitted Ending Into The One Shape Everything Else Assumes
+     * Put a Submitted TLD Into The One Shape Everything Else Assumes
      *
      * Lowercase, exactly one leading dot. An operator types `.com`, `com` or
      * `COM` and means the same thing; storing all three would make match() find
      * whichever was entered first and price the others at nothing.
-     * @param string $tld Submitted Ending
+     * @param string $tld Submitted TLD
      * @return string
      */
     public function normaliseTld(string $tld): string
@@ -568,32 +568,32 @@ class Tld extends Action
     {
         $data = $this->only($input, self::FIELDS);
 
-        $ending = $this->normaliseTld((string) ($data['tld'] ?? ''));
+        $tld = $this->normaliseTld((string) ($data['tld'] ?? ''));
 
-        if ($ending === '') {
-            throw new RuntimeException('An ending needs a name, such as .com.');
+        if ($tld === '') {
+            throw new RuntimeException('A TLD needs a name, such as .com.');
         }
 
-        if (strlen($ending) > self::MAX_LENGTH) {
-            throw new RuntimeException('That ending is too long.');
+        if (strlen($tld) > self::MAX_LENGTH) {
+            throw new RuntimeException('That TLD is too long.');
         }
 
-        if (!preg_match('/^\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*$/', $ending)) {
-            throw new RuntimeException('That does not look like a domain ending.');
+        if (!preg_match('/^\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*$/', $tld)) {
+            throw new RuntimeException('That does not look like a TLD.');
         }
 
         if ((int) ($data['registrar_relid'] ?? 0) <= 0) {
-            throw new RuntimeException('An ending needs a registrar.');
+            throw new RuntimeException('A TLD needs a registrar.');
         }
 
         if ((int) ($data['currency_relid'] ?? 0) <= 0) {
-            throw new RuntimeException('An ending needs a currency to be priced in.');
+            throw new RuntimeException('A TLD needs a currency to be priced in.');
         }
 
         $min = max(1, (int) ($data['min_years'] ?? 1));
         $max = max($min, (int) ($data['max_years'] ?? $min));
 
-        $data['tld']             = $ending;
+        $data['tld']             = $tld;
         $data['registrar_relid'] = (int) $data['registrar_relid'];
         $data['currency_relid']  = (int) $data['currency_relid'];
         $data['min_years']       = $min;
@@ -621,17 +621,17 @@ class Tld extends Action
     }
 
     /**
-     * Whether Another Row Already Holds That Ending
+     * Whether Another Row Already Holds That TLD
      *
      * `tld` is UNIQUE, so this is the difference between a message the operator
      * can act on and a driver exception on the form.
-     * @param string $ending Normalised Ending
+     * @param string $tld Normalised TLD
      * @param ?int $ignore TLD ID To Skip
      * @return bool
      */
-    private function endingTaken(string $ending, ?int $ignore): bool
+    private function tldTaken(string $tld, ?int $ignore): bool
     {
-        $row = (new TldModel())->where(['tld' => $ending])->first();
+        $row = (new TldModel())->where(['tld' => $tld])->first();
 
         if (!is_array($row)) {
             return false;

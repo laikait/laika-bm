@@ -16,32 +16,32 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
-use LBM\Model\DomainRegistrarModel;
 use LBM\Service\Activity;
 use LBM\Service\Currency;
+use LBM\Service\Registrar;
 use LBM\Service\Tld;
 use LBM\Support\RegistersDomains;
 
 /**
- * The domain price list - which endings the shop sells and what they cost.
+ * The domain price list - which TLDs the shop sells and what they cost.
  *
  * Behind `domain` rather than a permission group of its own, and unlike addons
  * that needed no argument: the group already exists in Permission::GROUPS and
  * is already granted on every install, because the domain screens have been
  * there since Phase 8. Anybody trusted to edit a customer domain is trusted to
- * price the endings those domains are on.
+ * price the TLDs those domains are on.
  *
  * ---------------------------------------------------------------------------
  * THE SCREEN SAYS WHAT WILL ACTUALLY HAPPEN
  * ---------------------------------------------------------------------------
- * Two things about an ending are invisible from its row and change what an
+ * Two things about a TLD are invisible from its row and change what an
  * order does, so both are computed and shown:
  *
  *   - Whether the registrar it points at has a MODULE installed and switched
- *     on. Without one, every domain sold on that ending is recorded and left
+ *     on. Without one, every domain sold on that TLD is recorded and left
  *     `pending` for somebody to register by hand. That is supported, and an
  *     operator who does not know it is happening will find out from a customer.
- *   - Which currency it is priced in. A TLD carries exactly one, so an ending
+ *   - Which currency it is priced in. A TLD carries exactly one, so one
  *     priced in a currency a customer is not checking out in cannot be sold to
  *     them at all - see Action\Tld on why that is a refusal and not a
  *     conversion.
@@ -61,20 +61,20 @@ class TldController extends AdminController
      */
     public function index(): string
     {
-        $endings = Tld::listing();
+        $tlds = Tld::listing();
 
         return $this->screen('tlds', local('domain_pricing'), [
-            'endings'    =>  $endings,
+            'tlds'       =>  $tlds,
             'registrars' =>  $this->registrarChoices(),
             'modules'    =>  $this->moduleState(),
-            'terms'      =>  $this->termsFor($endings),
+            'terms'      =>  $this->termsFor($tlds),
             'currencies' =>  $this->currencyCodes(),
             'default'    =>  Currency::default(),
         ]);
     }
 
     /**
-     * Add An Ending
+     * Add A TLD
      * @return ?string
      */
     public function create(): ?string
@@ -87,18 +87,18 @@ class TldController extends AdminController
                     $id = Tld::store($input);
                     $row = Tld::find($id);
 
-                    $this->log('tld.created', 'Added domain ending ' . (string) $row['tld']);
+                    $this->log('tld.created', 'Added TLD ' . (string) $row['tld']);
                 },
                 'staff.tlds',
                 local('tld_added')
             );
         }
 
-        return $this->form(null, local('add_an_ending'));
+        return $this->form(null, local('add_a_tld'));
     }
 
     /**
-     * Edit An Ending
+     * Edit A TLD
      * @param string $tld TLD Uid
      * @return ?string
      */
@@ -115,7 +115,7 @@ class TldController extends AdminController
 
                     Tld::modify((int) $row['tld_id'], $input);
 
-                    $this->log('tld.updated', 'Updated domain ending ' . (string) $row['tld'], $changes);
+                    $this->log('tld.updated', 'Updated TLD ' . (string) $row['tld'], $changes);
                 },
                 'staff.tlds',
                 local('tld_updated')
@@ -126,7 +126,7 @@ class TldController extends AdminController
     }
 
     /**
-     * Take An Ending Off The Price List
+     * Take A TLD Off The Price List
      * @param string $tld TLD Uid
      * @return ?string
      */
@@ -139,7 +139,7 @@ class TldController extends AdminController
             function () use ($row, $name): void {
                 Tld::remove((int) $row['tld_id']);
 
-                $this->log('tld.deleted', "Deleted domain ending {$name}.");
+                $this->log('tld.deleted', "Deleted TLD {$name}.");
             },
             'staff.tlds',
             local('deleted_named', $name)
@@ -159,11 +159,15 @@ class TldController extends AdminController
     private function form(?array $tld, string $title): string
     {
         return $this->screen('tld-form', $title, [
-            'ending'     =>  $tld,
+            'tld'        =>  $tld,
             'editing'    =>  $tld !== null,
             'registrars' =>  $this->registrarChoices(),
             'currencies' =>  $this->currencyChoices(),
             'modules'    =>  $this->moduleState(),
+
+            // The registrar a NEW TLD starts on. `is_default` sat in the schema
+            // from Phase 0 with nothing reading it; this is what reads it.
+            'default_registrar' =>  Registrar::defaultId(),
 
             // The form offers exactly the terms a `domains` row can record, and
             // says so on the screen. An operator who types a max of 10 and is
@@ -174,18 +178,13 @@ class TldController extends AdminController
 
     /**
      * Registrar Names, Keyed By Id
+     *
+     * From Action\Registrar, the one place a registrar is named for a form.
      * @return array<int,string>
      */
     private function registrarChoices(): array
     {
-        $model = new DomainRegistrarModel();
-        $choices = [];
-
-        foreach ($model->order('name', 'ASC')->get() as $row) {
-            $choices[(int) $row['dr_id']] = (string) $row['name'];
-        }
-
-        return $choices;
+        return Registrar::choices();
     }
 
     /**
@@ -203,7 +202,7 @@ class TldController extends AdminController
     {
         $state = [];
 
-        foreach ((new DomainRegistrarModel())->get() as $row) {
+        foreach (Registrar::listing() as $row) {
             $state[(int) $row['dr_id']] = $this->registrarDriver($row) !== null;
         }
 
@@ -241,15 +240,15 @@ class TldController extends AdminController
     }
 
     /**
-     * The Orderable Terms For Each Ending On The List
-     * @param array $endings TLD Rows
+     * The Orderable Terms For Each TLD On The List
+     * @param array $tlds TLD Rows
      * @return array<int,int[]>
      */
-    private function termsFor(array $endings): array
+    private function termsFor(array $tlds): array
     {
         $terms = [];
 
-        foreach ($endings as $row) {
+        foreach ($tlds as $row) {
             $terms[(int) $row['tld_id']] = Tld::termsFor($row);
         }
 

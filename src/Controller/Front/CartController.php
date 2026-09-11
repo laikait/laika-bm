@@ -201,8 +201,8 @@ class CartController extends FrontController
      * they typed the name into.
      *
      * The name is matched against the price list rather than trusted: the
-     * ending is what decides the price, the term range and the registrar, and
-     * an ending the operator does not sell has no answer to any of the three.
+     * TLD is what decides the price, the term range and the registrar, and
+     * a TLD the operator does not sell has no answer to any of the three.
      * @return ?string
      */
     public function domain(): ?string
@@ -258,7 +258,7 @@ class CartController extends FrontController
      * The MIRROR of domain() above, and every check in it is the same check
      * read the other way round:
      *
-     *   - the ending has to be sold, and priced for TRANSFER in this currency;
+     *   - the TLD has to be sold, and priced for TRANSFER in this currency;
      *   - the name must not already be one this install holds, because a
      *     transfer brings in a name from somewhere else and `domains` is
      *     UNIQUE - a customer transferring a name they already have here would

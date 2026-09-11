@@ -170,7 +170,7 @@ class Domain extends Action
      *
      * A new domain starts `pending`: the row says the customer has bought the
      * name, and the registrar module has not yet been told. `Registration`
-     * moves it to `active` on the registry answer, and a domain whose ending
+     * moves it to `active` on the registry answer, and a domain whose TLD
      * has no registrar module stays pending for whoever registers names by
      * hand - the same three states a service has.
      * @param array $input Submitted Data

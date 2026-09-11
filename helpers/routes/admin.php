@@ -37,6 +37,7 @@ use LBM\Controller\Admin\AddonController;
 use LBM\Controller\Admin\ConfigOptionController;
 use LBM\Controller\Admin\PromoController;
 use LBM\Controller\Admin\TldController;
+use LBM\Controller\Admin\RegistrarController;
 use LBM\Controller\Admin\AnnouncementController;
 use LBM\Controller\Admin\KnowledgeBaseController;
 use LBM\Controller\Admin\ActivityController;
@@ -488,6 +489,29 @@ Url::group(ADMIN, function () use ($uid): void {
 
     Url::post("/tld/{tld:{$uid}}/delete", [TldController::class, 'delete'])
         ->name('staff.tld.delete')->pipeline([Permission::class . '|perm=domain.delete']);
+
+    /*
+     * The registrars a TLD points at. Phase 35.
+     *
+     * Behind `domain` for the price list's reason - the group exists and is
+     * granted on every install - and `/registrars/new` before
+     * `/registrar/{registrar}` for the reason every literal is first here.
+     */
+    Url::get('/registrars', [RegistrarController::class, 'index'])
+        ->name('staff.registrars')->pipeline([Permission::class . '|perm=domain.read']);
+
+    Url::get('/registrars/new', [RegistrarController::class, 'create'])
+        ->name('staff.registrar.new')->pipeline([Permission::class . '|perm=domain.create']);
+    Url::post('/registrars/new', [RegistrarController::class, 'create'])
+        ->pipeline([Permission::class . '|perm=domain.create']);
+
+    Url::get("/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
+        ->name('staff.registrar.edit')->pipeline([Permission::class . '|perm=domain.update']);
+    Url::post("/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
+        ->pipeline([Permission::class . '|perm=domain.update']);
+
+    Url::post("/registrar/{registrar:{$uid}}/delete", [RegistrarController::class, 'delete'])
+        ->name('staff.registrar.delete')->pipeline([Permission::class . '|perm=domain.delete']);
 
     /*=============================== SERVERS ===============================*/
     Url::get('/servers', [ServerController::class, 'index'])

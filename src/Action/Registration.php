@@ -466,7 +466,7 @@ class Registration extends Action
         $tlds = new Tld();
         $split = $tlds->split($name);
 
-        // The ending is no longer sold, or never was. The line was priced from
+        // The TLD is no longer sold, or never was. The line was priced from
         // a TLD row at checkout, so this means the operator withdrew it in
         // between - the record is still made, because the customer has paid,
         // and it has no registrar to reach so it waits for staff.
@@ -481,7 +481,7 @@ class Registration extends Action
         try {
             $id = $domains->store([
                 'domain'          =>  $name,
-                'tld'             =>  is_array($split) ? $split['tld'] : $this->endingOf($name),
+                'tld'             =>  is_array($split) ? $split['tld'] : $this->tldOf($name),
                 'client_relid'    =>  $clientId,
                 'registrar_relid' =>  (int) ($tld['registrar_relid'] ?? 0),
                 // What the customer actually bought. `domain_action` is NULL on
@@ -621,11 +621,11 @@ class Registration extends Action
     }
 
     /**
-     * The Ending Of a Name, When No TLD Row Claims It
+     * The TLD Of a Name, When No TLD Row Claims It
      * @param string $name Domain Name
      * @return string
      */
-    private function endingOf(string $name): string
+    private function tldOf(string $name): string
     {
         $at = strpos($name, '.');
 

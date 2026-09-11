@@ -18,7 +18,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Relay\Relay;
 
 /**
- * The domain price list - what the shop sells and what each ending costs.
+ * The domain price list - what the shop sells and what each TLD costs.
  *
  * A relay forwards method calls, not constants: `Tld::TERMS` fatals here. Reach
  * it through `terms()` beside it, or through the action.
