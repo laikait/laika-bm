@@ -16,6 +16,7 @@ namespace LBM\Support;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use LBM\Action\Module;
 use LBM\Module\Contracts\LookupInterface;
 use LBM\Module\ModuleManager;
 
@@ -45,31 +46,18 @@ trait LooksUpDomains
     protected function lookupDriver(string $module): ?LookupInterface
     {
         $module = trim($module);
-
-        if ($module === '') {
-            return null;
-        }
-
-        $wanted = 'lookup-' . strtolower($module);
-        $class = '';
-
-        foreach (ModuleManager::loaded() as $uid => $meta) {
-            if (($meta['type'] ?? '') !== 'lookup' || strtolower((string) $uid) !== $wanted) {
-                continue;
-            }
-
-            $class = trim((string) ($meta['class'] ?? ''));
-            break;
-        }
+        $class = ModuleSettings::loadedClass('lookup', $module) ?? '';
 
         if ($class === '' || !class_exists($class) || !is_subclass_of($class, LookupInterface::class)) {
             return null;
         }
 
-        // Built with NO arguments - the contract says so. A provider needing a
-        // key reads its own option; there is no credentials column for one.
+        // Built WITH its settings - Phase 40. Until then it was built with no
+        // arguments, and a provider needing a key had to read an option of its
+        // own. What the operator saved on the module's configure page reaches
+        // it opened, with `mode` beside it.
         try {
-            $driver = new $class();
+            $driver = new $class((new Module())->settingsFor(ModuleManager::uid('lookup', $module), $class));
         } catch (Throwable) {
             return null;
         }

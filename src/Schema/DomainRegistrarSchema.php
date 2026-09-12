@@ -31,6 +31,12 @@ class DomainRegistrarSchema extends SchemaAbstract
             $t->serialize('credentials')->comment('encrypted key/value pairs');
             $t->enum('is_default', ['yes', 'no'])->default('no');
             $t->enum('is_active', ['yes', 'no'])->default('yes');
+
+            // Phase 40. Which of its module's APIs a registrar calls - the
+            // module holds both addresses, the operator only chooses. `no` is
+            // live, the only safe default for a registrar that always was.
+            // M202609120200AddRegistrarTestMode adds it to an existing table.
+            $t->enum('test_mode', ['yes', 'no'])->default('no');
             $t->timestamps('dr_created_at', 'dr_updated_at');
 
             // Indexes

@@ -74,6 +74,16 @@ statement, so a transaction there is false comfort, and leaning on PostgreSQL's
 real transactional DDL would make the same migration safe on one engine and not
 the other. Guard each statement instead, and keep one logical change per class.
 
+**A migration that touches disk must be safe to run again.**
+`M202609120100RenameAddonsToPlugins` moves directories as well as rows, and a
+directory move cannot be rolled back with a database. So every step is written
+to be repeated, and when something must not be decided for the operator — a
+module in both `modules/addons` and `modules/plugins` — `run()` finishes
+everything else and then throws, naming it. Nothing is recorded, the update
+screen shows the message, and the next run completes the job once it is
+resolved. It reads no manifest: requiring a module's code in the middle of a
+migration lets a broken module stop the update.
+
 **Raw DDL is allowed here and nowhere else in the product.**
 `bin/verify-stage.php` greps for it at build time and blocks the release if it
 appears outside this directory. Everywhere else the rule stands: model methods

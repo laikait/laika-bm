@@ -72,17 +72,7 @@ trait RegistersDomains
             return null;
         }
 
-        $wanted = 'registrars-' . strtolower($module);
-        $class = '';
-
-        foreach (ModuleManager::loaded() as $uid => $meta) {
-            if (($meta['type'] ?? '') !== 'registrars' || strtolower((string) $uid) !== $wanted) {
-                continue;
-            }
-
-            $class = trim((string) ($meta['class'] ?? ''));
-            break;
-        }
+        $class = ModuleSettings::loadedClass('registrars', $module) ?? '';
 
         if ($class === '' || !class_exists($class) || !is_subclass_of($class, RegistrarInterface::class)) {
             return null;
@@ -93,8 +83,12 @@ trait RegistersDomains
         // so a real registrar module was never handed its own API key. Every
         // caller reaches a driver through here, so this one line serves all six
         // verbs - including the three call sites that pass no context at all.
+        //
+        // Phase 40 hands over the class, so a module that DECLARES its fields
+        // gets exactly those, opened - and `mode` from the registrar's own
+        // Live/Test switch either way.
         try {
-            $driver = new $class((new Registrar())->settingsFor($registrar));
+            $driver = new $class((new Registrar())->settingsFor($registrar, $class));
         } catch (Throwable) {
             return null;
         }

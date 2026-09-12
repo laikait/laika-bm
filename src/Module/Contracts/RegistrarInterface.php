@@ -34,6 +34,12 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
  * under the names the operator gave them - plus `api_url` from its own column,
  * always present and never shadowed by a credential of that name.
  *
+ * Phase 40: a module that DECLARES its fields through `Contracts\Configurable`
+ * gets exactly those instead, opened, drawn on the form from its own code. And
+ * every driver is given `mode` - `live` or `test`, from the registrar's own
+ * switch - so a module keeps its live and its sandbox address in code and the
+ * operator only chooses. See `LBM\Module\Api`.
+ *
  * The constructor is not declared here, because an interface cannot usefully
  * fix one; it is the contract anyway. `Support\RegistersDomains` is the only
  * place a driver is built, so every verb below reaches a driver that has its

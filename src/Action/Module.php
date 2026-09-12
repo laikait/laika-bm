@@ -16,9 +16,12 @@ namespace LBM\Action;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use RuntimeException;
 use Laika\Model\Model;
 use LBM\Model\ModuleModel;
+use LBM\Model\ModuleSettingModel;
 use LBM\Module\ModuleManager;
+use LBM\Support\ModuleSettings;
 
 /**
  * What is installed in the app root's `modules/` directory.
@@ -93,6 +96,15 @@ class Module extends Action
      * Nothing writes it any more.
      */
     public const OPTION = 'module_enabled_';
+
+    /**
+     * @var string[] The Kinds Configured On a Page Of Their Own - Phase 40
+     *
+     * The rest already have a screen that IS their configuration: a gateway's
+     * row on the gateways screen, a registrar's form, and a server module's
+     * fields on each product. These three had nowhere.
+     */
+    public const CONFIGURE_TYPES = ['lookup', 'fraud', 'plugins'];
 
     /** @var array<string,array>|null Discovered Modules, Keyed By Uid */
     private ?array $modules = null;
@@ -384,6 +396,176 @@ class Module extends Action
         return APP_PATH . self::ROOT;
     }
 
+    ################################################################################
+    /*======================= SETTINGS - PHASE 40 ================================*/
+    ################################################################################
+    //
+    // For lookup, fraud and plugin modules, whose settings live in
+    // `module_settings`, one row per declared field plus `mode`. What may be
+    // stored, and how, is LBM\Support\ModuleSettings' business; this only
+    // decides where it goes.
+
+    /**
+     * The Kinds Configured On Their Own Page
+     *
+     * A method rather than the constant, because a relay facade forwards
+     * method calls and not constants.
+     * @return string[]
+     */
+    public function configureTypes(): array
+    {
+        return self::CONFIGURE_TYPES;
+    }
+
+    /**
+     * The Class a Module Declares Its Settings In, If It Can Be Asked
+     *
+     * Only a module that is LOADED can be: its classes are not autoloadable
+     * otherwise, so a module switched off has nothing to draw.
+     * @param string $uid Module Uid
+     * @return ?string
+     */
+    public function configurableClass(string $uid): ?string
+    {
+        $module = $this->find($uid);
+
+        if ($module === null || !ModuleManager::isLoaded((string) $module['uid'])) {
+            return null;
+        }
+
+        $class = ModuleSettings::loadedClass((string) $module['type'], (string) $module['directory']);
+
+        return $class !== null && ModuleSettings::configurable($class) ? $class : null;
+    }
+
+    /**
+     * What Is Stored For a Module, Mode Aside
+     * @param string $uid Module Uid
+     * @return array<string,string>
+     */
+    public function storedSettings(string $uid): array
+    {
+        $stored = [];
+
+        foreach ($this->settingRows($uid) as $key => $row) {
+            if ($key !== 'mode' && is_string($row['setting_value'] ?? null)) {
+                $stored[$key] = (string) $row['setting_value'];
+            }
+        }
+
+        return $stored;
+    }
+
+    /**
+     * Live Or Test
+     * @param string $uid Module Uid
+     * @return string
+     */
+    public function modeOf(string $uid): string
+    {
+        return ModuleSettings::mode($this->settingRows($uid)['mode']['setting_value'] ?? null);
+    }
+
+    /**
+     * What a Module's Driver Is Constructed With
+     *
+     * Reads the settings table and nothing else - no manifest - because
+     * LooksUpDomains asks on every public search.
+     * @param string $uid Module Uid
+     * @param string $class The Class Being Built
+     * @return array<string,string>
+     */
+    public function settingsFor(string $uid, string $class): array
+    {
+        $settings = ModuleSettings::open(ModuleSettings::fields($class), $this->storedSettings($uid));
+        $settings['mode'] = $this->modeOf($uid);
+
+        return $settings;
+    }
+
+    /**
+     * What The Configure Page May Show
+     * @param string $uid Module Uid
+     * @return array{fields: array, mode: string}
+     */
+    public function formFor(string $uid): array
+    {
+        $class = $this->configurableClass($uid);
+
+        return [
+            'fields' =>  $class === null
+                ? []
+                : ModuleSettings::forForm(ModuleSettings::fields($class), $this->storedSettings($uid)),
+            'mode'   =>  $this->modeOf($uid),
+        ];
+    }
+
+    /**
+     * Save a Module's Settings
+     * @param string $uid Module Uid
+     * @param array $input The Form - `settings[...]`, `settings_clear[]`, `mode`
+     * @return void
+     * @throws RuntimeException
+     */
+    public function configure(string $uid, array $input): void
+    {
+        $module = $this->find($uid);
+
+        if ($module === null) {
+            throw new RuntimeException('That module is not installed.');
+        }
+
+        $class = $this->configurableClass($uid);
+
+        if ($class === null) {
+            throw new RuntimeException(
+                'This module is switched off, or declares no settings, so there is nothing to save. Switch it on under Modules first.'
+            );
+        }
+
+        $fields = ModuleSettings::fields($class);
+
+        $values = ModuleSettings::merge(
+            $fields,
+            is_array($input['settings'] ?? null) ? $input['settings'] : [],
+            $this->storedSettings($uid),
+            is_array($input['settings_clear'] ?? null) ? $input['settings_clear'] : []
+        );
+
+        $values['mode'] = ModuleSettings::mode($input['mode'] ?? $this->modeOf($uid));
+
+        $this->writeSettings((int) $module['module_id'], $values, $fields);
+    }
+
+    /**
+     * Try a Module's Saved Settings Against Its Provider
+     *
+     * Builds the driver the same way its kind's builder does - its settings,
+     * opened, and its mode - and asks it. Only Configurable matters here; the
+     * kind's contract is its builder's check.
+     * @param string $uid Module Uid
+     * @return array{success: bool, message: string}
+     */
+    public function testConnection(string $uid): array
+    {
+        $class = $this->configurableClass($uid);
+
+        if ($class === null) {
+            return [
+                'success' =>  false,
+                'message' =>  'This module is switched off, or declares no settings, so it has no connection test.',
+            ];
+        }
+
+        try {
+            $driver = new $class($this->settingsFor($uid, $class));
+        } catch (Throwable $e) {
+            return ['success' => false, 'message' => 'The module could not be constructed: ' . $e->getMessage()];
+        }
+
+        return ModuleSettings::test($driver);
+    }
+
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
@@ -573,6 +755,85 @@ class Module extends Action
         }
 
         return $module;
+    }
+
+    /**
+     * A Module's module_settings Rows, Keyed By setting_key
+     *
+     * By uid straight off the table - never through find(), which reads every
+     * manifest on disk. Empty when the table is not there yet: a release
+     * deployed and not yet migrated must not take a public search down.
+     * @param string $uid Module Uid
+     * @return array<string,array>
+     */
+    private function settingRows(string $uid): array
+    {
+        try {
+            $module = $this->model()->where(['uid' => $uid])->first();
+
+            if ($module === null) {
+                return [];
+            }
+
+            $rows = [];
+
+            foreach ((new ModuleSettingModel())->where(['module_relid' => (int) $module['module_id']])->get() as $row) {
+                $rows[(string) $row['setting_key']] = $row;
+            }
+
+            return $rows;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Write a Module's Settings, Whole
+     *
+     * One transaction, so a save that fails part-way leaves the module on the
+     * settings it had rather than half of the new ones. A key no longer in the
+     * set - a cleared field - is deleted.
+     * @param int $moduleId Module ID
+     * @param array<string,string> $values Setting Key => Stored Value
+     * @param array $fields From ModuleSettings::fields()
+     * @return void
+     */
+    private function writeSettings(int $moduleId, array $values, array $fields): void
+    {
+        (new ModuleSettingModel())->transaction(function () use ($moduleId, $values, $fields): void {
+            $existing = [];
+
+            foreach ((new ModuleSettingModel())->where(['module_relid' => $moduleId])->get() as $row) {
+                $existing[(string) $row['setting_key']] = (int) $row['ms_id'];
+            }
+
+            $now = $this->now();
+
+            foreach ($values as $key => $value) {
+                $data = [
+                    'setting_value' =>  (string) $value,
+                    'is_secret'     =>  !empty($fields[$key]['secret']) ? 'yes' : 'no',
+                    'ms_updated_at' =>  $now,
+                ];
+
+                if (isset($existing[$key])) {
+                    (new ModuleSettingModel())->where(['ms_id' => $existing[$key]])->update($data);
+                    unset($existing[$key]);
+
+                    continue;
+                }
+
+                (new ModuleSettingModel())->insert($data + [
+                    'module_relid'  =>  $moduleId,
+                    'setting_key'   =>  (string) $key,
+                    'ms_created_at' =>  $now,
+                ]);
+            }
+
+            foreach ($existing as $id) {
+                (new ModuleSettingModel())->where(['ms_id' => $id])->delete();
+            }
+        });
     }
 
     /**

@@ -618,7 +618,10 @@ class Dunning extends Action
             return ['success' => true, 'message' => 'No server; recorded without a module call.'];
         }
 
-        $driver = $this->driverFor($server);
+        $product = (new Product())->find((int) ($service['product_relid'] ?? 0)) ?? [];
+
+        // Built for this product, with its module fields - Phase 40.
+        $driver = $this->driverFor($server, $product);
 
         if ($driver === null) {
             return ['success' => true, 'message' => 'No module; recorded without a module call.'];
@@ -627,7 +630,7 @@ class Dunning extends Action
         $context = [
             'server'  =>  $server,
             'client'  =>  (new Client())->find((int) ($service['client_relid'] ?? 0)) ?? [],
-            'product' =>  (new Product())->find((int) ($service['product_relid'] ?? 0)) ?? [],
+            'product' =>  $product,
             'options' =>  [],
         ];
 

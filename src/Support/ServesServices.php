@@ -21,6 +21,7 @@ use LBM\Model\ClientServiceModel;
 use LBM\Model\ModuleModel;
 use LBM\Model\ProvisioningLogModel;
 use LBM\Model\ServerModel;
+use LBM\Module\Api;
 use LBM\Module\Contracts\ServerInterface;
 use LBM\Module\ModuleManager;
 use LBM\Pipeline\Auth;
@@ -57,40 +58,65 @@ trait ServesServices
      *
      * Every check here exists because a class name out of the database is
      * untrusted input, whatever wrote it.
+     *
+     * CONSTRUCTED WITH THE PRODUCT'S MODULE FIELDS - Phase 40. A server module
+     * declares what it needs per product (a package name, a plan id) and the
+     * operator fills them in on the product form, into `products.module_config`.
+     * The driver is handed them opened, plus `mode` - always live: a server
+     * module talks to the server the operator typed in, and there is no sandbox
+     * of that. Until Phase 40 it was built with nothing at all.
      * @param array $server Server Row
+     * @param array $product The Product Row The Call Is For - Its Fields Are Handed Over
      * @return ?ServerInterface Null when there is no usable module
      */
-    protected function driverFor(array $server): ?ServerInterface
+    protected function driverFor(array $server, array $product = []): ?ServerInterface
     {
-        $module = trim((string) ($server['module_name'] ?? ''));
-
-        if ($module === '') {
-            return null;
-        }
-
-        $wanted = 'servers-' . strtolower($module);
-        $class = '';
-
-        foreach (ModuleManager::loaded() as $uid => $meta) {
-            if (($meta['type'] ?? '') !== 'servers' || strtolower((string) $uid) !== $wanted) {
-                continue;
-            }
-
-            $class = trim((string) ($meta['class'] ?? ''));
-            break;
-        }
+        $class = ModuleSettings::loadedClass('servers', (string) ($server['module_name'] ?? '')) ?? '';
 
         if ($class === '' || !class_exists($class) || !is_subclass_of($class, ServerInterface::class)) {
             return null;
         }
 
+        $settings = ModuleSettings::open(ModuleSettings::fields($class), $this->moduleConfigOf($product));
+        $settings['mode'] = Api::LIVE;
+
         try {
-            $driver = new $class();
+            $driver = new $class($settings);
         } catch (Throwable) {
             return null;
         }
 
         return $driver instanceof ServerInterface ? $driver : null;
+    }
+
+    /**
+     * A Product's module_config, Whichever Way The Row Was Read
+     *
+     * Already an array through the typed model, whose cast decodes on read; a
+     * string through a bare one - unserialize()d inside try/catch, because `@`
+     * does not stop the handler promoting the warning.
+     * @param array $product Product Row
+     * @return array
+     */
+    private function moduleConfigOf(array $product): array
+    {
+        $raw = $product['module_config'] ?? null;
+
+        if (is_array($raw)) {
+            return $raw;
+        }
+
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = unserialize($raw, ['allowed_classes' => false]);
+        } catch (Throwable) {
+            return [];
+        }
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**

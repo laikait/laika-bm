@@ -22,6 +22,9 @@ use Laika\Service\Vault;
 use LBM\Model\DomainModel;
 use LBM\Model\DomainRegistrarModel;
 use LBM\Model\TldModel;
+use LBM\Module\Api;
+use LBM\Module\Contracts\RegistrarInterface;
+use LBM\Support\ModuleSettings;
 use LBM\Support\RegistersDomains;
 
 /**
@@ -84,9 +87,10 @@ class Registrar extends Action
      * `api_url` has its own column and is handed to the module under that key.
      * A credential of the same name would shadow it or be shadowed by it, and
      * either way the operator would be looking at one value while the module
-     * used another.
+     * used another. `mode` is the Live/Test switch, since Phase 40, for the
+     * same reason.
      */
-    public const RESERVED = ['api_url'];
+    public const RESERVED = ['api_url', 'mode'];
 
     /** @var string What a Credential Name May Look Like */
     public const CREDENTIAL_NAME = '/^[A-Za-z0-9_.\-]{1,60}$/';
@@ -203,21 +207,82 @@ class Registrar extends Action
     /**
      * What The Registrar's Module Is Constructed With
      *
-     * Its credentials, opened, under the names the operator gave them - plus
-     * `api_url` from its own column, set LAST so nothing can shadow it. The form
-     * already refuses a credential of that name; a row written some other way
-     * must not be able to hand the module a different URL from the one on the
-     * screen.
+     * Its credentials, opened, under the names the operator gave them - or,
+     * for a module that DECLARES its fields (Phase 40), exactly those, opened.
+     * Then `api_url` from its own column and `mode` from `test_mode`, both set
+     * LAST so nothing can shadow them. The form already refuses a credential of
+     * either name; a row written some other way must not be able to hand the
+     * module a different URL, or a different mode, from the one on the screen.
      * @param array $registrar Registrar Row
+     * @param ?string $class The Driver Class Being Built, When Known
      * @return array<string,string>
      */
-    public function settingsFor(array $registrar): array
+    public function settingsFor(array $registrar, ?string $class = null): array
     {
-        $settings = $this->credentials($registrar);
+        $fields = $class === null ? [] : ModuleSettings::fields($class);
+
+        $settings = $fields === []
+            ? $this->credentials($registrar)
+            : ModuleSettings::open($fields, $this->sealedOf($registrar));
 
         $settings['api_url'] = (string) ($registrar['api_url'] ?? '');
+        $settings['mode'] = $this->modeOf($registrar);
 
         return $settings;
+    }
+
+    /**
+     * Live Or Test - Phase 40
+     * @param array $registrar Registrar Row
+     * @return string
+     */
+    public function modeOf(array $registrar): string
+    {
+        return ($registrar['test_mode'] ?? 'no') === 'yes' ? Api::TEST : Api::LIVE;
+    }
+
+    /**
+     * What The Form May Show Of a Module That Declares Its Fields - Phase 40
+     *
+     * `declared` false means the module declares nothing, or is not loaded,
+     * and the form offers the Phase 35 name/value pairs instead.
+     * @param array $registrar Registrar Row
+     * @return array{fields: array, mode: string, declared: bool}
+     */
+    public function formFor(array $registrar): array
+    {
+        $fields = $this->declaredFields((string) ($registrar['module_name'] ?? ''));
+
+        return [
+            'fields'   =>  ModuleSettings::forForm($fields, $this->sealedOf($registrar)),
+            'mode'     =>  $this->modeOf($registrar),
+            'declared' =>  $fields !== [],
+        ];
+    }
+
+    /**
+     * Try a Registrar's Saved Settings - Phase 40
+     *
+     * Asked of its MODULE, whatever the registrar's own active switch says: an
+     * operator tests before switching one on. What cannot be tried says why,
+     * in state()'s terms.
+     * @param array $registrar Registrar Row
+     * @return array{success: bool, message: string}
+     */
+    public function testConnection(array $registrar): array
+    {
+        $driver = $this->registrarDriver(array_merge($registrar, ['is_active' => 'yes']));
+
+        if ($driver === null) {
+            return ['success' => false, 'message' => match ($this->state($registrar)) {
+                'manual'  =>  'This registrar has no module, so there is nothing to connect to.',
+                'off'     =>  'Its module is switched off. Switch it on under Modules first.',
+                'missing' =>  'The module it names is not installed.',
+                default   =>  'Its module is on, but the driver could not be built.',
+            }];
+        }
+
+        return ModuleSettings::test($driver);
     }
 
     /**
@@ -505,8 +570,68 @@ class Registrar extends Action
             // `serialize` and casts run on READ only, so a row written without
             // a value makes the next read of the whole table throw - which took
             // /domains down for every visitor in Phase 27.3.
-            'credentials' =>  serialize($this->sealed($input, $current === null ? [] : $this->sealedOf($current))),
+            'credentials' =>  serialize($this->credentialsFrom($input, $module, $current)),
+
+            // Phase 40. Kept as it is unless the form carried the switch.
+            'test_mode'   =>  array_key_exists('mode', $input)
+                ? (ModuleSettings::mode($input['mode']) === Api::TEST ? 'yes' : 'no')
+                : (string) ($current['test_mode'] ?? 'no'),
         ];
+    }
+
+    /**
+     * What The Credentials Column Becomes
+     *
+     * A module that declares its fields (Phase 40) is checked against them by
+     * ModuleSettings; one that does not keeps the Phase 35 name/value pairs.
+     * The declared fields are applied only when the form CARRIED them: the add
+     * form cannot, because the module is chosen on it, so a new registrar is
+     * saved first and configured on its edit form.
+     * @param array $input Submitted Data
+     * @param string $module The Module Directory Being Saved
+     * @param ?array $current The Row Being Edited, Or Null
+     * @return array<string,string>
+     * @throws RuntimeException
+     */
+    private function credentialsFrom(array $input, string $module, ?array $current): array
+    {
+        $stored = $current === null ? [] : $this->sealedOf($current);
+        $fields = $this->declaredFields($module);
+
+        if ($fields === []) {
+            return $this->sealed($input, $stored);
+        }
+
+        if (!is_array($input['settings'] ?? null)) {
+            return $stored;
+        }
+
+        return ModuleSettings::merge(
+            $fields,
+            $input['settings'],
+            $stored,
+            is_array($input['settings_clear'] ?? null) ? $input['settings_clear'] : []
+        );
+    }
+
+    /**
+     * The Fields a Registrar Module Declares, When It Is Loaded
+     * @param string $module Module Directory
+     * @return array
+     */
+    private function declaredFields(string $module): array
+    {
+        $class = ModuleSettings::loadedClass(self::TYPE, $module);
+
+        try {
+            if ($class === null || !class_exists($class) || !is_subclass_of($class, RegistrarInterface::class)) {
+                return [];
+            }
+        } catch (Throwable) {
+            return [];
+        }
+
+        return ModuleSettings::fields($class);
     }
 
     /**
@@ -581,7 +706,7 @@ class Registrar extends Action
             }
 
             if (in_array(strtolower($name), self::RESERVED, true)) {
-                throw new RuntimeException("{$name} is not a credential - the API URL has its own field, and is handed to the module under that name.");
+                throw new RuntimeException("{$name} is not a credential - it has its own field on this form, and is handed to the module under that name.");
             }
 
             if ($value === '') {

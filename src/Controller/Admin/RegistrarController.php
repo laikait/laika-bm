@@ -153,6 +153,29 @@ class RegistrarController extends AdminController
     }
 
     /**
+     * Try a Registrar's Saved Settings - Phase 40
+     *
+     * The module's own words come back on the edit form, success or not; a
+     * test that fails is an answer, so it is not written to the error log.
+     * @param string $registrar Registrar Uid
+     * @return ?string
+     */
+    public function test(string $registrar): ?string
+    {
+        $row = $this->record(Registrar::find($registrar), 'registrar');
+        $result = Registrar::testConnection($row);
+
+        $this->log('registrar.tested', 'Tested the connection of registrar ' . (string) $row['name']);
+
+        return $this->done(
+            'staff.registrar.edit',
+            local($result['success'] ? 'connection_ok' : 'connection_failed', $result['message']),
+            $result['success'],
+            ['registrar' => (string) $row['uid']]
+        );
+    }
+
+    /**
      * Choose Which Lookup Module a Search Asks First - Phase 36
      * @return ?string
      */
@@ -193,6 +216,10 @@ class RegistrarController extends AdminController
             'module_value' =>  $this->moduleValue($registrar),
             'credentials'  =>  $registrar === null ? [] : Registrar::credentialNames($registrar),
             'state'        =>  $registrar === null ? null : Registrar::state($registrar),
+
+            // Phase 40. The declared fields of a module that declares them,
+            // through ModuleSettings::forForm() - a secret arrives as a flag.
+            'module_form'  =>  $registrar === null ? null : Registrar::formFor($registrar),
         ]);
     }
 

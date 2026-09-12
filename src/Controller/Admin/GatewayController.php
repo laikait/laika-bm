@@ -72,7 +72,11 @@ class GatewayController extends AdminController
             $configured[] = [
                 'row'      =>  $row,
                 'problem'  =>  Gateway::problemWith($row),
-                'settings' =>  Gateway::settings($row),
+
+                // Phase 40: the declared fields and the mode, through
+                // ModuleSettings::forForm() - never the stored array, which
+                // is where the API keys are.
+                'form'     =>  Gateway::formFor($row),
 
                 // The URL the operator has to paste into their processor's
                 // dashboard. Shown rather than documented, because it is
@@ -183,10 +187,12 @@ class GatewayController extends AdminController
     /**
      * Save a Gateway's Settings
      *
-     * Whatever the form carried, minus the fields that are not settings. LBM
-     * does not know what an individual gateway needs, so it does not pretend to
-     * validate it - a wrong API key is reported by the gateway, at the only
-     * moment anybody can actually find out.
+     * The fields its module DECLARES, and the Live/Test switch - Phase 40.
+     * Until then it kept whatever the form carried, minus a list of names that
+     * were not settings; now LBM knows what a gateway needs because the gateway
+     * says so, refuses a required field left empty by its label, and seals the
+     * secrets. A wrong key is still reported by the gateway - on the Test
+     * connection button, before a customer meets it.
      * @param string $gateway Gateway Uid
      * @return ?string
      */
@@ -196,13 +202,7 @@ class GatewayController extends AdminController
 
         return $this->attempt(
             function () use ($row): void {
-                $settings = Request::inputs();
-
-                foreach (['csrf', 'csrf_token', 'token', '_token', 'gateway'] as $drop) {
-                    unset($settings[$drop]);
-                }
-
-                Gateway::putSettings((int) $row['gateway_id'], $settings);
+                Gateway::saveSettings((int) $row['gateway_id'], Request::inputs());
 
                 $this->log(
                     'gateway.settings.updated',
@@ -238,6 +238,29 @@ class GatewayController extends AdminController
             },
             'staff.gateways',
             $active ? local('gateway_switched_on') : local('gateway_switched_off')
+        );
+    }
+
+    /**
+     * Try a Gateway's Saved Settings - Phase 40
+     *
+     * The module's own words come back on the screen, success or not. A test
+     * that fails is an answer rather than a fault, so it is not written to the
+     * error log.
+     * @param string $gateway Gateway Uid
+     * @return ?string
+     */
+    public function test(string $gateway): ?string
+    {
+        $row = $this->gateway($gateway);
+        $result = Gateway::testConnection((int) $row['gateway_id']);
+
+        $this->log('gateway.tested', 'Tested the connection of the [' . $row['display_name'] . '] payment gateway.');
+
+        return $this->done(
+            'staff.gateways',
+            local($result['success'] ? 'connection_ok' : 'connection_failed', $result['message']),
+            $result['success']
         );
     }
 

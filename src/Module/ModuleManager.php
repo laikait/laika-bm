@@ -82,13 +82,19 @@ class ModuleManager
      * while one in `modules/plugins` loaded but was never listed. Neither
      * failure said anything.
      *
-     * `plugins` is gone (2026-09-03) - addons fill that role - and so is
-     * `widgets`, which was an empty directory the loader never knew about.
+     * `widgets` is gone (2026-09-03), an empty directory the loader never knew
+     * about.
      *
      * `lookup` arrived in Phase 36: a module that answers whether a domain is
      * free without registering anything. Laika Whois ships as one.
+     *
+     * `addons` became `plugins` in Phase 39. The catalogue feature called addons
+     * - `/admin/addons`, `Action\Addon` - is a different thing and kept its
+     * name. `M202609120100RenameAddonsToPlugins` moves what an older install
+     * has in modules/addons, and renames its rows so a module that was on
+     * stays on.
      */
-    public const TYPES = ['fraud', 'addons', 'gateways', 'servers', 'registrars', 'lookup'];
+    public const TYPES = ['fraud', 'plugins', 'gateways', 'servers', 'registrars', 'lookup'];
 
     /**
      * @var array<string,?string> The Contract Each Resource Kind Must Satisfy

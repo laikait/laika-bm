@@ -18,8 +18,10 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Model\Model;
 use Laika\Service\Uid;
 use LBM\Model\PaymentGatewayModel;
+use LBM\Module\Api;
 use LBM\Module\Contracts\GatewayInterface;
 use LBM\Module\ModuleManager;
+use LBM\Support\ModuleSettings;
 use RuntimeException;
 
 /**
@@ -158,7 +160,7 @@ class Gateway extends Action
         }
 
         try {
-            $driver = new $class($this->settings($row));
+            $driver = new $class($this->driverSettings($row, $class));
         } catch (\Throwable) {
             // A driver that will not construct is a broken module, not a fatal
             // for whoever happened to be paying an invoice.
@@ -287,6 +289,145 @@ class Gateway extends Action
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    ####################################################################################
+    /*=========================== SETTINGS - PHASE 40 ================================*/
+    ####################################################################################
+
+    /**
+     * What a Gateway Driver Is Constructed With
+     *
+     * A module that DECLARES its fields gets exactly those, opened. One that
+     * does not gets the stored array as it always has. Either way `mode` is set
+     * last, from `test_mode`, so nothing stored can shadow the switch.
+     * @param array $row Gateway Row
+     * @param string $class The Driver Class
+     * @return array
+     */
+    public function driverSettings(array $row, string $class): array
+    {
+        $stored = $this->settings($row);
+        $fields = ModuleSettings::fields($class);
+
+        $settings = $fields === [] ? $stored : ModuleSettings::open($fields, $stored);
+        $settings['mode'] = $this->modeOf($row);
+
+        return $settings;
+    }
+
+    /**
+     * Live Or Test
+     * @param array $row Gateway Row
+     * @return string
+     */
+    public function modeOf(array $row): string
+    {
+        return ($row['test_mode'] ?? 'no') === 'yes' ? Api::TEST : Api::LIVE;
+    }
+
+    /**
+     * The Fields a Gateway's Module Declares
+     *
+     * Only for a class that is loadable AND a gateway: the name is read out of
+     * the database, and nothing else's static settings() is asked.
+     * @param array $row Gateway Row
+     * @return array
+     */
+    public function fieldsFor(array $row): array
+    {
+        $class = trim((string) ($row['module_class'] ?? ''));
+
+        try {
+            if ($class === '' || !class_exists($class) || !is_subclass_of($class, GatewayInterface::class)) {
+                return [];
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return ModuleSettings::fields($class);
+    }
+
+    /**
+     * What The Gateways Screen May Show
+     *
+     * ModuleSettings::forForm() and nothing else - a secret arrives as a
+     * `saved` flag. Until Phase 40 the screen was handed the stored array
+     * whole, API keys included.
+     * @param array $row Gateway Row
+     * @return array{fields: array, mode: string}
+     */
+    public function formFor(array $row): array
+    {
+        return [
+            'fields' =>  ModuleSettings::forForm($this->fieldsFor($row), $this->settings($row)),
+            'mode'   =>  $this->modeOf($row),
+        ];
+    }
+
+    /**
+     * Save What The Gateways Screen Posted
+     *
+     * Only what the module declared is stored - the form used to keep whatever
+     * it carried. The mode goes to `test_mode`.
+     * @param int|string $key Gateway ID Or Uid
+     * @param array $input The Form - `settings[...]`, `settings_clear[]`, `mode`
+     * @return int Rows Updated
+     * @throws RuntimeException Naming a refused field by its label
+     */
+    public function saveSettings(int|string $key, array $input): int
+    {
+        $row = $this->find($key);
+
+        if ($row === null) {
+            throw new RuntimeException('That gateway is not configured.');
+        }
+
+        $data = [];
+        $fields = $this->fieldsFor($row);
+
+        if ($fields !== []) {
+            // serialize()d by hand, putSettings()'s reason: casts run on READ only.
+            $data['settings'] = serialize(ModuleSettings::merge(
+                $fields,
+                is_array($input['settings'] ?? null) ? $input['settings'] : [],
+                $this->settings($row),
+                is_array($input['settings_clear'] ?? null) ? $input['settings_clear'] : []
+            ));
+        }
+
+        if (array_key_exists('mode', $input)) {
+            $data['test_mode'] = ModuleSettings::mode($input['mode']) === Api::TEST ? 'yes' : 'no';
+        }
+
+        return $data === [] ? 0 : $this->update((int) $row['gateway_id'], $data);
+    }
+
+    /**
+     * Try a Gateway's Saved Settings
+     *
+     * Works whether or not the gateway is switched on for customers - an
+     * operator tests BEFORE offering it, which is the point.
+     * @param int|string $key Gateway ID Or Uid
+     * @return array{success: bool, message: string}
+     * @throws RuntimeException
+     */
+    public function testConnection(int|string $key): array
+    {
+        $row = $this->find($key);
+
+        if ($row === null) {
+            throw new RuntimeException('That gateway is not configured.');
+        }
+
+        $driver = $this->driverFor($row);
+
+        if ($driver === null) {
+            return ['success' => false, 'message' => (string) ($this->problemWith($row) ?? 'The driver could not be built.')];
+        }
+
+        return ModuleSettings::test($driver);
     }
 
     ####################################################################################

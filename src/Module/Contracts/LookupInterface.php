@@ -55,8 +55,13 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
  * ---------------------------------------------------------------------------
  * WHAT A DRIVER IS GIVEN
  * ---------------------------------------------------------------------------
- * Nothing at construction - it is built with no arguments, and a provider that
- * needs an API key reads its own option. Each call's CONTEXT carries:
+ * At construction, one array - Phase 40: the fields it DECLARES through
+ * `Contracts\Configurable`, opened, as saved on its configure page, plus `mode`
+ * (`live` or `test`; see `LBM\Module\Api`). A module that declares nothing is
+ * handed `mode` alone. Until Phase 40 it was built with no arguments, and a
+ * provider needing a key had to read an option of its own. `Support\
+ * LooksUpDomains` is the only place a driver is built. Each call's CONTEXT
+ * carries:
  *
  *   timeout  float   Seconds this call may take. A public search has ONE
  *                    budget for every TLD it asks about and this is what is

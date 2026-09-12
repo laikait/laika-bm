@@ -152,6 +152,110 @@ class Product extends Action
     }
 
     /**
+     * A Product's Stored Module Configuration
+     *
+     * An array through this model, whose cast decodes on read; a string through
+     * a bare one, unserialize()d inside try/catch because `@` does not stop the
+     * handler promoting the warning.
+     * @param array $product Product Row
+     * @return array
+     */
+    public function moduleConfig(array $product): array
+    {
+        $raw = $product['module_config'] ?? null;
+
+        if (is_array($raw)) {
+            return $raw;
+        }
+
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = unserialize($raw, ['allowed_classes' => false]);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * The Fields a Product's Server Module Declares, For The Form - Phase 40
+     *
+     * Null when there is nothing to draw: no module, a module that is not
+     * loaded, or one that declares nothing. ModuleSettings::forForm() is the
+     * only view the form gets, so a secret arrives as a flag.
+     * @param array $product Product Row
+     * @return ?array{fields: array}
+     */
+    public function moduleFormFor(array $product): ?array
+    {
+        $fields = $this->moduleFields($product);
+
+        return $fields === []
+            ? null
+            : ['fields' => \LBM\Support\ModuleSettings::forForm($fields, $this->moduleConfig($product))];
+    }
+
+    /**
+     * What a Product Form Posted For Its Module, Checked - Phase 40
+     *
+     * Null when there is nothing to apply: the module declares nothing, the
+     * form did not carry its fields, or the form is changing the module -
+     * whose fields were drawn for the OLD one, so they are not the new one's to
+     * keep. Called BEFORE the product is saved, so a refused field leaves the
+     * whole product as it was.
+     * @param array $product Product Row
+     * @param array $input Submitted Data
+     * @return ?array The New module_config
+     * @throws \RuntimeException Naming a refused field by its label
+     */
+    public function mergeModuleSettings(array $product, array $input): ?array
+    {
+        $fields = $this->moduleFields($product);
+
+        if ($fields === [] || !is_array($input['settings'] ?? null)) {
+            return null;
+        }
+
+        $posted = trim((string) ($input['module_name'] ?? ($product['module_name'] ?? '')));
+
+        if (strcasecmp($posted, trim((string) ($product['module_name'] ?? ''))) !== 0) {
+            return null;
+        }
+
+        return \LBM\Support\ModuleSettings::merge(
+            $fields,
+            $input['settings'],
+            $this->moduleConfig($product),
+            is_array($input['settings_clear'] ?? null) ? $input['settings_clear'] : []
+        );
+    }
+
+    /**
+     * The Fields The Product's Server Module Declares, When It Is Loaded
+     * @param array $product Product Row
+     * @return array
+     */
+    private function moduleFields(array $product): array
+    {
+        $class = \LBM\Support\ModuleSettings::loadedClass('servers', (string) ($product['module_name'] ?? ''));
+
+        try {
+            if ($class === null || !class_exists($class)
+                || !is_subclass_of($class, \LBM\Module\Contracts\ServerInterface::class)) {
+                return [];
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return \LBM\Support\ModuleSettings::fields($class);
+    }
+
+    /**
      * Delete a Product
      *
      * Refuses while a client still has a service on it: the service would lose

@@ -377,7 +377,8 @@ class Provision extends Action
             return $this->failed($service, 'The product or server this service points at is gone.');
         }
 
-        $driver = $this->driverFor($server);
+        // Built for this product, with its module fields - Phase 40.
+        $driver = $this->driverFor($server, $product);
 
         if ($driver === null) {
             return $this->failed(

@@ -127,9 +127,23 @@ class ProductController extends AdminController
             }
 
             if ($this->validate($input, (int) $row['pid'])) {
-                $changes = Activity::changes($row, $input);
+                // Phase 40. The module's declared fields, checked BEFORE the
+                // product is saved, so a refused field leaves it as it was.
+                try {
+                    $moduleConfig = Product::mergeModuleSettings($row, $input);
+                } catch (\RuntimeException $e) {
+                    return $this->done('staff.product.edit', $e->getMessage(), false, ['product' => $row['uid']]);
+                }
+
+                // The fields are not in the diff: a secret has no business in
+                // the activity log, sealed or not.
+                $changes = Activity::changes($row, array_diff_key($input, ['settings' => 1, 'settings_clear' => 1]));
 
                 Product::modify((int) $row['pid'], $input);
+
+                if ($moduleConfig !== null) {
+                    Product::setModuleConfig((int) $row['pid'], $moduleConfig);
+                }
 
                 // Only when the section was on the form. An unticked checkbox
                 // group posts NOTHING, so without the marker "the operator
@@ -280,6 +294,10 @@ class ProductController extends AdminController
             // form silently unmaps it.
             'configs'  =>  ConfigOption::listing(),
             'configured' =>  $productId > 0 ? ConfigOption::mappedIds($productId) : [],
+
+            // Phase 40. What the product's server module declares, per
+            // product - a package name, a plan id.
+            'module_form' =>  $product === null ? null : Product::moduleFormFor($product),
         ]);
     }
 

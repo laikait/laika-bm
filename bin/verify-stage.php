@@ -208,6 +208,16 @@ must_exist('cron.php', 'The entire scheduled-task story.');
 must_exist('nginx.conf', 'Carries the modules/ deny for nginx deployments.');
 must_exist('modules/README.md', 'The module contract.');
 
+// Phase 39 renamed the `addons` kind `plugins`. Without the directory there is
+// nowhere to put one; and a release carrying modules/addons would make a fresh
+// install RUN the migration that moves it instead of baselining it, and leave
+// every install holding a directory the loader never reads.
+must_exist('modules/plugins/index.php', 'The plugins kind (Phase 39). Without the directory there is nowhere to put one.');
+must_not_exist(
+    'modules/addons',
+    'Renamed modules/plugins in Phase 39. Shipped, a fresh install would run the rename migration instead of baselining it.'
+);
+
 foreach (['front', 'admin', 'panel', 'install'] as $area) {
     must_exist("lf-lang/{$area}", "The {$area} catalogue. local() throws on a missing key - no fallback.");
 }
@@ -872,9 +882,59 @@ must_not_exist(
     'Test fixture from modulewalk.php. Its manifest throws on purpose.'
 );
 must_not_exist(
-    'modules/addons/Keeper',
+    'modules/plugins/Keeper',
     'Test fixture from modulewalk.php. It exists only to keep the enabled list non-empty.'
 );
+
+// Phase 39's fixtures, from modulewalk.php's rename section. Mover is the
+// dangerous one - it registers a public route. The other three are a manifest
+// each and nothing else, and are listed because a fixture that ships is a
+// fixture that ships.
+foreach ([
+    'Mover' => 'It registers a public route that exists only to prove a moved module still loads.',
+    'Twin'  => 'Half of a clash the rename migration must refuse to resolve by itself.',
+    'Early' => 'A module moved by hand before the rename migration ran.',
+    'Seen'  => 'A module moved by hand and listed before the rename migration ran.',
+] as $fixture => $why) {
+    must_not_exist("modules/plugins/{$fixture}", "Test fixture from modulewalk.php. {$why}");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 40. A module owns its API and its settings.
+// ---------------------------------------------------------------------------
+//
+// The base class a module's API extends, the contract its fields are declared
+// through, and the one place they are checked and sealed. Missing, every module
+// written against them fatals the moment it is switched on - and the table and
+// the migration are what store what the screens save.
+foreach ([
+    'vendor/laikait/laika-bm/src/Module/Api.php'
+        => 'What a module\'s API extends. Without it every module that keeps its live and test address in code fatals on load.',
+    'vendor/laikait/laika-bm/src/Module/Contracts/Configurable.php'
+        => 'How a module declares its fields. Without it every configurable module fatals on load.',
+    'vendor/laikait/laika-bm/src/Support/ModuleSettings.php'
+        => 'The one place declared settings are checked, sealed and opened.',
+    'vendor/laikait/laika-bm/src/Schema/ModuleSettingSchema.php'
+        => 'Where a lookup, fraud or plugin module\'s settings live. Without it the table is never created.',
+    'vendor/laikait/laika-bm/src/Migration/M202609120200AddRegistrarTestMode.php'
+        => 'Adds domain_registrars.test_mode to an existing install. Without it saving a registrar fails there.',
+    'template/admin/bootstrap/partials/module-settings.twig'
+        => 'Draws a module\'s declared fields on four screens. Without it all four are a Twig error.',
+    'template/admin/bootstrap/module-configure.twig'
+        => 'A lookup, fraud or plugin module\'s settings page.',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+// modsettingswalk's five fixtures. Each one calls a scripted API on 127.0.0.1
+// and writes down the settings it was built with, secrets included - a fixture
+// that ships is a module that logs an operator's API key to a file.
+foreach (['gateways', 'registrars', 'lookup', 'plugins', 'servers'] as $kind) {
+    must_not_exist(
+        "modules/{$kind}/SettingsProbe",
+        'Test fixture from modsettingswalk.php. It writes the settings it is constructed with, secrets included, to a file beside itself.'
+    );
+}
 
 // ---------------------------------------------------------------------------
 // Phase 32. The error log a shipped install has never had.

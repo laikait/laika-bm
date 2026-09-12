@@ -513,6 +513,11 @@ Url::group(ADMIN, function () use ($uid): void {
     Url::post("/settings/registrar/{registrar:{$uid}}/delete", [RegistrarController::class, 'delete'])
         ->name('staff.registrar.delete')->pipeline([Permission::class . '|perm=domain.delete']);
 
+    // Phase 40. The registrar's driver built with what is SAVED, asked to try
+    // it. `update`, like editing: it spends a call at somebody else's API.
+    Url::post("/settings/registrar/{registrar:{$uid}}/test", [RegistrarController::class, 'test'])
+        ->name('staff.registrar.test')->pipeline([Permission::class . '|perm=domain.update']);
+
     // Phase 36. Which lookup module a public search asks before the registrar.
     // A write, so `update` - the same gate as editing a registrar.
     Url::post('/settings/registrars/lookup', [RegistrarController::class, 'lookup'])
@@ -668,6 +673,9 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.gateway.settings')->pipeline([Permission::class . '|perm=settings.update']);
     Url::post("/settings/gateway/{gateway:{$uid}}/toggle", [GatewayController::class, 'toggle'])
         ->name('staff.gateway.toggle')->pipeline([Permission::class . '|perm=settings.update']);
+    // Phase 40. The driver built with what is SAVED, asked to try it.
+    Url::post("/settings/gateway/{gateway:{$uid}}/test", [GatewayController::class, 'test'])
+        ->name('staff.gateway.test')->pipeline([Permission::class . '|perm=settings.update']);
     Url::post("/settings/gateway/{gateway:{$uid}}/delete", [GatewayController::class, 'delete'])
         ->name('staff.gateway.delete')->pipeline([Permission::class . '|perm=settings.update']);
 
@@ -684,6 +692,16 @@ Url::group(ADMIN, function () use ($uid): void {
     // directory from a form on the admin panel.
     Url::post("/settings/module/{module:{$uid}}/toggle", [ModuleController::class, 'toggle'])
         ->name('staff.module.toggle')->pipeline([Permission::class . '|perm=module.update']);
+
+    // Phase 40. A lookup, fraud or plugin module's own settings, declared in
+    // its code: read behind module.read, saved and tested behind module.update,
+    // the switch's gate.
+    Url::get("/settings/module/{module:{$uid}}/configure", [ModuleController::class, 'configure'])
+        ->name('staff.module.configure')->pipeline([Permission::class . '|perm=module.read']);
+    Url::post("/settings/module/{module:{$uid}}/configure", [ModuleController::class, 'configure'])
+        ->pipeline([Permission::class . '|perm=module.update']);
+    Url::post("/settings/module/{module:{$uid}}/test", [ModuleController::class, 'test'])
+        ->name('staff.module.test')->pipeline([Permission::class . '|perm=module.update']);
 
     /*============================== SETTINGS ===============================*/
     //
