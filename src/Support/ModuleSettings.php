@@ -296,7 +296,7 @@ final class ModuleSettings
             $has = is_string($value) && $value !== '';
 
             if ($field['secret']) {
-                $form[$name] = $field + ['value' => (string) $value, 'saved' => $has && self::unseal($value) !== null];
+                $form[$name] = $field + ['value' => '', 'saved' => $has && self::unseal($value) !== null];
 
                 continue;
             }
