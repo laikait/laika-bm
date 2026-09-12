@@ -92,8 +92,14 @@ class Server extends Action
     {
         $data = $this->fields($input);
 
+        // A new server is ONLINE unless the form says otherwise. `active` - what
+        // this asked for until Phase 42 - is not a server status, and falling
+        // back to id 1 put a server in whichever status happened to be first.
         $data['status_relid'] = (int) ($data['status_relid'] ?? 0)
-            ?: (Status::idOf(self::STATUSES, 'active') ?? 1);
+            ?: (Status::idOf(self::STATUSES, 'online') ?? throw new RuntimeException(
+                'There is no server status called "online", so a new server has no status to start in. '
+                . 'Restore it on the Statuses screen.'
+            ));
 
         // NOT NULL with no default, and nothing populates it yet.
         $data['ip_addresses'] = serialize([]);
@@ -445,8 +451,19 @@ class Server extends Action
             $data['use_ssl'] = $this->flag($data['use_ssl']);
         }
 
+        // A blank box means the default. Anything else must be a real port, and
+        // is refused by name rather than cast: (int) '70000' is a number, and
+        // until Phase 42 the column stored it as 32767 without a word.
         if (array_key_exists('port', $data)) {
-            $data['port'] = (int) $data['port'] ?: 2083;
+            $port = trim((string) $data['port']);
+
+            if ($port === '') {
+                $data['port'] = 2083;
+            } elseif (!ctype_digit($port) || (int) $port < 1 || (int) $port > 65535) {
+                throw new RuntimeException("A port must be a whole number from 1 to 65535; \"{$port}\" is not one.");
+            } else {
+                $data['port'] = (int) $port;
+            }
         }
 
         if (array_key_exists('hostname', $data)) {

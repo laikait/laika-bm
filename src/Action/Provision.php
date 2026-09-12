@@ -644,16 +644,24 @@ class Provision extends Action
             return null;
         }
 
-        $active = (new Server())->statusId('active');
-        $model = new ServerModel();
+        // ONLINE, and nothing else. `server_statuses` seeds online, offline and
+        // maintenance, and the last two exist to take a server out of rotation.
+        // Until Phase 42 this asked for `active`, a status no install has ever
+        // had, so the filter was silently dropped and an offline server kept
+        // receiving accounts. When `online` cannot be resolved at all, NO server
+        // is picked and the service waits for staff: dropping the filter is
+        // exactly the failure this replaced.
+        $online = (new Server())->statusId('online');
 
-        $where = ['module_name' => $module];
-
-        if ($active !== null) {
-            $where['status_relid'] = $active;
+        if ($online === null) {
+            return null;
         }
 
-        $servers = $model->where($where)->order($model->id, self::ASC)->get();
+        $model = new ServerModel();
+
+        $servers = $model->where(['module_name' => $module, 'status_relid' => $online])
+            ->order($model->id, self::ASC)
+            ->get();
 
         $candidates = [];
 

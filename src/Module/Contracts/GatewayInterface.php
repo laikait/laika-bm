@@ -59,6 +59,13 @@ interface GatewayInterface
      *   `redirect` is a URL the client must be sent to, for gateways that take
      *   payment on their own pages - in which case `pending` is true and the
      *   real outcome arrives at webhook().
+     *
+     *   PENDING OUTRANKS SUCCESS. `pending: true` means no money has moved yet:
+     *   the product records nothing and settles nothing, whatever `success`
+     *   says. `success: true` with `pending` false means the money was taken
+     *   now, and the invoice is settled for `amount`. Answer `success: false,
+     *   pending: true` for a redirect or an offline method - it cannot be
+     *   misread - and never report money you have not taken.
      */
     public function charge(array $payment): array;
 

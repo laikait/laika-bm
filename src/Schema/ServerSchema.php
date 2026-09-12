@@ -34,7 +34,9 @@ class ServerSchema extends SchemaAbstract
             $t->string('username', 100)->nullable()->default(NULL)->comment('Encrypted');
             $t->string('password')->nullable()->default(NULL)->comment('Encrypted');
             $t->text('access_key')->nullable()->default(NULL)->comment('Encrypted');
-            $t->smallInteger('port')->default(2083);
+            // INTEGER, not smallint: a port runs to 65535 and a signed smallint
+            // stops at 32767. M202609130100WidenServerPort widens existing installs.
+            $t->integer('port')->default(2083);
             $t->enum('use_ssl', ['yes', 'no'])->default('yes');
             $t->string('nameserver1')->nullable()->default(NULL);
             $t->string('nameserver2')->nullable()->default(NULL);

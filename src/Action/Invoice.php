@@ -63,6 +63,9 @@ class Invoice extends Action
     /** @var string Status Lookup Table */
     public const STATUSES = 'invoice_statuses';
 
+    /** @var int How Often applyCredit() Re-reads a Balance That Moved Under It */
+    public const CREDIT_TRIES = 5;
+
     /** @var string[] Columns a Form May Write */
     public const FIELDS = [
         'client_relid', 'currency_relid', 'status_relid', 'discount', 'tax',
@@ -719,57 +722,103 @@ class Invoice extends Action
      *
      * Takes the smaller of what is owed and what the client holds, so credit is
      * never spent past the balance due and the invoice never over-settles.
+     *
+     * All at once and only once (Phase 42): the balance, the invoice and the
+     * credit notes behind it move in ONE transaction, and the balance is claimed
+     * with a compare-and-set, so two presses at once cannot both spend it.
+     * Settling - which provisions - happens after the transaction has closed.
      * @param int $invoiceId Invoice ID
      * @return string The amount of credit applied
      */
     public function applyCredit(int $invoiceId): string
     {
-        $invoice = $this->find($invoiceId);
+        // The balance is CLAIMED, not read and then written. The update carries
+        // the balance it read in its WHERE - Promo::claim()'s compare-and-set -
+        // so of two presses at once exactly one moves it; the other finds it
+        // changed, reads again, and applies what is actually left, which may be
+        // nothing. Read-then-write let both spend the same credit and drove the
+        // balance below zero.
+        for ($try = 0; $try < self::CREDIT_TRIES; $try++) {
+            $invoice = $this->find($invoiceId);
 
-        if ($invoice === null) {
-            return '0';
+            if ($invoice === null) {
+                return '0';
+            }
+
+            $clientId = (int) $invoice['client_relid'];
+            $client = (new Client())->find($clientId);
+
+            if ($client === null) {
+                return '0';
+            }
+
+            $available = (string) ($client['credit_balance'] ?? '0');
+            $owed = $this->balance($invoice);
+
+            // Not isZero(): a balance that is not positive is not credit to
+            // spend, and the smaller of a negative one and the amount owed would
+            // take credit_applied DOWN.
+            if (!Money::isGreater($available, '0') || !Money::isGreater($owed, '0')) {
+                return '0';
+            }
+
+            $applied = Money::round(Money::isGreater($available, $owed) ? $owed : $available);
+
+            // ONE transaction for the balance, the invoice and the notes behind
+            // it. A failure part-way used to leave an invoice showing credit the
+            // account still held. laika-model nests with savepoints, so spend()'s
+            // own writes inside are safe.
+            $claimed = (bool) $this->model()->transaction(
+                function (InvoiceModel $m) use ($invoiceId, $invoice, $clientId, $available, $applied): bool {
+                    $clients = new ClientModel();
+
+                    $moved = (int) $clients->where([
+                        $clients->id     =>  $clientId,
+                        'credit_balance' =>  $available,
+                    ])->update([
+                        'credit_balance'    =>  Money::sub($available, $applied),
+                        'client_updated_at' =>  $this->now(),
+                    ]);
+
+                    if ($moved === 0) {
+                        return false;
+                    }
+
+                    $m->where([$m->id => $invoiceId])->update([
+                        'credit_applied'     =>  Money::round(
+                            Money::add((string) ($invoice['credit_applied'] ?? '0'), $applied)
+                        ),
+                        'invoice_updated_at' =>  $this->now(),
+                    ]);
+
+                    // The balance has moved, so the documents behind it move with
+                    // it - oldest note first. Anything left over is credit put on
+                    // the account by hand, which has no note to mark and is not an
+                    // error. See Action\CreditNote::spend().
+                    (new CreditNote())->spend($clientId, $applied);
+
+                    return true;
+                }
+            );
+
+            if (!$claimed) {
+                continue;
+            }
+
+            // OUTSIDE the transaction, deliberately: settling provisions, and
+            // provisioning calls modules. A transaction held open across a
+            // control panel's reply is how one slow server locks the invoices
+            // table.
+            $refreshed = $this->find($invoiceId);
+
+            if ($refreshed !== null && $this->isSettled($refreshed)) {
+                $this->markPaid($invoiceId);
+            }
+
+            return $applied;
         }
 
-        $clientId = (int) $invoice['client_relid'];
-        $client = (new Client())->find($clientId);
-
-        if ($client === null) {
-            return '0';
-        }
-
-        $available = (string) ($client['credit_balance'] ?? '0');
-        $owed = $this->balance($invoice);
-
-        if (Money::isZero($available) || Money::isZero($owed)) {
-            return '0';
-        }
-
-        $applied = Money::round(Money::isGreater($available, $owed) ? $owed : $available);
-
-        $this->model()->transaction(function (InvoiceModel $m) use ($invoiceId, $invoice, $applied): void {
-            $m->where([$m->id => $invoiceId])->update([
-                'credit_applied'     =>  Money::round(
-                    Money::add((string) ($invoice['credit_applied'] ?? '0'), $applied)
-                ),
-                'invoice_updated_at' =>  $this->now(),
-            ]);
-        });
-
-        (new Client())->adjustCredit($clientId, '-' . $applied);
-
-        // The balance has moved, so the documents behind it move with it -
-        // oldest note first. Anything left over is credit that was put on the
-        // account by hand, which has no note to mark and is not an error. See
-        // Action\CreditNote::spend().
-        (new CreditNote())->spend($clientId, $applied);
-
-        $refreshed = $this->find($invoiceId);
-
-        if ($refreshed !== null && $this->isSettled($refreshed)) {
-            $this->markPaid($invoiceId);
-        }
-
-        return $applied;
+        return '0';
     }
 
     /**

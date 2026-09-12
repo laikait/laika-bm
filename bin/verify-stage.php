@@ -918,6 +918,9 @@ foreach ([
         => 'Where a lookup, fraud or plugin module\'s settings live. Without it the table is never created.',
     'vendor/laikait/laika-bm/src/Migration/M202609120200AddRegistrarTestMode.php'
         => 'Adds domain_registrars.test_mode to an existing install. Without it saving a registrar fails there.',
+    // Phase 42.
+    'vendor/laikait/laika-bm/src/Migration/M202609130100WidenServerPort.php'
+        => 'Widens servers.port on an existing install. Without it a server above port 32767 is saved on 32767.',
     'template/admin/bootstrap/partials/module-settings.twig'
         => 'Draws a module\'s declared fields on four screens. Without it all four are a Twig error.',
     'template/admin/bootstrap/module-configure.twig'

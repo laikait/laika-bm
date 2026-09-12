@@ -190,7 +190,8 @@ class InvoiceController extends ClientController
      *   pending  - nothing has moved yet. The customer is told what to do next,
      *              and the invoice is left exactly as it was. Every offline
      *              gateway lives here, and so does a redirect before its webhook
-     *              arrives.
+     *              arrives. `pending: true` outranks `success`, so a driver
+     *              answering both lands here too.
      *   failure  - say so, and record nothing.
      *
      * @param array $invoice Invoice Row
@@ -203,7 +204,14 @@ class InvoiceController extends ClientController
     {
         $message = trim((string) ($result['message'] ?? ''));
 
-        if (($result['success'] ?? false) === true) {
+        // PENDING OUTRANKS SUCCESS. `pending: true` means no money has moved,
+        // whatever `success` says: a redirect driver answering "success,
+        // pending" means the CALL worked, and reading that as payment marks an
+        // invoice paid because somebody was sent to a page. GatewayInterface
+        // states the rule.
+        $pending = ($result['pending'] ?? false) === true;
+
+        if (!$pending && ($result['success'] ?? false) === true) {
             // The amount recorded is the driver's, not the request's, and not
             // the invoice's: a gateway may have taken a different sum, and the
             // ledger has to say what actually happened.
