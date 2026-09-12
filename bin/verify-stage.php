@@ -937,6 +937,41 @@ foreach (['gateways', 'registrars', 'lookup', 'plugins', 'servers'] as $kind) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 41. A starter module for every kind, and the fraud check at checkout.
+// ---------------------------------------------------------------------------
+//
+// The six Examples are what somebody writing the first real module copies, so
+// they ship - switched off, and pointing at reserved example.com names. The
+// copies starterwalk makes of them point at a scripted API on 127.0.0.1 and
+// must never ship.
+foreach (['gateways', 'servers', 'registrars', 'lookup', 'fraud', 'plugins'] as $kind) {
+    foreach (['module.php', 'src/Example.php', 'src/Api.php'] as $file) {
+        must_exist(
+            "modules/{$kind}/Example/{$file}",
+            "The {$kind} starter module. Without it there is nothing to copy when writing the first real one."
+        );
+    }
+
+    must_not_exist(
+        "modules/{$kind}/StarterProbe",
+        'Test fixture from starterwalk.php: a copy of the Example pointed at a scripted API on 127.0.0.1.'
+    );
+}
+
+foreach ([
+    'modules/plugins/Example/routes/example.php'
+        => 'The plugin starter\'s route - the only example of a module shipping one.',
+    'modules/plugins/Example/hooks/example.php'
+        => 'The plugin starter\'s hook, and nav_extend()\'s only caller.',
+    'vendor/laikait/laika-bm/src/Module/Contracts/FraudInterface.php'
+        => 'What a fraud module implements. Without it every fraud module fatals on load.',
+    'vendor/laikait/laika-bm/src/Action/Fraud.php'
+        => 'Screens an order at checkout. Without it checkout fatals the moment it asks.',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+// ---------------------------------------------------------------------------
 // Phase 32. The error log a shipped install has never had.
 // ---------------------------------------------------------------------------
 //

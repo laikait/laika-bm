@@ -16,6 +16,7 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
+use LBM\Service\Fraud;
 use LBM\Service\Module;
 use LBM\Support\ModuleSettings;
 
@@ -76,7 +77,65 @@ class ModuleController extends AdminController
             'modules' =>  $modules,
             'types'   =>  Module::types(),
             'path'    =>  Module::path(),
+            'fraud'   =>  $this->fraudCard(),
         ]);
+    }
+
+    /**
+     * Choose Which Fraud Module Screens Checkout - Phase 41
+     *
+     * Behind module.update, the same as the switch beside it: choosing a
+     * module that holds orders is the same kind of decision as turning one on.
+     * @return ?string
+     */
+    public function fraud(): ?string
+    {
+        $posted = (string) Request::input('fraud_module', '');
+        $before = Fraud::chosen() ?? 'none';
+
+        return $this->attempt(
+            function () use ($posted, $before): void {
+                $after = Fraud::choose($posted);
+
+                if ($after !== $before) {
+                    $this->log('fraud.chosen', "Fraud check changed from {$before} to {$after}.");
+                }
+            },
+            'staff.modules',
+            local('fraud_saved')
+        );
+    }
+
+    /**
+     * What The Fraud Check Card Shows
+     *
+     * The chosen module stays in the dropdown when it has left the disk -
+     * Phase 35's select trap: a <select> whose value is not among its
+     * options posts another one, and saving would quietly change the choice.
+     * @return array{value: string, name: ?string, state: string, choices: array<string,string>}
+     */
+    private function fraudCard(): array
+    {
+        $chosen = Fraud::chosen();
+
+        $choices = ['none' => local('fraud_none')];
+
+        foreach (Fraud::modules() as $directory => $module) {
+            $choices[(string) $directory] = $module['enabled']
+                ? $module['name']
+                : local('module_named_off', $module['name']);
+        }
+
+        if ($chosen !== null && Fraud::installedModule($chosen) === null) {
+            $choices[$chosen] = local('module_named_missing', $chosen);
+        }
+
+        return [
+            'value'   =>  $chosen === null ? 'none' : (Fraud::installedModule($chosen) ?? $chosen),
+            'name'    =>  Fraud::name(),
+            'state'   =>  Fraud::state(),
+            'choices' =>  $choices,
+        ];
     }
 
     /**

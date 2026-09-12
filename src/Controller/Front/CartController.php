@@ -21,6 +21,7 @@ use Laika\Service\Request;
 use LBM\Service\Addon;
 use LBM\Service\ConfigOption;
 use LBM\Service\Domain;
+use LBM\Service\Fraud;
 use LBM\Service\Currency;
 use LBM\Service\Gateway;
 use LBM\Service\Invoice;
@@ -458,6 +459,12 @@ class CartController extends FrontController
 
         Cart::clear();
 
+        // Phase 41. Held by the fraud check: the order exists, for staff to
+        // accept or cancel, and there is no invoice to send the customer to.
+        if ($invoice === null) {
+            return $this->done('client.dashboard', local('order_held_for_review'), true);
+        }
+
         // Straight to the invoice, which is where the gateway picker lives.
         return $this->done('client.invoice', local('order_placed'), true, ['invoice' => $invoice]);
     }
@@ -472,10 +479,10 @@ class CartController extends FrontController
      * @param array $client Signed-In Client
      * @param int $currencyId Currency ID
      * @param array $lines Priced Cart Lines
-     * @return string The invoice uid
+     * @return ?string The invoice uid - null when the fraud check held the order
      * @throws RuntimeException
      */
-    private function place(array $client, int $currencyId, array $lines): string
+    private function place(array $client, int $currencyId, array $lines): ?string
     {
         // The CODE is claimed before the order exists, and the ORDER records
         // which one. claim() is a compare-and-set, so a limited code cannot go
@@ -495,6 +502,15 @@ class CartController extends FrontController
             'currency_relid' =>  $currencyId,
             'promo_relid'    =>  $promoId,
         ], $this->orderItems($lines));
+
+        // Phase 41. Screened BEFORE it is invoiced, and only when an operator
+        // has chosen a fraud module. `review` or `fail` holds it - status
+        // `fraud`, no invoice - for staff to accept or cancel on the order
+        // screen. Every way of not knowing lets it through: a screening
+        // service that is down must not stop every sale. See Action\Fraud.
+        if (Fraud::screen($orderId)['held']) {
+            return null;
+        }
 
         // accept() raises the invoice. The second argument keeps the order
         // pending rather than moving it to active - see the method's docblock,

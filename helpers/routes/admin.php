@@ -686,6 +686,10 @@ Url::group(ADMIN, function () use ($uid): void {
     /*=============================== MODULES ===============================*/
     Url::get('/settings/modules', [ModuleController::class, 'index'])
         ->name('staff.modules')->pipeline([Permission::class . '|perm=module.read']);
+    // Phase 41. Which fraud module screens checkout - a card on the modules
+    // screen, so it sits beside the switch that has to be on for it to work.
+    Url::post('/settings/modules/fraud', [ModuleController::class, 'fraud'])
+        ->name('staff.modules.fraud')->pipeline([Permission::class . '|perm=module.update']);
     // POST /module/upload was here until Phase 31. It is GONE rather than
     // disabled: a route that still resolves is a door somebody finds, and the
     // feature behind it wrote executable PHP into the application's own
