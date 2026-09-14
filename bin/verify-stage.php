@@ -641,16 +641,14 @@ must_exist(
 );
 must_exist(
     'vendor/laikait/laika-bm/src/Controller/Admin/RegistrarController.php',
-    'The only screen a registrar can be added on. Without it the TLD form offers an empty dropdown.'
+    'The registrars screen, where registrar and lookup modules are switched on. Without it no registrar can ever be added.'
 );
 must_exist(
     'template/admin/bootstrap/registrars.twig',
-    'The registrar list. Without it /admin/settings/registrars is a Twig error for every member of staff.'
+    'The registrar and lookup modules. Without it /admin/settings/registrars is a Twig error for every member of staff.'
 );
-must_exist(
-    'template/admin/bootstrap/registrar-form.twig',
-    'Where a registrar is added and its credentials typed. Without it the list has nothing to link to.'
-);
+// registrar-form.twig went in Phase 46: a registrar is added by switching its
+// module on, and configured on the module's Configure page.
 
 // Phase 36. A lookup module answers "is this name free" without a registrar.
 // Without the contract nothing can implement one; without the action and its
@@ -921,10 +919,20 @@ foreach ([
     // Phase 42.
     'vendor/laikait/laika-bm/src/Migration/M202609130100WidenServerPort.php'
         => 'Widens servers.port on an existing install. Without it a server above port 32767 is saved on 32767.',
+    // Phase 45.
+    'vendor/laikait/laika-bm/src/Support/Referrer.php'
+        => 'Sends a refused staff member or sub-login back with a message. Without it every refusal is a fatal error.',
     'template/admin/bootstrap/partials/module-settings.twig'
         => 'Draws a module\'s declared fields on four screens. Without it all four are a Twig error.',
     'template/admin/bootstrap/module-configure.twig'
-        => 'A lookup, fraud or plugin module\'s settings page.',
+        => 'Every kind of module\'s settings page but servers\'. Without it Configure is a Twig error for all of them.',
+    // Phase 46. One screen per kind, laid out like Modules; settings/modules is gone.
+    'template/admin/bootstrap/partials/module-list.twig'
+        => 'Draws every kind\'s modules on its own screen. Without it gateways, servers, registrars, fraud and plugins are all a Twig error.',
+    'template/admin/bootstrap/fraud.twig'
+        => 'The fraud modules, and the card that chooses which one screens checkout.',
+    'template/admin/bootstrap/plugins.twig'
+        => 'The plugin modules. Without it no plugin can be switched on at all.',
 ] as $shipped => $why) {
     must_exist($shipped, $why);
 }
@@ -973,6 +981,65 @@ foreach ([
 ] as $shipped => $why) {
     must_exist($shipped, $why);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 47. Stripe ships, switched off. The copy stripewalk makes of it is
+// pointed at a scripted API on 127.0.0.1 and must never ship.
+// ---------------------------------------------------------------------------
+foreach (['module.php', 'index.php', 'src/Stripe.php', 'src/Api.php'] as $file) {
+    must_exist(
+        "modules/gateways/Stripe/{$file}",
+        'The Stripe gateway module. Without it an install that switched Stripe on loses its gateway on update.'
+    );
+}
+
+must_not_exist(
+    'modules/gateways/StripeProbe',
+    'Test fixture from stripewalk.php: a copy of the Stripe module pointed at a scripted API on 127.0.0.1.'
+);
+
+// ---------------------------------------------------------------------------
+// Phase 48. Two kinds of gateway. Stripe Card - the tokenizer: the card taken on
+// the site - ships switched off beside Stripe, and both run on stripe-php,
+// which has to ship in vendor/. The copy cardwalk makes of it is pointed at a
+// scripted API on 127.0.0.1 and must never ship.
+// ---------------------------------------------------------------------------
+foreach (['module.php', 'index.php', 'src/StripeCard.php', 'src/Api.php', 'assets/tokenize.js'] as $file) {
+    must_exist(
+        "modules/gateways/StripeCard/{$file}",
+        'The Stripe Card gateway module. Without it an install that switched it on loses its gateway - and its customers the cards they saved - on update.'
+    );
+}
+
+foreach ([
+    'vendor/stripe/stripe-php/init.php'
+        => 'stripe/stripe-php, which both Stripe modules are built on. Without it neither can take a payment.',
+    'vendor/laikait/laika-bm/src/Module/Contracts/TokenizerInterface.php'
+        => 'The contract of a gateway that takes the card on the site. Without it Stripe Card does not load.',
+    'vendor/laikait/laika-bm/src/Module/Contracts/RegistersWebhook.php'
+        => 'A webhook that registers itself. Without it neither Stripe module loads.',
+    'vendor/laikait/laika-bm/src/Action/PayMethod.php'
+        => 'Saved cards. The invoice page, the admin client screen and the scheduled charge all call it.',
+    'vendor/laikait/laika-bm/src/Action/AutoCharge.php'
+        => 'Charging a saved card. The daily cron task and the admin invoice call it.',
+    'vendor/laikait/laika-bm/src/Schema/AutoChargeAttemptSchema.php'
+        => 'The attempts table, whose unique claim is what stops a card being charged twice in a day.',
+    'vendor/laikait/laika-bm/src/Model/AutoChargeAttemptModel.php'
+        => 'The attempts model.',
+    'vendor/laikait/laika-bm/src/Controller/Client/PayMethodController.php'
+        => 'The payment methods page, and the route that serves a gateway\'s card field.',
+    'template/panel/bootstrap/payment-methods.twig'
+        => 'The payment methods page. Without it the page is an error.',
+    'template/panel/bootstrap/assets/js/tokenize.js'
+        => 'The card field. Without it no card can be taken on the site.',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+must_not_exist(
+    'modules/gateways/StripeCardProbe',
+    'Test fixture from cardwalk.php: a copy of the Stripe Card module pointed at a scripted API on 127.0.0.1.'
+);
 
 // ---------------------------------------------------------------------------
 // Phase 32. The error log a shipped install has never had.

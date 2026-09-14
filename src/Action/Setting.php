@@ -53,25 +53,26 @@ class Setting extends Action
      */
     public const BOOLEANS = [
         'strict_ip', 'allow_registration', 'mail_keepalive', 'mail_auto_tls',
-        'mail_validate_cert', 'suspend_overdue', 'prices_include_tax',
+        'mail_validate_cert', 'suspend_overdue', 'prices_include_tax', 'auto_charge',
     ];
 
     /** @var array<string,string[]> Which Keys Belong To Which Settings Screen */
     public const GROUPS = [
         'general' => [
             'app_name', 'app_host', 'app_email', 'app_logo', 'app_icon',
-            'front_template', 'admin_template', 'panel_template',
+            'front_template', 'admin_template', 'panel_template', 'data_limit',
         ],
         'localisation' => [
             'time_zone', 'date_format', 'datetime_format', 'time_format',
             'default_language', 'decimal_symbol', 'thousand_separator',
-            'data_limit', 'default_currency',
+            'default_currency',
         ],
         'billing' => [
             'invoice_prefix', 'order_prefix', 'ticket_prefix', 'invoice_due_days',
             'late_fee_percent', 'invoice_generate_days', 'invoice_reminder_days',
             'suspend_overdue', 'suspend_overdue_days', 'terminate_cancelled_days',
             'domain_renew_days', 'domain_grace_days', 'error_log_days',
+            'auto_charge', 'auto_charge_days',
         ],
         'tax' => [
             'prices_include_tax',

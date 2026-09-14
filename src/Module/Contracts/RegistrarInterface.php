@@ -30,9 +30,10 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
  * ---------------------------------------------------------------------------
  * WHAT A DRIVER IS CONSTRUCTED WITH
  * ---------------------------------------------------------------------------
- * One array: the registrar's credentials from the Registrars screen, opened,
- * under the names the operator gave them - plus `api_url` from its own column,
- * always present and never shadowed by a credential of that name.
+ * One array: the registrar's credentials from its Configure page, opened,
+ * under the names the operator gave them. There is no `api_url` in it any more:
+ * since Phase 46 a module keeps its own addresses in its Api class (`API_URL`,
+ * `TEST_API_URL`), and the operator never types one.
  *
  * Phase 40: a module that DECLARES its fields through `Contracts\Configurable`
  * gets exactly those instead, opened, drawn on the form from its own code. And

@@ -508,7 +508,7 @@ class DomainRenewal extends Action
                     'first_name'   =>  $client['first_name'] ?? '',
                     'last_name'    =>  $client['last_name'] ?? '',
                     'domain'       =>  $domain['domain'] ?? '',
-                    'expiry_date'  =>  format_date($domain['expiry_date'] ?? null),
+                    'expiry_date'  =>  format_day($domain['expiry_date'] ?? null),
                     'invoice_line' =>  $line,
                 ],
                 (int) $client['cid']

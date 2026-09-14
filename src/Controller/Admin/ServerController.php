@@ -16,6 +16,7 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
+use LBM\Service\Module;
 use LBM\Service\Server;
 
 /**
@@ -25,6 +26,12 @@ use LBM\Service\Server;
  * shows a blank password field and the action leaves the stored value alone
  * unless a new one is typed - so a screen cannot leak a root login, and
  * correcting a hostname cannot accidentally wipe one.
+ *
+ * Phase 46: the control-panel MODULES are listed above the machines, laid out
+ * like every other kind's screen - Enable and Disable, and no Configure, because
+ * a server module's fields belong to each product. "Add server" stays: a
+ * machine is not a module. And a machine's control panel is chosen from the
+ * modules on disk rather than typed.
  */
 class ServerController extends AdminController
 {
@@ -50,10 +57,12 @@ class ServerController extends AdminController
             $page['rows'][$i]['usage'] = Server::usage($row);
         }
 
-        return $this->screen('servers', 'Servers', [
+        return $this->screen('servers', local('servers'), [
             'pager'    =>  $page,
             'statuses' =>  Server::statuses(),
             'groups'   =>  $this->groupChoices(),
+            'modules'  =>  $this->moduleList('servers'),
+            'path'     =>  'modules/servers',
         ]);
     }
 
@@ -156,9 +165,11 @@ class ServerController extends AdminController
     private function form(?array $server, string $title): string
     {
         return $this->screen('server-form', $title, [
-            'server'   =>  $server,
-            'statuses' =>  $this->statusChoices(Server::statuses()),
-            'groups'   =>  $this->groupChoices(),
+            'server'      =>  $server,
+            'statuses'    =>  $this->statusChoices(Server::statuses()),
+            'groups'      =>  $this->groupChoices(),
+            'panels'      =>  $this->panelChoices($server),
+            'panel_value' =>  $this->panelValue($server),
         ]);
     }
 
@@ -175,6 +186,72 @@ class ServerController extends AdminController
             'ip_address'  =>  local('ip_required'),
             'module_name' =>  local('which_control_panel'),
         ], $input);
+    }
+
+    /**
+     * The Control Panels a Machine Can Run - Phase 46
+     *
+     * The server modules on disk rather than a free-text box: a typo in a
+     * module name is a machine nothing is ever provisioned through, and the
+     * only symptom is every service on it waiting for somebody by hand.
+     *
+     * THE ONE A MACHINE ALREADY HAS IS ALWAYS AMONG THEM, installed or not -
+     * Phase 35's select trap. A <select> whose value is not among its options
+     * posts another one, so saving a hostname fix would quietly move the
+     * machine to a different panel.
+     * @param ?array $server Server Row, Or Null When Adding
+     * @return array<string,string>
+     */
+    private function panelChoices(?array $server): array
+    {
+        $choices = [];
+
+        foreach (Module::ofType('servers') as $module) {
+            $choices[(string) $module['directory']] = !empty($module['enabled'])
+                ? (string) $module['name']
+                : local('module_named_off', (string) $module['name']);
+        }
+
+        $current = trim((string) ($server['module_name'] ?? ''));
+
+        if ($current !== '' && $this->panelOnDisk($current) === null) {
+            $choices[$current] = local('module_named_missing', $current);
+        }
+
+        return $choices;
+    }
+
+    /**
+     * Which Panel Is Selected
+     *
+     * The on-disk spelling when the stored one matches in another case - the
+     * loader matches case-insensitively, so `cpanel` and `Cpanel` are the same
+     * module, and the dropdown has to find it rather than fall back to its
+     * first option.
+     * @param ?array $server Server Row, Or Null
+     * @return string
+     */
+    private function panelValue(?array $server): string
+    {
+        $current = trim((string) ($server['module_name'] ?? ''));
+
+        return $current === '' ? '' : ($this->panelOnDisk($current) ?? $current);
+    }
+
+    /**
+     * The On-Disk Spelling Of a Server Module, If It Is Installed
+     * @param string $module Module Directory, In Any Case
+     * @return ?string
+     */
+    private function panelOnDisk(string $module): ?string
+    {
+        foreach (Module::ofType('servers') as $found) {
+            if (strcasecmp((string) $found['directory'], $module) === 0) {
+                return (string) $found['directory'];
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -130,6 +130,12 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.client.contact.delete')->pipeline([Permission::class . '|perm=client.delete']);
 
     /*------------------------------ Client Notes -----------------------------*/
+    // Phase 48: remove one of a client's saved cards - it is asked to be
+    // forgotten at its gateway too. client.update, the permission that edits
+    // the rest of the client's record.
+    Url::post("/client/{client:{$uid}}/payment-method/{method:{$uid}}/remove", [ClientController::class, 'removePayMethod'])
+        ->name('staff.client.payment.method.remove')->pipeline([Permission::class . '|perm=client.update']);
+
     Url::get("/client/{client:{$uid}}/notes", [ClientController::class, 'notes'])
         ->name('staff.client.notes')->pipeline([Permission::class . '|perm=note.read']);
     Url::post("/client/{client:{$uid}}/notes", [ClientController::class, 'noteCreate'])
@@ -368,6 +374,10 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.invoice.send')->pipeline([Permission::class . '|perm=invoice.update']);
     Url::post("/invoice/{invoice:{$uid}}/pay", [InvoiceController::class, 'pay'])
         ->name('staff.invoice.pay')->pipeline([Permission::class . '|perm=transaction.create']);
+    // Phase 48: charge one of the client's saved cards. Money moves, so it is
+    // transaction.create - the same as recording a payment by hand.
+    Url::post("/invoice/{invoice:{$uid}}/charge", [InvoiceController::class, 'charge'])
+        ->name('staff.invoice.charge')->pipeline([Permission::class . '|perm=transaction.create']);
     Url::post("/invoice/{invoice:{$uid}}/cancel", [InvoiceController::class, 'cancel'])
         ->name('staff.invoice.cancel')->pipeline([Permission::class . '|perm=invoice.update']);
     Url::post("/invoice/{invoice:{$uid}}/delete", [InvoiceController::class, 'delete'])
@@ -494,29 +504,14 @@ Url::group(ADMIN, function () use ($uid): void {
      * The registrars a TLD points at. Phase 35.
      *
      * Behind `domain` for the price list's reason - the group exists and is
-     * granted on every install - and `/registrars/new` before
-     * `/registrar/{registrar}` for the reason every literal is first here.
+     * granted on every install. Since Phase 46 the screen lists the registrar
+     * and lookup MODULES: enabling one adds its registrar, and its credentials
+     * are saved on the module's Configure page further down. There is no add,
+     * edit or delete route - a registrar row is kept once made, because TLDs
+     * and domains point at it.
      */
     Url::get('/settings/registrars', [RegistrarController::class, 'index'])
         ->name('staff.registrars')->pipeline([Permission::class . '|perm=domain.read']);
-
-    Url::get('/settings/registrars/new', [RegistrarController::class, 'create'])
-        ->name('staff.registrar.new')->pipeline([Permission::class . '|perm=domain.create']);
-    Url::post('/settings/registrars/new', [RegistrarController::class, 'create'])
-        ->pipeline([Permission::class . '|perm=domain.create']);
-
-    Url::get("/settings/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
-        ->name('staff.registrar.edit')->pipeline([Permission::class . '|perm=domain.update']);
-    Url::post("/settings/registrar/{registrar:{$uid}}/edit", [RegistrarController::class, 'edit'])
-        ->pipeline([Permission::class . '|perm=domain.update']);
-
-    Url::post("/settings/registrar/{registrar:{$uid}}/delete", [RegistrarController::class, 'delete'])
-        ->name('staff.registrar.delete')->pipeline([Permission::class . '|perm=domain.delete']);
-
-    // Phase 40. The registrar's driver built with what is SAVED, asked to try
-    // it. `update`, like editing: it spends a call at somebody else's API.
-    Url::post("/settings/registrar/{registrar:{$uid}}/test", [RegistrarController::class, 'test'])
-        ->name('staff.registrar.test')->pipeline([Permission::class . '|perm=domain.update']);
 
     // Phase 36. Which lookup module a public search asks before the registrar.
     // A write, so `update` - the same gate as editing a registrar.
@@ -660,52 +655,52 @@ Url::group(ADMIN, function () use ($uid): void {
     Url::get('/settings/gateways', [GatewayController::class, 'index'])
         ->name('staff.gateways')->pipeline([Permission::class . '|perm=settings.read']);
 
-    // Before /gateway/{gateway}/... for the usual reason, and before
-    // /gateways/configure is irrelevant because that one is a POST. A GET
-    // listing, so it is filterable and bookmarkable.
+    // A GET listing, so it is filterable and bookmarkable.
     Url::get('/settings/gateways/callbacks', [GatewayController::class, 'callbacks'])
         ->name('staff.gateway.callbacks')->pipeline([Permission::class . '|perm=settings.read']);
-    // Literal before parameterised: matching is first-match-wins in registration
-    // order, and {gateway} matches the word "configure" perfectly well.
-    Url::post('/settings/gateways/configure', [GatewayController::class, 'configure'])
-        ->name('staff.gateway.configure')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post("/settings/gateway/{gateway:{$uid}}/settings", [GatewayController::class, 'settings'])
-        ->name('staff.gateway.settings')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post("/settings/gateway/{gateway:{$uid}}/toggle", [GatewayController::class, 'toggle'])
-        ->name('staff.gateway.toggle')->pipeline([Permission::class . '|perm=settings.update']);
-    // Phase 40. The driver built with what is SAVED, asked to try it.
-    Url::post("/settings/gateway/{gateway:{$uid}}/test", [GatewayController::class, 'test'])
-        ->name('staff.gateway.test')->pipeline([Permission::class . '|perm=settings.update']);
-    Url::post("/settings/gateway/{gateway:{$uid}}/delete", [GatewayController::class, 'delete'])
-        ->name('staff.gateway.delete')->pipeline([Permission::class . '|perm=settings.update']);
+    // Phase 46: no Set up, offer switch, settings, test or delete route. A
+    // gateway module is switched on on this screen - which creates its row -
+    // and configured on its Configure page under /settings/module/.
 
     /*============================== ACTIVITIES =============================*/
     Url::get('/activities', [ActivityController::class, 'index'])
         ->name('staff.activities')->pipeline([Permission::class . '|perm=activity.read']);
 
     /*=============================== MODULES ===============================*/
-    Url::get('/settings/modules', [ModuleController::class, 'index'])
-        ->name('staff.modules')->pipeline([Permission::class . '|perm=module.read']);
-    // Phase 41. Which fraud module screens checkout - a card on the modules
-    // screen, so it sits beside the switch that has to be on for it to work.
-    Url::post('/settings/modules/fraud', [ModuleController::class, 'fraud'])
-        ->name('staff.modules.fraud')->pipeline([Permission::class . '|perm=module.update']);
-    // POST /module/upload was here until Phase 31. It is GONE rather than
-    // disabled: a route that still resolves is a door somebody finds, and the
-    // feature behind it wrote executable PHP into the application's own
-    // directory from a form on the admin panel.
+    //
+    // Phase 46: there is no settings/modules. Each kind is switched on and off
+    // on its own screen - gateways, servers and registrars above, fraud and
+    // plugins here - and every one of them posts to the same switch. NO ROUTE
+    // ADDS OR UPLOADS A MODULE: POST /module/upload went in Phase 31, and the
+    // gateway "Set up" and "Add a registrar" forms in Phase 46.
+    Url::get('/settings/fraud', [ModuleController::class, 'fraud'])
+        ->name('staff.fraud')->pipeline([Permission::class . '|perm=module.read']);
+    // Phase 41. Which fraud module screens checkout - a card on the fraud
+    // screen, beside the switch that has to be on for it to work.
+    Url::post('/settings/fraud', [ModuleController::class, 'chooseFraud'])
+        ->name('staff.fraud.choose')->pipeline([Permission::class . '|perm=module.update']);
+    Url::get('/settings/plugins', [ModuleController::class, 'plugins'])
+        ->name('staff.plugins')->pipeline([Permission::class . '|perm=module.read']);
+
     Url::post("/settings/module/{module:{$uid}}/toggle", [ModuleController::class, 'toggle'])
         ->name('staff.module.toggle')->pipeline([Permission::class . '|perm=module.update']);
 
-    // Phase 40. A lookup, fraud or plugin module's own settings, declared in
-    // its code: read behind module.read, saved and tested behind module.update,
-    // the switch's gate.
+    // A module's Configure page and its Test connection, for every kind but
+    // servers. NO PERMISSION PIPELINE, deliberately: which permission they need
+    // depends on the KIND - a gateway's settings were always settings.*, a
+    // registrar's domain.update, the rest module.* - so ModuleController asks
+    // for Module::CONFIGURE_ACCESS once it knows which module it is. The admin
+    // group's Auth pipeline still requires a signed-in member of staff.
     Url::get("/settings/module/{module:{$uid}}/configure", [ModuleController::class, 'configure'])
-        ->name('staff.module.configure')->pipeline([Permission::class . '|perm=module.read']);
-    Url::post("/settings/module/{module:{$uid}}/configure", [ModuleController::class, 'configure'])
-        ->pipeline([Permission::class . '|perm=module.update']);
+        ->name('staff.module.configure');
+    Url::post("/settings/module/{module:{$uid}}/configure", [ModuleController::class, 'configure']);
     Url::post("/settings/module/{module:{$uid}}/test", [ModuleController::class, 'test'])
-        ->name('staff.module.test')->pipeline([Permission::class . '|perm=module.update']);
+        ->name('staff.module.test');
+
+    // Phase 48: a gateway that registers its own webhook with its provider.
+    // Asks for the gateway's save permission itself, like Test.
+    Url::post("/settings/module/{module:{$uid}}/webhook", [ModuleController::class, 'webhook'])
+        ->name('staff.module.webhook');
 
     /*============================== SETTINGS ===============================*/
     //

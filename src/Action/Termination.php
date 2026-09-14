@@ -285,7 +285,7 @@ class Termination extends Action
         );
 
         $this->notify($service, 'service-cancelled', [
-            'ends_on' =>  format_date($due),
+            'ends_on' =>  format_day($due),
             'reason'  =>  trim($reason),
         ]);
 
@@ -359,7 +359,7 @@ class Termination extends Action
         $this->recountFor($service);
 
         $this->notify($service, 'service-cancelled', [
-            'ends_on' =>  format_date($this->now()),
+            'ends_on' =>  format_day($this->now()),
             'reason'  =>  trim($reason),
         ]);
 

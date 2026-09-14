@@ -17,12 +17,14 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use RuntimeException;
 use Laika\Service\Request;
+use LBM\Service\AutoCharge;
 use LBM\Service\Client;
 use LBM\Service\CreditNote;
 use LBM\Service\Currency;
 use LBM\Service\Invoice;
 use LBM\Service\Mail;
 use LBM\Service\Money;
+use LBM\Service\PayMethod;
 use LBM\Service\Refund;
 use LBM\Service\Transaction;
 
@@ -129,6 +131,11 @@ class InvoiceController extends AdminController
             'credit_notes' =>  CreditNote::forInvoice($id),
             'credited'     =>  CreditNote::creditedAgainst($id),
             'creditable'   =>  CreditNote::creditableOn($row),
+
+            // Phase 48: the client's saved cards, which staff may charge, and
+            // what the last attempt at charging one did.
+            'pay_methods'  =>  PayMethod::forClient((int) $row['client_relid']),
+            'last_attempt' =>  AutoCharge::lastAttempt($id),
         ]);
     }
 
@@ -259,6 +266,40 @@ class InvoiceController extends AdminController
             'staff.invoice',
             local('payment_recorded'),
             ['invoice' => $row['uid']]
+        );
+    }
+
+    /**
+     * Charge One Of The Client's Saved Cards - Phase 48
+     *
+     * The same path as the scheduled charge: an attempt is recorded, the balance
+     * is charged off-session through the card's gateway, and the payment goes
+     * through the one ledger. The card must be the invoice's own client's;
+     * another client's is not found.
+     * @param string $invoice Invoice Uid
+     * @return ?string
+     */
+    public function charge(string $invoice): ?string
+    {
+        $row = $this->record(Invoice::find($invoice), 'invoice');
+        $params = ['invoice' => $row['uid']];
+
+        try {
+            $answer = AutoCharge::chargeNow((int) $row['invoice_id'], (string) Request::input('pay_method', ''), 'staff');
+        } catch (RuntimeException $e) {
+            return $this->done('staff.invoice', $e->getMessage(), false, $params);
+        }
+
+        $this->log(
+            'invoice.card.charged',
+            ($answer['success'] ? 'Charged' : 'Tried to charge') . ' a saved card for invoice ' . $row['invoice_number'] . '.'
+        );
+
+        return $this->done(
+            'staff.invoice',
+            local($answer['success'] ? 'card_charged' : 'card_not_charged', (string) $answer['message']),
+            (bool) $answer['success'],
+            $params
         );
     }
 

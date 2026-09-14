@@ -87,11 +87,10 @@ class Clock
             Date::setAppTimezone($timezone);
         }
 
-        try {
-            Date::setFormat(option('datetime_format', 'Y-m-d H:i:s') ?: 'Y-m-d H:i:s');
-        } catch (Throwable) {
-            Date::setFormat('Y-m-d H:i:s');
-        }
+        // No display format is set here. Date::setFormat() returns a clone, so
+        // setting one on the shared instance never took and every page printed
+        // Y-m-d H:i:s. format_date(), format_day() and format_time() each read
+        // their own option instead.
 
         // The database half. Without this the PHP clock is right and the
         // database clock is not, which is the worse of the two failures -

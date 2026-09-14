@@ -16,10 +16,11 @@ namespace LBM\Pipeline;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Redirect;
-use Laika\Core\Exceptions\HttpException;
 use Laika\Route\Contracts\PipelineInterface;
 use LBM\Pipeline\Auth;
 use LBM\Service\Permission as Access;
+use LBM\Support\Permission as Rules;
+use LBM\Support\Referrer;
 
 /**
  * Per-route permission check for the admin area.
@@ -46,6 +47,9 @@ class Permission implements PipelineInterface
 {
     /** @var string Route Parameter Carrying The Required Access */
     public const PARAM = 'perm';
+
+    /** @var string Where a Refusal Goes When There Is No Page To Go Back To */
+    public const FALLBACK = 'staff.dashboard';
 
     /**
      * Handle The Request
@@ -90,20 +94,45 @@ class Permission implements PipelineInterface
     /**
      * Refuse The Request
      *
-     * Throwing is the only real short-circuit available here. Invoke::pipeline()
-     * builds each link as `function (bool $continue = true)`, and passing false
-     * makes that link `return $core()` - which runs the controller. Calling
-     * $next(false) would therefore skip the remaining checks and let the request
-     * straight through, the exact opposite of denying it.
+     * A missing permission is an answer, not a fault: the person clicked
+     * something their role does not cover, so they are told so and sent back to
+     * the page they came from. Referrer::refuse() never returns - a redirect
+     * exits - which matters here, because it is the only real short-circuit:
+     * Invoke::pipeline() builds each link as `function (bool $continue = true)`,
+     * and passing false makes that link `return $core()`, running the
+     * controller. $next(false) would let the request straight through.
      *
-     * HttpException is caught by the framework's exception handler, which
-     * renders it with the right status code.
-     * @param string $access Required Access
+     * It used to throw HttpException(403), which DEBUG renders as a 500 error
+     * page and production as a generic one with the message dropped.
+     * @param string $access Required Access. Example: 'invoice.update'
      * @return never
-     * @throws HttpException
      */
     private function deny(string $access): never
     {
-        throw new HttpException(403, local('no_permission_to', $access));
+        Referrer::refuse(local('no_permission_to', self::describe($access)), self::FALLBACK);
+    }
+
+    /**
+     * A Permission In Words
+     *
+     * "change invoices", the way a person would say it - never the key. Falls
+     * back to the key for a group or action the catalogue has no words for,
+     * because local() throws on a missing key and a refusal must not become an
+     * error on the way out.
+     *
+     * Public since Phase 46, for the one controller that refuses by permission
+     * itself: Configure serves every kind of module, and each keeps its own.
+     * @param string $access Example: 'invoice.update'
+     * @return string
+     */
+    public static function describe(string $access): string
+    {
+        [$group, $action] = array_pad(explode('.', $access, 2), 2, '');
+
+        if (!in_array($group, Rules::GROUPS, true) || !in_array($action, Rules::ACTIONS, true)) {
+            return $access;
+        }
+
+        return local('permission_' . $action, local('permission_area_' . $group));
     }
 }

@@ -15,6 +15,7 @@ namespace LBM\Module;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use ReflectionClass;
 use Throwable;
 
 /**
@@ -24,9 +25,11 @@ use Throwable;
  * THE ADDRESSES LIVE IN THE MODULE, NOT ON A SCREEN
  * ---------------------------------------------------------------------------
  * A module knows where its provider's live API is and where its sandbox is, so
- * it says so in `endpoints()` and the operator never types an address. What the
- * operator chooses is the MODE - live or test - and it arrives in the settings
- * every driver is constructed with, under `mode`.
+ * it says so in two constants on its own Api class - `API_URL`, and
+ * `TEST_API_URL` when there is a sandbox - and the operator never types an
+ * address. What the operator chooses is the MODE - live or test - and it arrives
+ * in the settings every driver is constructed with, under `mode`. (Phase 46.
+ * Until then every module wrote an endpoints() method to say the same thing.)
  *
  * Only the word `test` selects the sandbox. A missing mode, a misspelt one, or
  * one this class has never heard of is LIVE, because the alternative is a
@@ -89,21 +92,41 @@ abstract class Api
     }
 
     /**
-     * Where The Provider's API Is, For Each Mode
+     * Where The Provider's API Is, For Each Mode - Phase 46
      *
-     * A base address per mode, with no trailing slash needed:
+     * Read from two constants on the module's own Api class, with any
+     * visibility:
      *
-     *     return ['live' => 'https://api.example.com/v1', 'test' => 'https://sandbox.example.com/v1'];
+     *     protected const API_URL      = 'api.example.com/v1';
+     *     protected const TEST_API_URL = 'sandbox.example.com/v1';
      *
-     * Leave `test` out for a provider with no sandbox, and test mode refuses
-     * every call rather than touching the live one.
+     * Leave TEST_API_URL out for a provider with no sandbox, and test mode
+     * refuses every call rather than touching the live one. An address written
+     * without a scheme is called over https - see base().
+     *
+     * Override this instead when the address is not fixed. A control panel's is
+     * whichever server the account is on, which is how the server Example builds
+     * its own.
      * @return array{live?: string, test?: string}
      */
-    abstract protected function endpoints(): array;
+    protected function endpoints(): array
+    {
+        $points = [];
 
-    ####################################################################################
-    /*================================= EXTERNAL API =================================*/
-    ####################################################################################
+        foreach ([self::LIVE => 'API_URL', self::TEST => 'TEST_API_URL'] as $mode => $name) {
+            $address = $this->declared($name);
+
+            if ($address !== '') {
+                $points[$mode] = $address;
+            }
+        }
+
+        return $points;
+    }
+
+    ##############################################################################
+    /*============================== EXTERNAL API ==============================*/
+    ##############################################################################
 
     /**
      * Read a Mode Out Of Anything
@@ -191,9 +214,9 @@ abstract class Api
         }
     }
 
-    ####################################################################################
-    /*================================= INTERNAL API =================================*/
-    ####################################################################################
+    ##############################################################################
+    /*============================== INTERNAL API ==============================*/
+    ##############################################################################
 
     /**
      * The Base Address For The Current Mode
@@ -207,7 +230,40 @@ abstract class Api
             return '';
         }
 
-        return rtrim(trim((string) ($points[$this->mode] ?? '')), '/');
+        $address = $points[$this->mode] ?? '';
+        $base = is_string($address) ? rtrim(trim($address), '/') : '';
+
+        if ($base === '') {
+            return '';
+        }
+
+        // Written without a scheme - `api.example.com/v1`, the operator's own
+        // example - it is called over https. Anything that names a scheme is
+        // left as written, and send() still refuses whatever is not http(s).
+        return preg_match('#^[a-z][a-z0-9+.\-]*://#i', $base) === 1 ? $base : 'https://' . $base;
+    }
+
+    /**
+     * One Of The Address Constants, Whatever Its Visibility
+     *
+     * By reflection, because this class cannot name a constant it does not
+     * declare - and must not declare one: a module writing `protected const
+     * API_URL`, as the operator's own example does, would then be narrowing a
+     * public constant, which PHP refuses outright.
+     * @param string $name API_URL Or TEST_API_URL
+     * @return string '' When It Is Not Declared, Or Is Not a String
+     */
+    private function declared(string $name): string
+    {
+        $class = new ReflectionClass(static::class);
+
+        if (!$class->hasConstant($name)) {
+            return '';
+        }
+
+        $value = $class->getConstant($name);
+
+        return is_string($value) ? trim($value) : '';
     }
 
     /**

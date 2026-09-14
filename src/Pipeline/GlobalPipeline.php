@@ -225,7 +225,6 @@ class GlobalPipeline implements PipelineInterface
     private function bootMinimal(): void
     {
         Date::setAppTimezone(self::TIMEZONE);
-        Date::setFormat('Y-m-d H:i:s');
 
         // Files, not the database - the installer has to hold state across its
         // steps before a database exists to hold it.

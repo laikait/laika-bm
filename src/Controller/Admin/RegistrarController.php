@@ -16,34 +16,39 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
-use LBM\Service\Activity;
 use LBM\Service\Lookup;
 use LBM\Service\Registrar;
 
 /**
- * The registrars a TLD is registered through - Phase 35.
+ * The registrars domains are registered through, and the lookup modules a
+ * search asks - Phase 35, Phase 36, and laid out like the Modules page since
+ * Phase 46.
  *
  * Behind `domain`, as the TLD screens are: the group already exists and is
- * already granted on every install, so no 20.5 argument is needed. Whoever may
- * price a TLD may say who registers it.
+ * already granted on every install, so no 20.5 argument is needed.
  *
  * ---------------------------------------------------------------------------
- * NO SECRET REACHES A TEMPLATE, OR THE ACTIVITY LOG
+ * A REGISTRAR IS ITS MODULE, SWITCHED ON
  * ---------------------------------------------------------------------------
- * The row handed to a view has its `credentials` column taken off first, so a
- * template cannot print one even by mistake, encrypted or not. What a view gets
- * instead is the NAMES, which is enough to say "api_key: saved".
+ * There is no "Add a registrar". Enabling a registrar module creates its row
+ * the first time (Action\Registrar::attach()), and its credentials, mode and
+ * default are saved on its Configure page; ModuleController does both, because
+ * the switch and the page are shared by every kind. Each row here still says
+ * which registrar the module serves and what points at it.
  *
- * Activity::changes() diffs the columns a form posted against the row, so it
- * is given the five plain columns and nothing else. A credential's old and new
- * values are not something an audit trail should hold in either form.
+ * Registering by hand is still supported - "By hand (no module)" on a TLD - and
+ * a registrar whose module has left the disk is listed on its own, because it
+ * looks exactly like a working one in the database and every domain on its TLDs
+ * is then left for somebody by hand.
  *
  * ---------------------------------------------------------------------------
  * AND WHICH LOOKUP MODULE IS ASKED FIRST - PHASE 36
  * ---------------------------------------------------------------------------
- * A card above the list, because the two answer one question between them: a
- * public search asks the chosen lookup module, then the registrar a TLD points
- * at. Choosing is `domain.update`, the same as editing a registrar.
+ * A card beside the lookup modules, because the two answer one question
+ * between them: a public search asks the chosen lookup module, then the
+ * registrar a TLD points at. Choosing is `domain.update`.
+ *
+ * No secret reaches this screen: credentials are never read here at all.
  */
 class RegistrarController extends AdminController
 {
@@ -53,126 +58,30 @@ class RegistrarController extends AdminController
     }
 
     /**
-     * The Registrar List
+     * Registrar Modules, Lookup Modules, And The Lookup Choice
      * @return string
      */
     public function index(): string
     {
-        $entries = [];
+        $registrars = $this->moduleList('registrars');
 
-        foreach (Registrar::listing() as $row) {
-            $entries[] = [
-                'row'         =>  $this->withoutSecrets($row),
-                'state'       =>  Registrar::state($row),
-                'credentials' =>  Registrar::credentialNames($row),
-                'usage'       =>  Registrar::usage($row),
-            ];
+        foreach ($registrars as $uid => $module) {
+            $row = Registrar::forModule((string) $module['directory']);
+
+            if ($row !== null) {
+                $registrars[$uid]['note'] = $this->noteFor($row);
+            }
         }
+
+        $manual = Registrar::manualRow();
 
         return $this->screen('registrars', local('registrars'), [
-            'registrars' =>  $entries,
-            'modules'    =>  Registrar::modules(),
+            'registrars' =>  $registrars,
+            'lookups'    =>  $this->moduleList('lookup'),
+            'orphans'    =>  $this->orphans(),
+            'manual'     =>  $manual === null ? null : ['row' => $manual, 'usage' => Registrar::usage($manual)],
             'lookup'     =>  $this->lookupCard(),
         ]);
-    }
-
-    /**
-     * Add a Registrar
-     * @return ?string
-     */
-    public function create(): ?string
-    {
-        if (Request::isPost()) {
-            $input = Request::inputs();
-
-            return $this->attempt(
-                function () use ($input): void {
-                    $id = Registrar::store($input);
-                    $row = Registrar::find($id);
-
-                    $this->log('registrar.created', 'Added registrar ' . (string) ($row['name'] ?? ''));
-                },
-                'staff.registrars',
-                local('registrar_added')
-            );
-        }
-
-        return $this->form(null, local('add_registrar'));
-    }
-
-    /**
-     * Edit a Registrar
-     * @param string $registrar Registrar Uid
-     * @return ?string
-     */
-    public function edit(string $registrar): ?string
-    {
-        $row = $this->record(Registrar::find($registrar), 'registrar');
-
-        if (Request::isPost()) {
-            $input = Request::inputs();
-
-            return $this->attempt(
-                function () use ($row, $input): void {
-                    $changes = Activity::changes(
-                        $this->withoutSecrets($row),
-                        array_intersect_key($input, array_flip(Registrar::fields()))
-                    );
-
-                    Registrar::modify((int) $row['dr_id'], $input);
-
-                    $this->log('registrar.updated', 'Updated registrar ' . (string) $row['name'], $changes);
-                },
-                'staff.registrars',
-                local('registrar_updated')
-            );
-        }
-
-        return $this->form($row, local('edit_named', (string) $row['name']));
-    }
-
-    /**
-     * Delete a Registrar
-     * @param string $registrar Registrar Uid
-     * @return ?string
-     */
-    public function delete(string $registrar): ?string
-    {
-        $row = $this->record(Registrar::find($registrar), 'registrar');
-        $name = (string) $row['name'];
-
-        return $this->attempt(
-            function () use ($row, $name): void {
-                Registrar::remove((int) $row['dr_id']);
-
-                $this->log('registrar.deleted', "Deleted registrar {$name}.");
-            },
-            'staff.registrars',
-            local('deleted_named', $name)
-        );
-    }
-
-    /**
-     * Try a Registrar's Saved Settings - Phase 40
-     *
-     * The module's own words come back on the edit form, success or not; a
-     * test that fails is an answer, so it is not written to the error log.
-     * @param string $registrar Registrar Uid
-     * @return ?string
-     */
-    public function test(string $registrar): ?string
-    {
-        $row = $this->record(Registrar::find($registrar), 'registrar');
-        $result = Registrar::testConnection($row);
-
-        $this->log('registrar.tested', 'Tested the connection of registrar ' . (string) $row['name']);
-
-        return $this->done(
-            'staff.registrar.edit',
-            local($result['success'] ? 'connection_ok' : 'connection_failed', $result['message']),
-            $result['success'],
-            ['registrar' => (string) $row['uid']]
-        );
     }
 
     /**
@@ -202,78 +111,67 @@ class RegistrarController extends AdminController
     ####################################################################################
 
     /**
-     * The Add / Edit Form
-     * @param ?array $registrar Registrar Row, Or Null To Create
-     * @param string $title Page Title
+     * What a Registrar Module's Row Says About Its Registrar
+     * @param array $row Registrar Row
      * @return string
      */
-    private function form(?array $registrar, string $title): string
+    private function noteFor(array $row): string
     {
-        return $this->screen('registrar-form', $title, [
-            'registrar'    =>  $registrar === null ? null : $this->withoutSecrets($registrar),
-            'editing'      =>  $registrar !== null,
-            'modules'      =>  $this->moduleChoices($registrar),
-            'module_value' =>  $this->moduleValue($registrar),
-            'credentials'  =>  $registrar === null ? [] : Registrar::credentialNames($registrar),
-            'state'        =>  $registrar === null ? null : Registrar::state($registrar),
+        $usage = Registrar::usage($row);
+        $parts = [local('registrar_note', (string) $row['name'])];
 
-            // Phase 40. The declared fields of a module that declares them,
-            // through ModuleSettings::forForm() - a secret arrives as a flag.
-            'module_form'  =>  $registrar === null ? null : Registrar::formFor($registrar),
-        ]);
+        if (($row['is_default'] ?? 'no') === 'yes') {
+            $parts[] = local('default_registrar_badge');
+        }
+
+        if (($row['test_mode'] ?? 'no') === 'yes') {
+            $parts[] = local('mode_test');
+        }
+
+        if (($row['is_active'] ?? 'yes') !== 'yes') {
+            $parts[] = local('inactive');
+        }
+
+        $parts[] = local('registrar_usage', $usage['tlds'], $usage['domains']);
+
+        return implode(' · ', $parts);
     }
 
     /**
-     * The Module Dropdown
+     * Registrars Whose Module Is No Longer On Disk
      *
-     * THE STORED MODULE IS ALWAYS AMONG THE CHOICES, installed or not. A
-     * <select> whose value is not one of its options submits whichever option
-     * the browser lands on - so a registrar whose module had been deleted from
-     * disk would quietly become one registered by hand the next time somebody
-     * saved it to correct a typo in its name. The action accepts the unchanged
-     * value for the same reason.
-     * @param ?array $registrar Registrar Row, Or Null
-     * @return array<string,string>
+     * Nothing is sent to them, and nothing here can switch them on: their
+     * module has to come back. Listed so an operator can see which TLDs are
+     * quietly waiting on somebody by hand.
+     * @return array<int,array{name:string,module:string,usage:array{tlds:int,domains:int}}>
      */
-    private function moduleChoices(?array $registrar): array
+    private function orphans(): array
     {
-        $choices = ['' => local('registrar_manual')];
+        $orphans = [];
 
-        foreach (Registrar::modules() as $directory => $module) {
-            $choices[(string) $directory] = $module['enabled']
-                ? $module['name']
-                : local('module_named_off', $module['name']);
+        foreach (Registrar::listing() as $row) {
+            $module = trim((string) $row['module_name']);
+
+            if ($module === '' || Registrar::installedModule($module) !== null) {
+                continue;
+            }
+
+            $orphans[] = [
+                'name'   =>  (string) $row['name'],
+                'module' =>  $module,
+                'usage'  =>  Registrar::usage($row),
+            ];
         }
 
-        $current = trim((string) ($registrar['module_name'] ?? ''));
-
-        if ($current !== '' && Registrar::installedModule($current) === null) {
-            $choices[$current] = local('module_named_missing', $current);
-        }
-
-        return $choices;
-    }
-
-    /**
-     * Which Module Choice Is Selected
-     *
-     * The on-disk spelling when the stored name matches one in another case, so
-     * the dropdown finds it rather than falling back to its first option.
-     * @param ?array $registrar Registrar Row, Or Null
-     * @return string
-     */
-    private function moduleValue(?array $registrar): string
-    {
-        $current = trim((string) ($registrar['module_name'] ?? ''));
-
-        return $current === '' ? '' : (Registrar::installedModule($current) ?? $current);
+        return $orphans;
     }
 
     /**
      * What The Lookup Card Shows
      *
-     * The chosen module is ALWAYS among the choices, installed or not - the
-     * same select trap moduleChoices() describes, one card up.
+     * The chosen module is ALWAYS among the choices, installed or not - Phase
+     * 35's select trap: a <select> whose value is not among its options posts
+     * another one, and saving would quietly change the choice.
      * @return array{value:string,name:?string,state:string,choices:array<string,string>}
      */
     private function lookupCard(): array
@@ -298,17 +196,5 @@ class RegistrarController extends AdminController
             'state'   =>  Lookup::state(),
             'choices' =>  $choices,
         ];
-    }
-
-    /**
-     * A Row With Its Credentials Taken Off
-     * @param array $row Registrar Row
-     * @return array
-     */
-    private function withoutSecrets(array $row): array
-    {
-        unset($row['credentials']);
-
-        return $row;
     }
 }

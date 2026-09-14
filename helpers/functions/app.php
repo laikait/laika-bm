@@ -331,13 +331,22 @@ function decimal(string|float|int $amount): string
 }
 
 /**
- * Format a Timestamp In The App's Format and Timezone
+ * Format a Timestamp As a Moment, In The Date-And-Time Format
+ *
+ * Reads `datetime_format` itself, as format_day() and format_time() read theirs.
+ * It used to lean on a display format Clock set on the shared Date instance -
+ * but laika-core's Date::setFormat() returns a CLONE, which Clock threw away, so
+ * every moment on every page printed Y-m-d H:i:s whatever the operator chose.
  * @param null|string $time Timestamp
  * @return string
  */
 function format_date(null|string $time): string
 {
-    return $time ? Date::parse($time)->format() : '';
+    if (!$time) {
+        return '';
+    }
+
+    return Date::parse($time)->format(option('datetime_format', 'Y-m-d H:i:s') ?: 'Y-m-d H:i:s');
 }
 
 /**

@@ -19,9 +19,11 @@ use Throwable;
 use Laika\Service\Request;
 use Laika\Service\Redirect;
 use Laika\Core\Exceptions\HttpException;
+use LBM\Action\ClientContact as Contacts;
 use LBM\Controller\Controller;
 use LBM\Service\Activity;
 use LBM\Service\ClientContact;
+use LBM\Support\Referrer;
 
 /**
  * Base for every client-area screen.
@@ -199,19 +201,23 @@ abstract class ClientController extends Controller
         return $row;
     }
 
+    /** @var string Where a Refused Sub-Login Goes When There Is No Page To Go Back To */
+    protected const FALLBACK = 'client.dashboard';
+
     /**
      * Refuse a Sub-Login That Was Not Granted Something
      *
      * The account holder passes everything - they own the records. A contact is
      * checked against the permission JSON the client set for them.
      *
-     * 403 rather than 404 here, and deliberately so: unlike an ownership miss,
-     * this says nothing a contact does not already know. They can see the
-     * account has invoices; they have simply not been given them.
+     * Told, not 404'd, and deliberately so: unlike an ownership miss, this says
+     * nothing a contact does not already know. They can see the account has
+     * invoices; they have simply not been given them. So they get the flash and
+     * the page they came from - the same answer a staff member gets from
+     * Pipeline\Permission - and never an error page.
      * @param string $group Permission Group. Example: 'invoice'
      * @param string $action read, create, update or delete
      * @return void
-     * @throws HttpException
      */
     protected function allow(string $group, string $action = self::READ): void
     {
@@ -222,8 +228,27 @@ abstract class ClientController extends Controller
         }
 
         if (!ClientContact::allows($contact, $group . '.' . $action)) {
-            throw new HttpException(403, local('no_access_to_that'));
+            Referrer::refuse(local('no_permission_to', $this->inWords($group, $action)), self::FALLBACK);
         }
+    }
+
+    /**
+     * A Permission In Words
+     *
+     * "change your profile" - never the key. Falls back to the key for a group
+     * or action the catalogue has no words for, because local() throws on a
+     * missing key and a refusal must not become an error on the way out.
+     * @param string $group Permission Group
+     * @param string $action Action
+     * @return string
+     */
+    private function inWords(string $group, string $action): string
+    {
+        if (!in_array($group, Contacts::GROUPS, true) || !in_array($action, ['read', 'create', 'update', 'delete'], true)) {
+            return $group . '.' . $action;
+        }
+
+        return local('permission_' . $action, local('permission_area_' . $group));
     }
 
     ####################################################################################

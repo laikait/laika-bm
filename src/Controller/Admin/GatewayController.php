@@ -15,36 +15,37 @@ namespace LBM\Controller\Admin;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
-use RuntimeException;
-use Laika\Core\Exceptions\HttpException;
 use Laika\Service\Request;
 use LBM\Service\Gateway;
 use LBM\Service\GatewayCallback;
 
 /**
- * Setting up the ways this installation can take money.
+ * The ways this installation can take money.
  *
  * ------------------------------------------------------------------------
- * Two states, and the screen has to show both
+ * The screen is the gateway modules - Phase 46
  * ------------------------------------------------------------------------
- * A gateway module on disk is not a gateway an operator can use. It has to be
- * enabled (the modules screen), then configured here, then switched on. Each of
- * those is a separate decision and skipping the distinction produces the worst
- * possible screen: one where a gateway looks ready and silently is not.
+ * Laid out like the Modules page was: each gateway module with its state,
+ * Enable or Disable, and Configure once it is switched on and loaded. Enabling
+ * one creates its payment_gateways row the first time, and disabling stops
+ * offering it; ModuleController does both, because the switch is the same
+ * button on every kind's screen. The "Set up" form, the separate offer switch
+ * and Delete are gone - a gateway row is kept for good once made, because
+ * transactions point at it.
  *
- * So this lists two groups - what is configured, and what is installed but not
- * configured yet - and for anything configured it says outright whether its
- * driver actually builds.
+ * Each row still says the thing an operator most needs to know: whether
+ * customers are being offered it, under what name, and - when its driver will
+ * not build - why not. A gateway that looks ready and silently is not is the
+ * worst screen available.
  *
  * ------------------------------------------------------------------------
  * No new permission group
  * ------------------------------------------------------------------------
  * Permission::GROUPS is granted to a role only when the role is CREATED, so a
  * new group is invisible on every installation that already exists and the fix
- * is a checkbox nobody knows to tick. Gateways are settings, so they sit behind
- * settings.read, with everything that changes them behind settings.update -
- * the same decision 20.5 took for the utilities screens, and for the same
- * reason.
+ * is a checkbox nobody knows to tick. Gateways are settings, so this screen is
+ * behind settings.read and a gateway's Configure page behind settings.*, while
+ * the switch - a module switch like every other - is module.update.
  */
 class GatewayController extends AdminController
 {
@@ -61,36 +62,41 @@ class GatewayController extends AdminController
     ####################################################################################
 
     /**
-     * Every Gateway, Configured Or Not
+     * Every Gateway Module, And What Customers Are Offered
      * @return string
      */
     public function index(): string
     {
-        $configured = [];
+        $modules = $this->moduleList('gateways');
 
-        foreach (Gateway::all([], 'ASC', 'display_name') as $row) {
-            $configured[] = [
-                'row'      =>  $row,
-                'problem'  =>  Gateway::problemWith($row),
+        foreach ($modules as $uid => $module) {
+            $row = Gateway::forModule((string) $uid);
 
-                // Phase 40: the declared fields and the mode, through
-                // ModuleSettings::forForm() - never the stored array, which
-                // is where the API keys are.
-                'form'     =>  Gateway::formFor($row),
+            if ($row === null) {
+                continue;
+            }
 
-                // The URL the operator has to paste into their processor's
-                // dashboard. Shown rather than documented, because it is
-                // derived from THIS installation's base URL and route table -
-                // an operator behind a reverse proxy or in a subdirectory has
-                // a different one, and a webhook pointed at the wrong path
-                // fails silently until somebody notices unpaid invoices.
-                'webhook'  =>  named('webhook.gateway', ['gateway' => (string) $row['gateway_slug']]),
-            ];
+            $problem = !empty($module['loaded']) ? Gateway::problemWith($row) : null;
+            $offered = ($row['is_active'] ?? 'no') === 'yes';
+
+            // Phase 48: which kind of gateway - read from its class, so only for
+            // a module that has loaded.
+            $modules[$uid]['kind'] = !empty($module['loaded']) ? Gateway::kindOf($row) : null;
+
+            if ($problem !== null) {
+                $modules[$uid]['note'] = local('gateway_problem', $problem);
+                $modules[$uid]['note_tone'] = 'bad';
+            } else {
+                $modules[$uid]['note'] = local(
+                    $offered ? 'gateway_offered_as' : 'gateway_not_offered_as',
+                    (string) $row['display_name']
+                );
+            }
         }
 
         return $this->screen('gateways', local('payment_gateways'), [
-            'configured'   =>  $configured,
-            'unconfigured' =>  Gateway::unconfigured(),
+            'modules' =>  $modules,
+            'path'    =>  'modules/gateways',
         ]);
     }
 
@@ -131,182 +137,5 @@ class GatewayController extends AdminController
             'outcomes'  =>  GatewayCallback::outcomes(),
             'outcome'   =>  $outcome,
         ]);
-    }
-
-    ####################################################################################
-    /*=================================== ACTIONS ====================================*/
-    ####################################################################################
-
-    /**
-     * Create The Configuration Row For an Installed Driver
-     *
-     * The class is not taken from the form. It is looked up among the drivers
-     * enabled modules actually declare, keyed by module uid - otherwise this
-     * endpoint would let anybody who can reach it name the class the application
-     * instantiates on every payment.
-     * @return ?string
-     */
-    public function configure(): ?string
-    {
-        return $this->attempt(
-            function (): void {
-                $uid = (string) Request::input('module', '');
-                $drivers = Gateway::drivers();
-
-                if (!isset($drivers[$uid])) {
-                    throw new RuntimeException(local('gateway_module_unknown'));
-                }
-
-                $name = trim((string) Request::input('display_name', ''));
-                $slug = trim((string) Request::input('gateway_slug', ''));
-
-                if ($name === '' || $slug === '') {
-                    throw new RuntimeException(local('gateway_needs_name_and_slug'));
-                }
-
-                $id = Gateway::add([
-                    'gateway_name' =>  $slug,
-                    'gateway_slug' =>  $slug,
-                    'display_name' =>  $name,
-                    'module_class' =>  $drivers[$uid],
-
-                    // Configured is not the same as switched on. The operator
-                    // fills in the settings first, then activates deliberately.
-                    'is_active'    =>  'no',
-                ]);
-
-                $this->log('gateway.configured', "Configured the [{$name}] payment gateway.");
-
-                unset($id);
-            },
-            'staff.gateways',
-            local('gateway_configured')
-        );
-    }
-
-    /**
-     * Save a Gateway's Settings
-     *
-     * The fields its module DECLARES, and the Live/Test switch - Phase 40.
-     * Until then it kept whatever the form carried, minus a list of names that
-     * were not settings; now LBM knows what a gateway needs because the gateway
-     * says so, refuses a required field left empty by its label, and seals the
-     * secrets. A wrong key is still reported by the gateway - on the Test
-     * connection button, before a customer meets it.
-     * @param string $gateway Gateway Uid
-     * @return ?string
-     */
-    public function settings(string $gateway): ?string
-    {
-        $row = $this->gateway($gateway);
-
-        return $this->attempt(
-            function () use ($row): void {
-                Gateway::saveSettings((int) $row['gateway_id'], Request::inputs());
-
-                $this->log(
-                    'gateway.settings.updated',
-                    'Updated the settings for the [' . $row['display_name'] . '] payment gateway.'
-                );
-            },
-            'staff.gateways',
-            local('gateway_settings_saved')
-        );
-    }
-
-    /**
-     * Switch a Gateway On Or Off For Customers
-     * @param string $gateway Gateway Uid
-     * @return ?string
-     */
-    public function toggle(string $gateway): ?string
-    {
-        $row = $this->gateway($gateway);
-        $active = ($row['is_active'] ?? 'no') !== 'yes';
-
-        return $this->attempt(
-            function () use ($row, $active): void {
-                // activate() refuses to switch on a gateway whose driver will
-                // not build, which is what keeps a dead button off the checkout.
-                Gateway::activate((int) $row['gateway_id'], $active);
-
-                $this->log(
-                    'gateway.toggled',
-                    ($active ? 'Switched on' : 'Switched off')
-                        . ' the [' . $row['display_name'] . '] payment gateway.'
-                );
-            },
-            'staff.gateways',
-            $active ? local('gateway_switched_on') : local('gateway_switched_off')
-        );
-    }
-
-    /**
-     * Try a Gateway's Saved Settings - Phase 40
-     *
-     * The module's own words come back on the screen, success or not. A test
-     * that fails is an answer rather than a fault, so it is not written to the
-     * error log.
-     * @param string $gateway Gateway Uid
-     * @return ?string
-     */
-    public function test(string $gateway): ?string
-    {
-        $row = $this->gateway($gateway);
-        $result = Gateway::testConnection((int) $row['gateway_id']);
-
-        $this->log('gateway.tested', 'Tested the connection of the [' . $row['display_name'] . '] payment gateway.');
-
-        return $this->done(
-            'staff.gateways',
-            local($result['success'] ? 'connection_ok' : 'connection_failed', $result['message']),
-            $result['success']
-        );
-    }
-
-    /**
-     * Forget a Gateway's Configuration
-     *
-     * The module stays on disk; only the settings row goes. Existing
-     * transactions keep pointing at the id, which is why nothing cascades.
-     * @param string $gateway Gateway Uid
-     * @return ?string
-     */
-    public function delete(string $gateway): ?string
-    {
-        $row = $this->gateway($gateway);
-
-        return $this->attempt(
-            function () use ($row): void {
-                Gateway::delete((int) $row['gateway_id']);
-
-                $this->log(
-                    'gateway.deleted',
-                    'Removed the configuration for the [' . $row['display_name'] . '] payment gateway.'
-                );
-            },
-            'staff.gateways',
-            local('gateway_removed')
-        );
-    }
-
-    ####################################################################################
-    /*================================= INTERNAL API =================================*/
-    ####################################################################################
-
-    /**
-     * One Gateway By Uid, Or a Refusal
-     * @param string $uid Gateway Uid
-     * @return array
-     */
-    private function gateway(string $uid): array
-    {
-        $row = Gateway::find($uid);
-
-        if ($row === null) {
-            throw new HttpException(404, local('gateway_not_found'));
-        }
-
-        return $row;
     }
 }

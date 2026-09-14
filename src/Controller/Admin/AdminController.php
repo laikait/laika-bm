@@ -21,8 +21,11 @@ use Laika\Service\Redirect;
 use Laika\Core\Exceptions\HttpException;
 use LBM\Controller\Controller;
 use LBM\Pipeline\Auth;
+use LBM\Pipeline\Permission;
 use LBM\Service\Activity;
+use LBM\Service\Module;
 use LBM\Support\ErrorLog;
+use LBM\Support\Referrer;
 
 /**
  * Base for every admin screen.
@@ -188,6 +191,56 @@ abstract class AdminController extends Controller
         }
 
         return $this->done($route, $success, true, $params);
+    }
+
+    /**
+     * Refuse Unless The Staff Member Holds a Permission - Phase 46
+     *
+     * For the one kind of route whose permission depends on WHAT is asked for
+     * rather than on the route: a module's Configure page serves every kind,
+     * and each kind keeps what its settings were always behind. The refusal is
+     * the Permission pipeline's own - a message and a safe way back, never an
+     * error page - because it IS that refusal, one step later. Never returns
+     * when it refuses: a redirect exits.
+     * @param string $access Example: 'settings.update'
+     * @return void
+     */
+    protected function demand(string $access): void
+    {
+        if (!staff_has_access($access)) {
+            Referrer::refuse(local('no_permission_to', Permission::describe($access)), Permission::FALLBACK);
+        }
+    }
+
+    /**
+     * One Kind's Modules, Ready For partials/module-list.twig - Phase 46
+     *
+     * Configure is offered once a module is switched on AND loaded - its fields
+     * are declared in its own code, which is not loaded until then - never for
+     * a server module, and not to somebody the kind's Configure page would
+     * refuse. Hiding the link is a courtesy; the page asks again.
+     *
+     * `note` is one line a screen may add under a module's name - what a
+     * gateway is offered as, which registrar a module serves.
+     * @param string $type One Of The Module Kinds
+     * @return array<string,array>
+     */
+    protected function moduleList(string $type): array
+    {
+        $modules = Module::listed($type);
+        $access = Module::configureAccess($type);
+
+        foreach ($modules as $uid => $module) {
+            $modules[$uid]['configurable'] = $access !== null
+                && !empty($module['enabled'])
+                && !empty($module['loaded'])
+                && staff_has_access($access[0]);
+
+            $modules[$uid]['note'] = null;
+            $modules[$uid]['note_tone'] = 'muted';
+        }
+
+        return $modules;
     }
 
     /**

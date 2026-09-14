@@ -15,6 +15,7 @@ namespace LBM\Controller\Admin;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use RuntimeException;
 use Laika\Service\Request;
 use LBM\Service\Activity;
 use LBM\Service\Client;
@@ -26,6 +27,7 @@ use LBM\Service\Domain;
 use LBM\Service\Invoice;
 use LBM\Service\Order;
 use LBM\Service\Password;
+use LBM\Service\PayMethod;
 use LBM\Service\Support;
 use LBM\Service\Transaction;
 
@@ -111,7 +113,40 @@ class ClientController extends AdminController
             'domains'      =>  Domain::browseForClient($id, 5)['rows'],
             'transactions' =>  Transaction::browseForClient($id, 5)['rows'],
             'outstanding'  =>  Invoice::outstandingFor($id),
+
+            // Phase 48: saved cards - brand, last four and expiry, never a token.
+            'pay_methods'  =>  PayMethod::forClient($id, false),
         ]);
+    }
+
+    /**
+     * Remove One Of a Client's Saved Cards - Phase 48
+     *
+     * The gateway is asked to forget it, and it is removed here whatever the
+     * gateway says: this installation is the only thing that would charge it.
+     * @param string $client Client Uid
+     * @param string $method Card Uid
+     * @return ?string
+     */
+    public function removePayMethod(string $client, string $method): ?string
+    {
+        $row = $this->record(Client::find($client), 'client');
+        $params = ['client' => $row['cuid']];
+
+        try {
+            $result = PayMethod::remove((int) $row['cid'], $method);
+        } catch (RuntimeException $e) {
+            return $this->done('staff.client', $e->getMessage(), false, $params);
+        }
+
+        $this->log('client.payment.method.removed', 'Removed a saved card from ' . client_name($row) . '.');
+
+        return $this->done(
+            'staff.client',
+            $result['forgotten'] ? local('card_removed') : local('card_removed_locally', (string) $result['message']),
+            true,
+            $params
+        );
     }
 
     /**

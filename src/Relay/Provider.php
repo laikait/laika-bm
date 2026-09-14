@@ -109,6 +109,8 @@ class Provider extends RelayProvider
             'action.credit.note'    =>  Action\CreditNote::class,
             'action.refund'         =>  Action\Refund::class,
             'action.domain.contact' =>  Action\DomainContact::class,
+            'action.pay.method'     =>  Action\PayMethod::class,
+            'action.auto.charge'    =>  Action\AutoCharge::class,
         ] as $accessor => $class) {
             $this->registry->singleton($accessor, $class);
         }

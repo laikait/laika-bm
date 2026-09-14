@@ -16,6 +16,7 @@ namespace LBM\Controller\Admin;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Request;
+use LBM\Action\Registrar as RegistrarAction;
 use LBM\Service\Activity;
 use LBM\Service\Currency;
 use LBM\Service\Registrar;
@@ -161,7 +162,7 @@ class TldController extends AdminController
         return $this->screen('tld-form', $title, [
             'tld'        =>  $tld,
             'editing'    =>  $tld !== null,
-            'registrars' =>  $this->registrarChoices(),
+            'registrars' =>  $this->formRegistrars($tld),
             'currencies' =>  $this->currencyChoices(),
             'modules'    =>  $this->moduleState(),
 
@@ -185,6 +186,65 @@ class TldController extends AdminController
     private function registrarChoices(): array
     {
         return Registrar::choices();
+    }
+
+    /**
+     * What The TLD Form Offers As a Registrar - Phase 46
+     *
+     * The registrar modules that are switched on, and "By hand (no module)" -
+     * there is no form that adds a registrar any more, so these ARE the ways a
+     * TLD can be registered. An enabled module with no row yet, and the one
+     * registrar run by hand before its first use, are offered by what they are
+     * and made when the TLD is saved (Action\Tld::registrarFrom()).
+     *
+     * THE TLD'S OWN REGISTRAR IS ALWAYS AMONG THE CHOICES, whatever state it is
+     * in - Phase 35's select trap: a <select> whose value is not among its
+     * options posts another one, and saving a price change would quietly move
+     * the TLD to another registrar.
+     * @param ?array $tld TLD Row, Or Null When Adding
+     * @return array<int|string,string>
+     */
+    private function formRegistrars(?array $tld): array
+    {
+        $choices = [];
+
+        foreach (Registrar::modules() as $directory => $module) {
+            if (!$module['enabled']) {
+                continue;
+            }
+
+            $row = Registrar::forModule((string) $directory);
+
+            if ($row === null) {
+                $choices[RegistrarAction::MODULE_PREFIX . $directory] = (string) $module['name'];
+            } else {
+                $choices[(int) $row['dr_id']] = (string) $row['name'];
+            }
+        }
+
+        $manual = Registrar::manualRow();
+
+        if ($manual === null) {
+            $choices[RegistrarAction::BY_HAND] = local('registrar_by_hand');
+        } else {
+            $choices[(int) $manual['dr_id']] = local('registrar_by_hand');
+        }
+
+        $current = (int) ($tld['registrar_relid'] ?? 0);
+
+        if ($current > 0 && !array_key_exists($current, $choices)) {
+            $row = Registrar::find($current);
+
+            if ($row === null) {
+                $choices[$current] = local('registrar_gone', $current);
+            } elseif (Registrar::installedModule((string) $row['module_name']) === null) {
+                $choices[$current] = local('module_named_missing', (string) $row['name']);
+            } else {
+                $choices[$current] = local('module_named_off', (string) $row['name']);
+            }
+        }
+
+        return $choices;
     }
 
     /**

@@ -685,7 +685,7 @@ class SettingsController extends AdminController
      */
     private function dateFormats(): array
     {
-        return $this->labelled(['Y-m-d', 'd/m/Y', 'm/d/Y', 'd M Y', 'M d, Y', 'd-m-Y']);
+        return $this->labelled(['Y-m-d', 'd/m/Y', 'm/d/Y', 'd M Y', 'M d, Y', 'd-m-Y'], 'date_format');
     }
 
     /**
@@ -694,7 +694,7 @@ class SettingsController extends AdminController
      */
     private function dateTimeFormats(): array
     {
-        return $this->labelled(['Y-m-d H:i', 'Y-m-d h:i A', 'd/m/Y H:i', 'm/d/Y h:i A', 'd M Y H:i']);
+        return $this->labelled(['Y-m-d H:i', 'Y-m-d h:i A', 'd/m/Y H:i', 'm/d/Y h:i A', 'd M Y H:i'], 'datetime_format');
     }
 
     /**
@@ -703,18 +703,30 @@ class SettingsController extends AdminController
      */
     private function timeFormats(): array
     {
-        return $this->labelled(['H:i', 'H:i:s', 'h:i A', 'h:i a']);
+        return $this->labelled(['H:i', 'H:i:s', 'h:i A', 'h:i a'], 'time_format');
     }
 
     /**
      * Label Each Format With What It Produces
      *
      * "Y-m-d" means nothing to most people; "2026-08-28" does.
+     *
+     * The stored format is always offered, first when it is not one of ours. A
+     * <select> whose stored value is not among its options submits another one,
+     * so saving any change on this screen would quietly change the format too -
+     * and laika-core's own seed writes `Y-M-d`, which is not in the list.
      * @param string[] $formats Formats
+     * @param string $key Option Holding The Stored Format
      * @return array<string,string>
      */
-    private function labelled(array $formats): array
+    private function labelled(array $formats, string $key): array
     {
+        $stored = trim((string) option($key, ''));
+
+        if ($stored !== '' && !in_array($stored, $formats, true)) {
+            array_unshift($formats, $stored);
+        }
+
         $now = new \DateTimeImmutable('now', new DateTimeZone('UTC'));
         $choices = [];
 

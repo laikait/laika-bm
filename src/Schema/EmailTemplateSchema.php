@@ -325,6 +325,32 @@ class EmailTemplateSchema extends SchemaAbstract
                 ],
             ],
 
+            // Phase 48. A scheduled card charge that did not work is something
+            // the customer has to act on, and they are the only one who can: a
+            // decline needs another card, and a bank that wants them to confirm
+            // the payment cannot ask while they are away.
+            'card-charge-failed' => [
+                'name'    =>  'card_charge_failed',
+                'subject' =>  'We could not charge your card for invoice {{invoice_number}}',
+                'body'    =>  '<p>Hello {{first_name}},</p>'
+                    . '<p>We tried to charge <strong>{{balance}}</strong> for invoice '
+                    . '<strong>{{invoice_number}}</strong> to your saved card, {{card}}, '
+                    . 'and it did not go through.</p>'
+                    . '<p>{{reason}}</p>'
+                    . '<p>{{what_next}}</p>'
+                    . '<p>Your account: <a href="{{client_area}}">{{client_area}}</a></p>'
+                    . '<p>- {{app_name}}</p>',
+                'variables' => [
+                    'first_name'     =>  'The client\'s first name.',
+                    'last_name'      =>  'The client\'s last name.',
+                    'invoice_number' =>  'The invoice the card was charged for.',
+                    'balance'        =>  'What was due, with its currency.',
+                    'card'           =>  'The card, as "Visa •••• 4242 (12/31)". Never its number.',
+                    'reason'         =>  'Why, in the card provider\'s words.',
+                    'what_next'      =>  'What the customer can do about it.',
+                ],
+            ],
+
             // The two end-of-life messages. Cancelling and terminating are
             // different acts and need different words: one says the billing has
             // stopped, the other says the data is gone. A single template

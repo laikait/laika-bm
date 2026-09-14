@@ -21,6 +21,7 @@ use LBM\Controller\Client\DomainController;
 use LBM\Controller\Client\TicketController;
 use LBM\Controller\Client\CreditNoteController;
 use LBM\Controller\Client\InvoiceController;
+use LBM\Controller\Client\PayMethodController;
 use LBM\Controller\Client\ProfileController;
 use LBM\Controller\Client\ServiceController;
 use LBM\Controller\Client\DashboardController;
@@ -66,6 +67,32 @@ Url::group(PANEL, function () use ($uid): void {
     // processor and may not settle anything at all.
     Url::post("/invoice/{invoice:{$uid}}/checkout", [InvoiceController::class, 'checkout'])
         ->name('client.invoice.checkout');
+
+    // Phase 48: back from the customer's bank after 3-D Secure, for a gateway
+    // that takes the card on the site. A GET because it is the bank's browser
+    // redirect - the one exception to POST-for-mutations here, and a safe one:
+    // it records only what the gateway confirms, once, through the same ledger
+    // key its webhook uses.
+    Url::get("/invoice/{invoice:{$uid}}/card-return/{gateway:[a-z0-9\-]+}", [InvoiceController::class, 'cardReturn'])
+        ->name('client.invoice.card.return');
+
+    /*============================ PAYMENT METHODS ==========================*/
+    // Saved cards - Phase 48. Literal paths before parameterised ones.
+    Url::get('/payment-methods', [PayMethodController::class, 'index'])->name('client.payment.methods');
+    Url::post('/payment-methods/add', [PayMethodController::class, 'add'])->name('client.payment.method.add');
+    Url::get('/payment-methods/return/{gateway:[a-z0-9\-]+}', [PayMethodController::class, 'back'])
+        ->name('client.payment.method.return');
+    Url::post("/payment-method/{method:{$uid}}/default", [PayMethodController::class, 'makeDefault'])
+        ->name('client.payment.method.default');
+    Url::post("/payment-method/{method:{$uid}}/remove", [PayMethodController::class, 'remove'])
+        ->name('client.payment.method.remove');
+
+    // A gateway module's card-field adapter. modules/ is closed to the web, so
+    // it is served from here - only from inside its own module. No `.js` on the
+    // path: PHP's built-in server and a typical nginx static rule both answer a
+    // missing .js file with 404 before the application is asked.
+    Url::get('/gateway/{gateway:[a-z0-9\-]+}/script', [PayMethodController::class, 'script'])
+        ->name('client.gateway.script');
 
     // Credit notes, read only. There is nothing here a customer could press:
     // a note is issued by the operator and spent automatically against the

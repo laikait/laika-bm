@@ -20,6 +20,8 @@ use Laika\Service\Uid;
 use LBM\Model\PaymentGatewayModel;
 use LBM\Module\Api;
 use LBM\Module\Contracts\GatewayInterface;
+use LBM\Module\Contracts\RegistersWebhook;
+use LBM\Module\Contracts\TokenizerInterface;
 use LBM\Module\ModuleManager;
 use LBM\Support\ModuleSettings;
 use RuntimeException;
@@ -30,14 +32,17 @@ use RuntimeException;
  * ------------------------------------------------------------------------
  * Two layers, and they answer different questions
  * ------------------------------------------------------------------------
- * A gateway is a **module** on disk under `modules/gateways`, enabled or
- * disabled through the modules screen like every other module - that decides
+ * A gateway is a **module** on disk under `modules/gateways` - that decides
  * whether its class is autoloadable at all.
  *
  * The `payment_gateways` row is its **configuration**: the API keys, test mode,
- * and whether the operator has switched it on for customers. Enabled-but-not-
- * configured is a real and common state, and it must not be offered at
- * checkout, so the two are kept apart rather than collapsed into one flag.
+ * the name customers see, and whether it is offered. Since Phase 46 the two
+ * move together: Enable on the gateways screen switches the module on and
+ * creates the row the first time (attach()), and Disable switches both off.
+ * The row is KEPT - transactions point at it. What stays apart is "offered" and
+ * "can take money": a module switched on is not loadable until the next
+ * request, and one that will not build is never offered at checkout, because
+ * payable() builds the driver before listing it.
  *
  * ------------------------------------------------------------------------
  * resolve() is the only place a driver is instantiated
@@ -195,9 +200,16 @@ class Gateway extends Action
             return "The class [{$class}] does not implement GatewayInterface.";
         }
 
-        return $this->driverFor($row) === null
-            ? "The class [{$class}] exists but could not be constructed."
-            : null;
+        // Built here rather than through driverFor(), which swallows the reason:
+        // a module missing its Composer package says so in its constructor, and
+        // "could not be constructed" alone sends the operator looking elsewhere.
+        try {
+            new $class($this->driverSettings($row, $class));
+        } catch (\Throwable $e) {
+            return "The class [{$class}] could not be constructed: " . $e->getMessage();
+        }
+
+        return null;
     }
 
     /**
@@ -387,6 +399,22 @@ class Gateway extends Action
         $data = [];
         $fields = $this->fieldsFor($row);
 
+        // Phase 46: the name customers see is set here, on the gateway's
+        // Configure page - there is no Set up form to type it into any more.
+        if (array_key_exists('display_name', $input)) {
+            $name = trim((string) $input['display_name']);
+
+            if ($name === '') {
+                throw new RuntimeException('A gateway needs a name customers will see.');
+            }
+
+            if (mb_strlen($name) > 100) {
+                throw new RuntimeException('A gateway name can be 100 characters at most.');
+            }
+
+            $data['display_name'] = $name;
+        }
+
         if ($fields !== []) {
             // serialize()d by hand, putSettings()'s reason: casts run on READ only.
             $data['settings'] = serialize(ModuleSettings::merge(
@@ -431,8 +459,373 @@ class Gateway extends Action
     }
 
     ####################################################################################
+    /*=========================== WEBHOOKS - PHASE 48 ================================*/
+    ####################################################################################
+
+    /**
+     * Whether a Gateway's Driver Registers Its Own Webhook
+     * @param array $row Gateway Row
+     * @return bool
+     */
+    public function registersWebhook(array $row): bool
+    {
+        $class = trim((string) ($row['module_class'] ?? ''));
+
+        try {
+            return $class !== '' && class_exists($class) && is_subclass_of($class, RegistersWebhook::class);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether The Gateway's Current Mode Has Its Webhook
+     * @param array $row Gateway Row
+     * @return ?bool Null when the driver cannot say - it will not build, or it
+     *               does not register its own
+     */
+    public function webhookReady(array $row): ?bool
+    {
+        $driver = $this->driverFor($row);
+
+        if (!$driver instanceof RegistersWebhook) {
+            return null;
+        }
+
+        try {
+            return !$driver->needsWebhook();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Register a Gateway's Webhook With Its Provider
+     *
+     * After a save, only when the driver says its mode still needs one - so a
+     * page that already works never touches the provider. From the button,
+     * always.
+     *
+     * What the module returns is stored through ModuleSettings, and only for
+     * the fields it DECLARES: a module cannot write a key it never declared, and
+     * a secret is sealed the way one typed into the form would be. Nothing else
+     * on the row is touched.
+     * @param int|string $key Gateway ID Or Uid
+     * @param bool $always The operator pressed Register webhook
+     * @return ?array{success: bool, message: string} Null when there was nothing to do
+     * @throws RuntimeException
+     */
+    public function registerWebhook(int|string $key, bool $always = false): ?array
+    {
+        $row = $this->find($key);
+
+        if ($row === null) {
+            throw new RuntimeException('That gateway is not configured.');
+        }
+
+        $driver = $this->driverFor($row);
+
+        if (!$driver instanceof RegistersWebhook) {
+            return $always
+                ? ['success' => false, 'message' => (string) ($this->problemWith($row) ?? 'This gateway cannot register its own webhook.')]
+                : null;
+        }
+
+        try {
+            if (!$always && !$driver->needsWebhook()) {
+                return null;
+            }
+
+            $answer = $driver->registerWebhook(named('webhook.gateway', ['gateway' => (string) $row['gateway_slug']]));
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => 'The module could not register the webhook: ' . $e->getMessage()];
+        }
+
+        $message = trim((string) ($answer['message'] ?? ''));
+
+        if (($answer['success'] ?? false) !== true) {
+            return ['success' => false, 'message' => $message !== '' ? $message : 'The webhook was not registered.'];
+        }
+
+        $fields = $this->fieldsFor($row);
+        $keep = array_intersect_key(is_array($answer['settings'] ?? null) ? $answer['settings'] : [], $fields);
+
+        if ($keep !== []) {
+            // Merged over what is stored, field by field: the other fields are
+            // not in the answer, and a merge of the whole set would read their
+            // absence as a blank box.
+            $stored = $this->settings($row);
+
+            $merged = ModuleSettings::merge(
+                array_intersect_key($fields, $keep),
+                array_map(static fn (mixed $value): string => (string) $value, $keep),
+                $stored
+            );
+
+            // serialize()d by hand, putSettings()'s reason: casts run on READ only.
+            $this->update((int) $row['gateway_id'], ['settings' => serialize(array_merge($stored, $merged))]);
+        }
+
+        return ['success' => true, 'message' => $message !== '' ? $message : 'The webhook was registered.'];
+    }
+
+    ####################################################################################
+    /*======================== TWO KINDS OF GATEWAY - PHASE 48 =======================*/
+    ####################################################################################
+
+    /** @var string A Gateway That Takes The Card On The Site */
+    public const TOKENIZER = 'tokenizer';
+
+    /** @var string A Gateway Paid On The Provider's Page, Or Offline */
+    public const THIRD_PARTY = 'third_party';
+
+    /**
+     * Which Kind Of Gateway a Row Is - Read From Its Class, Never Stored
+     *
+     * A setting that said "tokenizer" over a class that is not one would draw a
+     * card field nothing can charge.
+     * @param array $row Gateway Row
+     * @return ?string tokenizer, third_party, or null when the class is not loadable
+     */
+    public function kindOf(array $row): ?string
+    {
+        $class = trim((string) ($row['module_class'] ?? ''));
+
+        try {
+            if ($class === '' || !class_exists($class) || !is_subclass_of($class, GatewayInterface::class)) {
+                return null;
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_subclass_of($class, TokenizerInterface::class) ? self::TOKENIZER : self::THIRD_PARTY;
+    }
+
+    /**
+     * Whether a Gateway Takes The Card On The Site
+     *
+     * A method, because a relay forwards calls and not constants.
+     * @param array $row Gateway Row
+     * @return bool
+     */
+    public function isTokenizer(array $row): bool
+    {
+        return $this->kindOf($row) === self::TOKENIZER;
+    }
+
+    /**
+     * A Tokenizer's Driver - Or Null For Any Other Gateway, Or One That Will Not Build
+     * @param array $row Gateway Row
+     * @return ?TokenizerInterface
+     */
+    public function tokenizerFor(array $row): ?TokenizerInterface
+    {
+        $driver = $this->driverFor($row);
+
+        return $driver instanceof TokenizerInterface ? $driver : null;
+    }
+
+    /**
+     * What a Page Needs To Draw a Tokenizer's Card Field
+     *
+     * Only what the driver's browser() returns, and of the scripts only https
+     * addresses: the provider's own library comes from the provider, and a
+     * plain-http script on a payment page is one anybody on the network can
+     * rewrite.
+     * @param array $row Gateway Row
+     * @param array $context See TokenizerInterface::browser()
+     * @return ?array{slug: string, name: string, adapter: string, scripts: string[], config: array, error: ?string}
+     */
+    public function cardField(array $row, array $context): ?array
+    {
+        $driver = $this->tokenizerFor($row);
+
+        if ($driver === null) {
+            return null;
+        }
+
+        try {
+            $browser = $driver->browser($context);
+        } catch (\Throwable $e) {
+            $browser = ['error' => $e->getMessage()];
+        }
+
+        $scripts = array_values(array_filter(
+            is_array($browser['scripts'] ?? null) ? $browser['scripts'] : [],
+            static fn (mixed $src): bool => is_string($src) && preg_match('#^https://[^\s"\'<>]+$#i', $src) === 1
+        ));
+
+        $error = trim((string) ($browser['error'] ?? ''));
+
+        return [
+            'slug'    =>  (string) $row['gateway_slug'],
+            'name'    =>  (string) $row['display_name'],
+            'adapter' =>  (string) ($browser['adapter'] ?? ''),
+            'scripts' =>  $scripts,
+            'config'  =>  is_array($browser['config'] ?? null) ? $browser['config'] : [],
+            'error'   =>  $error !== '' ? $error : null,
+        ];
+    }
+
+    /**
+     * The File a Tokenizer's Adapter Is Served From - Only From Inside Its Module
+     *
+     * modules/ is closed to the web, so the product serves the adapter. The path
+     * is the module's to name; resolving it through realpath() against the
+     * module's OWN directory is what stops a module - or a class name read out
+     * of the database - serving lf-config/database.php as JavaScript.
+     * @param array $row Gateway Row
+     * @return ?string
+     */
+    public function scriptFile(array $row): ?string
+    {
+        if (!$this->isTokenizer($row)) {
+            return null;
+        }
+
+        $class = trim((string) $row['module_class']);
+        $home = '';
+
+        foreach (ModuleManager::loaded() as $module) {
+            if (($module['type'] ?? '') === self::TYPE && trim((string) ($module['class'] ?? '')) === $class) {
+                $home = (string) ($module['path'] ?? '');
+                break;
+            }
+        }
+
+        try {
+            $file = (string) $class::script();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $real = $file === '' ? false : realpath($file);
+        $root = $home === '' ? false : realpath($home);
+
+        if ($real === false || $root === false || !is_file($real) || strtolower(pathinfo($real, PATHINFO_EXTENSION)) !== 'js') {
+            return null;
+        }
+
+        $real = str_replace('\\', '/', $real);
+        $root = rtrim(str_replace('\\', '/', $root), '/') . '/';
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            return str_starts_with(strtolower($real), strtolower($root)) ? $real : null;
+        }
+
+        return str_starts_with($real, $root) ? $real : null;
+    }
+
+    /**
+     * The Idempotency Key For Charging a Balance To a Card Today
+     *
+     * The same invoice, balance, card and day give the same key, whoever
+     * presses what: two presses, or the scheduled charge and a member of staff
+     * on the same morning, are one charge at the provider. A different card, or a
+     * balance that has changed, is a different charge.
+     * @param int $invoiceId
+     * @param string $balance
+     * @param string $card The token or saved card
+     * @return string
+     */
+    public function attemptKey(int $invoiceId, string $balance, string $card): string
+    {
+        return 'lbm-' . substr(hash('sha256', implode('|', [$invoiceId, $balance, $card, date('Y-m-d')])), 0, 40);
+    }
+
+    ####################################################################################
     /*=================================== WRITING ====================================*/
     ####################################################################################
+
+    /**
+     * The Row a Driver Class Is Configured In - Phase 46
+     *
+     * A gateway row names its driver by class, and a module names its driver
+     * by class in its manifest, so that is the link: the directory may be
+     * renamed and the display name is the operator's.
+     * @param string $class Driver Class
+     * @return ?array
+     */
+    public function forClass(string $class): ?array
+    {
+        $class = trim($class);
+
+        return $class === '' ? null : $this->first(['module_class' => $class]);
+    }
+
+    /**
+     * The Row a Gateway Module Is Configured In - Phase 46
+     * @param string $uid Module Uid
+     * @return ?array
+     */
+    public function forModule(string $uid): ?array
+    {
+        $module = (new Module())->find($uid);
+
+        return $module === null ? null : $this->forClass((string) ($module['class'] ?? ''));
+    }
+
+    /**
+     * Switch a Gateway Module's Gateway On Or Off - Phase 46
+     *
+     * Enabling a gateway module IS setting it up: the row is created the first
+     * time - named from the manifest, its slug from the directory, offered -
+     * and offered again every time after. Disabling stops offering it and keeps
+     * the row, because transactions point at it.
+     *
+     * No driver is built here. The module is being switched on in this very
+     * request and is not loadable until the next one; payable() builds it
+     * before a customer is shown it, so one that will not build is never on
+     * the checkout, and the gateways screen says why.
+     * @param string $uid Module Uid
+     * @param bool $on
+     * @return ?int Gateway ID, Or Null When Switching Off One That Never Had a Row
+     * @throws RuntimeException When It Is Not a Gateway Module, Or Names No Driver
+     */
+    public function attach(string $uid, bool $on): ?int
+    {
+        $module = (new Module())->find($uid);
+
+        if ($module === null || ($module['type'] ?? '') !== self::TYPE) {
+            throw new RuntimeException('That payment gateway module is not installed.');
+        }
+
+        $class = trim((string) ($module['class'] ?? ''));
+        $row = $this->forClass($class);
+
+        if ($row !== null) {
+            $this->update((int) $row['gateway_id'], ['is_active' => $on ? 'yes' : 'no']);
+
+            return (int) $row['gateway_id'];
+        }
+
+        if (!$on) {
+            return null;
+        }
+
+        if ($class === '') {
+            throw new RuntimeException(
+                'This gateway module names no driver class in its manifest, so it cannot take payments. Its author has to add one.'
+            );
+        }
+
+        $slug = $this->freeSlug((string) $module['directory']);
+
+        $id = $this->add([
+            'gateway_name' =>  $slug,
+            'gateway_slug' =>  $slug,
+            'display_name' =>  mb_substr(trim((string) $module['name']) ?: (string) $module['directory'], 0, 100),
+            'module_class' =>  $class,
+            'test_mode'    =>  'no',
+            'is_active'    =>  'yes',
+        ]);
+
+        // A serialize column, and casts run on READ only - written by hand.
+        $this->putSettings($id, []);
+
+        return $id;
+    }
 
     /**
      * Record a Gateway's Configuration
@@ -511,6 +904,29 @@ class Gateway extends Action
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
+
+    /**
+     * A Slug Nobody Else Has, From a Module Directory
+     *
+     * `gateway_slug` is what the webhook URL is built from, so it is plain
+     * lower case - and a module whose directory name is already taken gets a
+     * number rather than a duplicate-key error on the Enable button.
+     * @param string $directory Module Directory
+     * @return string
+     */
+    private function freeSlug(string $directory): string
+    {
+        $base = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($directory)), '-');
+        $base = $base === '' ? 'gateway' : substr($base, 0, 40);
+
+        $slug = $base;
+
+        for ($n = 2; $this->exists(['gateway_slug' => $slug]); $n++) {
+            $slug = $base . '-' . $n;
+        }
+
+        return $slug;
+    }
 
     /**
      * The Columns a Form May Write, And Nothing Else

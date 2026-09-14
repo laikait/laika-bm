@@ -582,7 +582,12 @@ class Tld extends Action
             throw new RuntimeException('That does not look like a TLD.');
         }
 
-        if ((int) ($data['registrar_relid'] ?? 0) <= 0) {
+        // Phase 46: "By hand (no module)", or an enabled registrar module that
+        // has no row yet - each a row that is made on demand, below.
+        $registrar = trim((string) ($data['registrar_relid'] ?? ''));
+        $onDemand = $registrar === Registrar::BY_HAND || str_starts_with($registrar, Registrar::MODULE_PREFIX);
+
+        if (!$onDemand && (int) $registrar <= 0) {
             throw new RuntimeException('A TLD needs a registrar.');
         }
 
@@ -594,7 +599,6 @@ class Tld extends Action
         $max = max($min, (int) ($data['max_years'] ?? $min));
 
         $data['tld']             = $tld;
-        $data['registrar_relid'] = (int) $data['registrar_relid'];
         $data['currency_relid']  = (int) $data['currency_relid'];
         $data['min_years']       = $min;
         $data['max_years']       = $max;
@@ -617,7 +621,34 @@ class Tld extends Action
             );
         }
 
+        // LAST, once everything else has been checked: a registrar made on
+        // demand for a TLD that is then refused would be a row for nothing.
+        $data['registrar_relid'] = $this->registrarFrom($registrar);
+
         return $data;
+    }
+
+    /**
+     * The Registrar ID a TLD Form Posted - Phase 46
+     *
+     * A number is a registrar row. "By hand" is the one registrar run by hand,
+     * made the first time it is chosen; `module:<Directory>` is an enabled
+     * registrar module that has no row yet, given one the way Enable gives it.
+     * @param string $posted What The Form Sent
+     * @return int
+     * @throws RuntimeException When The Named Module Is Not Installed
+     */
+    private function registrarFrom(string $posted): int
+    {
+        if ($posted === Registrar::BY_HAND) {
+            return (int) ((new Registrar())->manual()['dr_id'] ?? 0);
+        }
+
+        if (str_starts_with($posted, Registrar::MODULE_PREFIX)) {
+            return (int) (new Registrar())->attach(substr($posted, strlen(Registrar::MODULE_PREFIX)), true);
+        }
+
+        return (int) $posted;
     }
 
     /**

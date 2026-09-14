@@ -318,10 +318,10 @@ class DomainRenewalJob extends Job
                 [
                     'first_name'     =>  $client['first_name'] ?? '',
                     'domain'         =>  $domain['domain'] ?? '',
-                    'expiry_date'    =>  format_date($domain['expiry_date'] ?? null),
+                    'expiry_date'    =>  format_day($domain['expiry_date'] ?? null),
                     'invoice_number' =>  $invoice['invoice_number'] ?? '',
                     'total'          =>  money($invoice['total'] ?? 0, $invoice['currency_relid'] ?? null),
-                    'due_date'       =>  format_date($invoice['invoice_due_date'] ?? null),
+                    'due_date'       =>  format_day($invoice['invoice_due_date'] ?? null),
                 ],
                 (int) $client['cid']
             );

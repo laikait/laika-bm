@@ -235,6 +235,43 @@ class GatewayCallback extends Action
         return $this->apply($id, $gateway, $result, $reference);
     }
 
+    /**
+     * Record a Charge That Succeeded On The Spot - Phase 48
+     *
+     * A gateway that takes the card on the site knows the answer at once, and
+     * then its webhook says the same thing again, for the same payment. Both come
+     * through receive() under the same reference, so UNIQUE (gateway_relid,
+     * event_ref) lets exactly one of them record it - whichever arrives first.
+     * The database decides, not a read followed by a write; until this phase
+     * Transaction::pay() was called directly and had no such guard, which was
+     * safe only because no gateway ever succeeded on the spot.
+     *
+     * Trusted as verified: this installation made the call itself, to an
+     * address in the module's own code. A reference is required - with none
+     * there is nothing to be idempotent on, and receive() refuses.
+     * @param array $gateway Gateway Row
+     * @param array $invoice Invoice Row
+     * @param array $result What charge() or complete() answered
+     * @param string $source What started it - panel, staff, cron
+     * @return array receive()'s answer: applied, duplicate or ignored mean it is paid
+     */
+    public function recordCharge(array $gateway, array $invoice, array $result, string $source = 'panel'): array
+    {
+        $raw = is_array($result['raw'] ?? null) ? $result['raw'] : [];
+
+        return $this->receive($gateway, [
+            'verified'   =>  true,
+            'event'      =>  'charge',
+            'reference'  =>  (string) ($result['reference'] ?? ''),
+            'invoice_id' =>  (int) ($invoice['invoice_id'] ?? 0),
+            'amount'     =>  $result['amount'] ?? null,
+            'fee'        =>  $result['fee'] ?? null,
+            'success'    =>  true,
+            'message'    =>  null,
+            'raw'        =>  $raw,
+        ], ['source' => $source, 'raw' => $raw]);
+    }
+
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################

@@ -98,13 +98,49 @@ class Module extends Action
     public const OPTION = 'module_enabled_';
 
     /**
-     * @var string[] The Kinds Configured On a Page Of Their Own - Phase 40
+     * @var string[] The Kinds Whose Settings Live In `module_settings` - Phase 40
      *
-     * The rest already have a screen that IS their configuration: a gateway's
-     * row on the gateways screen, a registrar's form, and a server module's
-     * fields on each product. These three had nowhere.
+     * The rest keep theirs where they always did: a gateway's on its
+     * payment_gateways row, a registrar's on its domain_registrars row, and a
+     * server module's on each product. Since Phase 46 every kind but servers is
+     * configured on the same page; this says only where the page stores them.
      */
     public const CONFIGURE_TYPES = ['lookup', 'fraud', 'plugins'];
+
+    /**
+     * @var array<string,array{0:string,1:string}> Who May Configure Each Kind - Phase 46
+     *
+     * [read, save]. Configure is one page for every kind but servers, and each
+     * kind keeps the permission its settings were always behind (20.5's rule -
+     * a permission is granted only when a role is CREATED, so moving a screen
+     * behind a tidier gate strands every role that already exists): a gateway's
+     * were the gateways screen's, settings.*; a registrar's were its edit
+     * form's, domain.update; the rest were the Modules page's, module.*. Servers
+     * are absent - their fields belong to each product.
+     */
+    public const CONFIGURE_ACCESS = [
+        'gateways'   => ['settings.read', 'settings.update'],
+        'registrars' => ['domain.update', 'domain.update'],
+        'lookup'     => ['module.read', 'module.update'],
+        'fraud'      => ['module.read', 'module.update'],
+        'plugins'    => ['module.read', 'module.update'],
+    ];
+
+    /**
+     * @var array<string,string> The Screen That Lists Each Kind - Phase 46
+     *
+     * settings/modules is gone. Each kind is switched on and off on its own
+     * screen, and a switch or a Configure page goes back there. Lookup modules
+     * sit on the registrars screen, beside the card that chooses between them.
+     */
+    public const SCREENS = [
+        'gateways'   => 'staff.gateways',
+        'servers'    => 'staff.servers',
+        'registrars' => 'staff.registrars',
+        'lookup'     => 'staff.registrars',
+        'fraud'      => 'staff.fraud',
+        'plugins'    => 'staff.plugins',
+    ];
 
     /** @var array<string,array>|null Discovered Modules, Keyed By Uid */
     private ?array $modules = null;
@@ -269,6 +305,53 @@ class Module extends Action
         $this->rebuildCache();
 
         return $state;
+    }
+
+    /**
+     * One Kind's Modules, As Its Screen Draws Them - Phase 46
+     *
+     * What all() knows, plus the loader's view: whether each one LOADED this
+     * request, what it registered, and why it did not load. Enabled and loaded
+     * are separate questions and the screen shows both - a module switched on a
+     * moment ago is enabled and pending; one whose manifest throws is enabled
+     * and failed. A load error wins over a manifest-read error: both come from
+     * the same file, but the loader's is the one that stopped it working.
+     * @param string $type One of TYPES
+     * @return array<string,array>
+     */
+    public function listed(string $type): array
+    {
+        $modules = $this->ofType($type);
+
+        foreach ($modules as $uid => $module) {
+            $uid = (string) $uid;
+
+            $modules[$uid]['loaded']    = $this->isLoaded($uid);
+            $modules[$uid]['registers'] = $this->loadedResources($uid);
+            $modules[$uid]['error']     = $this->loadError($uid) ?? ($module['error'] ?? null);
+        }
+
+        return $modules;
+    }
+
+    /**
+     * Who May Read And Save a Kind's Configure Page - Phase 46
+     * @param string $type One of TYPES
+     * @return ?array{0:string,1:string} Null For a Kind With No Configure Page
+     */
+    public function configureAccess(string $type): ?array
+    {
+        return self::CONFIGURE_ACCESS[$type] ?? null;
+    }
+
+    /**
+     * The Route Of The Screen That Lists a Kind - Phase 46
+     * @param string $type One of TYPES
+     * @return string
+     */
+    public function screenRoute(string $type): string
+    {
+        return self::SCREENS[$type] ?? 'staff.settings.index';
     }
 
     /**
@@ -519,7 +602,7 @@ class Module extends Action
 
         if ($class === null) {
             throw new RuntimeException(
-                'This module is switched off, or declares no settings, so there is nothing to save. Switch it on under Modules first.'
+                'This module is switched off, or declares no settings, so there is nothing to save. Switch it on on its own settings screen first.'
             );
         }
 

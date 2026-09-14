@@ -145,6 +145,9 @@ function nav_panel(?string $current = null): array
     // A credit note is the customer's document as much as the invoice is, and
     // behind the same permission - there is no separate one to grant.
     nav_item('credit_notes', 'client.credit.notes', 'invoices', client_can('invoice.read'), $account);
+    // Saved cards (Phase 48), behind the same permission: a card is how an
+    // invoice gets paid.
+    nav_item('payment_methods', 'client.payment.methods', 'card', client_can('invoice.read'), $account);
 
     $help = nav_group('help');
     nav_item('tickets', 'client.tickets', 'tickets', client_can('ticket.read'),  $help, 'support');
@@ -223,7 +226,8 @@ function settings_sections(): array
         ['slug' => 'servers',         'route' => 'staff.servers',               'icon' => 'servers',   'label' => 'servers',           'hint' => 'settings_hint_servers',         'perm' => 'server.read'],
         ['slug' => 'tlds',            'route' => 'staff.tlds',                  'icon' => 'domains',   'label' => 'domain_pricing',    'hint' => 'settings_hint_tlds',            'perm' => 'domain.read'],
         ['slug' => 'registrars',      'route' => 'staff.registrars',            'icon' => 'key',       'label' => 'domain_registrars', 'hint' => 'settings_hint_registrars',      'perm' => 'domain.read'],
-        ['slug' => 'modules',         'route' => 'staff.modules',               'icon' => 'modules',   'label' => 'modules',           'hint' => 'settings_hint_modules',         'perm' => 'module.read'],
+        ['slug' => 'fraud',           'route' => 'staff.fraud',                 'icon' => 'ban',       'label' => 'fraud_check',       'hint' => 'settings_hint_fraud',           'perm' => 'module.read'],
+        ['slug' => 'plugins',         'route' => 'staff.plugins',               'icon' => 'modules',   'label' => 'plugins',           'hint' => 'settings_hint_plugins',         'perm' => 'module.read'],
         ['slug' => 'config-options',  'route' => 'staff.config.options',        'icon' => 'products',  'label' => 'config_options',    'hint' => 'settings_hint_config_options',  'perm' => 'product.read'],
         ['slug' => 'promos',          'route' => 'staff.promos',                'icon' => 'megaphone', 'label' => 'promo_codes',       'hint' => 'settings_hint_promos',          'perm' => 'product.read'],
         ['slug' => 'currencies',      'route' => 'staff.currencies',            'icon' => 'currency',  'label' => 'currencies',        'hint' => 'settings_hint_currencies',      'perm' => 'currency.read'],

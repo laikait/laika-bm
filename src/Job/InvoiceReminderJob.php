@@ -249,7 +249,7 @@ class InvoiceReminderJob extends Job
                 'invoice_number' =>  $row['invoice_number'] ?? '',
                 'balance'        =>  money($balance, $row['currency_relid'] ?? null),
                 'total'          =>  money($row['total'] ?? 0, $row['currency_relid'] ?? null),
-                'due_date'       =>  format_date($row['invoice_due_date'] ?? null),
+                'due_date'       =>  format_day($row['invoice_due_date'] ?? null),
                 'days'           =>  (string) abs($offset),
                 'subject'        =>  $subject,
             ], (int) $client['cid']);

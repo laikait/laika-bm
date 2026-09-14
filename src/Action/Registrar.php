@@ -18,6 +18,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Throwable;
 use RuntimeException;
 use Laika\Model\Model;
+use Laika\Service\Uid;
 use Laika\Service\Vault;
 use LBM\Model\DomainModel;
 use LBM\Model\DomainRegistrarModel;
@@ -56,20 +57,26 @@ use LBM\Support\RegistersDomains;
  * reason.
  *
  * ---------------------------------------------------------------------------
- * EVERY REFUSAL IS NAMED BEFORE THE DATABASE CAN REFUSE IT
+ * A REGISTRAR IS ITS MODULE, SWITCHED ON - PHASE 46
  * ---------------------------------------------------------------------------
- * `name` and `module_name` are both UNIQUE. A duplicate that reaches the
- * database is refused there too, as a driver exception an operator cannot act
- * on. The name check is case-insensitive here because MySQL's collation would
- * refuse `NAMESILO` beside `Namesilo` while PostgreSQL would store both.
+ * There is no form that adds one. Enabling a registrar module on the
+ * registrars screen creates its row the first time - named from the manifest,
+ * `module_name` its directory, no credentials yet - and switches it back on
+ * every time after; disabling switches it off and keeps it, because TLDs and
+ * domains point at it. Its credentials, its mode and whether it is the default
+ * are saved on its Configure page.
  *
- * "No module" is stored as the empty string, and the index counts it as a
- * value - so the table holds ONE registrar that is run by hand. That is a limit
- * of the schema, stated in the refusal rather than surfaced as a duplicate key.
+ * `module_name` is UNIQUE, so a module serves one registrar. "No module" is
+ * stored as the empty string and the index counts it as a value, so there is
+ * ONE registrar run by hand: it is created the first time a TLD is priced
+ * "By hand (no module)", and every later one reuses it.
  *
- * The table is small by nature, one row per registrar account, so the
- * uniqueness checks read it whole rather than asking the database to compare
- * case-insensitively, which would need raw SQL.
+ * `name` is UNIQUE too. A row is created with a name nobody else has -
+ * compared case-insensitively, because MySQL's collation would refuse
+ * `NAMESILO` beside `Namesilo` while PostgreSQL would store both - so the
+ * database never has to refuse one. The table is small by nature, one row per
+ * registrar account, so that is done by reading it whole rather than asking the
+ * database to compare case-insensitively, which would need raw SQL.
  */
 class Registrar extends Action
 {
@@ -78,19 +85,25 @@ class Registrar extends Action
     /** @var string The Module Directory a Registrar's Module Lives Under */
     public const TYPE = 'registrars';
 
-    /** @var string[] Columns a Form May Write */
-    public const FIELDS = ['name', 'module_name', 'api_url', 'is_default', 'is_active'];
-
     /**
      * @var string[] Names a Credential May Not Take
      *
-     * `api_url` has its own column and is handed to the module under that key.
-     * A credential of the same name would shadow it or be shadowed by it, and
-     * either way the operator would be looking at one value while the module
-     * used another. `mode` is the Live/Test switch, since Phase 40, for the
-     * same reason.
+     * `mode` is the Live/Test switch (Phase 40), and a credential of the same
+     * name would shadow it or be shadowed by it. `api_url` was a column handed
+     * to the module until Phase 46; a module keeps its own address in its Api
+     * class now, and a credential of that name would be an address typed on a
+     * screen by another door.
      */
     public const RESERVED = ['api_url', 'mode'];
+
+    /** @var string What The TLD Form Posts For "By Hand (No Module)" - Phase 46 */
+    public const BY_HAND = 'manual';
+
+    /** @var string What The TLD Form Posts For An Enabled Module With No Row Yet - Phase 46 */
+    public const MODULE_PREFIX = 'module:';
+
+    /** @var string What The One Registrar Run By Hand Is Called, Unless Taken */
+    public const MANUAL_NAME = 'Registered by hand';
 
     /** @var string What a Credential Name May Look Like */
     public const CREDENTIAL_NAME = '/^[A-Za-z0-9_.\-]{1,60}$/';
@@ -209,10 +222,12 @@ class Registrar extends Action
      *
      * Its credentials, opened, under the names the operator gave them - or,
      * for a module that DECLARES its fields (Phase 40), exactly those, opened.
-     * Then `api_url` from its own column and `mode` from `test_mode`, both set
-     * LAST so nothing can shadow them. The form already refuses a credential of
-     * either name; a row written some other way must not be able to hand the
-     * module a different URL, or a different mode, from the one on the screen.
+     * Then `mode` from `test_mode`, set LAST so nothing can shadow it: the form
+     * refuses a credential of that name, and a row written some other way must
+     * not be able to hand the module a different mode from the one on screen.
+     *
+     * No `api_url` since Phase 46, whatever the column holds: a module's
+     * address is its own API_URL, and one typed on a screen must not reach it.
      * @param array $registrar Registrar Row
      * @param ?string $class The Driver Class Being Built, When Known
      * @return array<string,string>
@@ -225,7 +240,7 @@ class Registrar extends Action
             ? $this->credentials($registrar)
             : ModuleSettings::open($fields, $this->sealedOf($registrar));
 
-        $settings['api_url'] = (string) ($registrar['api_url'] ?? '');
+        unset($settings['api_url']);
         $settings['mode'] = $this->modeOf($registrar);
 
         return $settings;
@@ -276,7 +291,7 @@ class Registrar extends Action
         if ($driver === null) {
             return ['success' => false, 'message' => match ($this->state($registrar)) {
                 'manual'  =>  'This registrar has no module, so there is nothing to connect to.',
-                'off'     =>  'Its module is switched off. Switch it on under Modules first.',
+                'off'     =>  'Its module is switched off. Switch it on on the Domain registrars screen first.',
                 'missing' =>  'The module it names is not installed.',
                 default   =>  'Its module is on, but the driver could not be built.',
             }];
@@ -397,47 +412,147 @@ class Registrar extends Action
         ];
     }
 
-    /**
-     * The Columns a Form May Write
-     *
-     * A method rather than the constant, because a relay facade forwards method
-     * calls and not constants.
-     * @return string[]
-     */
-    public function fields(): array
-    {
-        return self::FIELDS;
-    }
-
     ####################################################################################
     /*=================================== WRITING ====================================*/
     ####################################################################################
 
     /**
-     * Add a Registrar
-     * @param array $input Submitted Data
-     * @return int New Registrar ID
-     * @throws RuntimeException
+     * The Registrar a Module Serves, If It Has a Row - Phase 46
+     *
+     * Case-insensitive, because the loader is.
+     * @param string $module Module Directory, In Any Case
+     * @return ?array
      */
-    public function store(array $input): int
+    public function forModule(string $module): ?array
     {
-        $data = $this->prepare($input, null);
+        $module = trim($module);
 
-        if ($data['is_default'] === 'yes') {
-            $this->clearDefault();
+        if ($module === '') {
+            return null;
         }
 
-        return $this->create($data);
+        foreach ($this->listing() as $row) {
+            if (strcasecmp((string) $row['module_name'], $module) === 0) {
+                return $row;
+            }
+        }
+
+        return null;
     }
 
     /**
-     * Change a Registrar
-     * @param int|string $key Registrar ID Or Uid
-     * @param array $input Submitted Data
-     * @return int Affected rows
-     * @throws RuntimeException
+     * The One Registrar Run By Hand, If It Exists Yet
+     * @return ?array
      */
-    public function modify(int|string $key, array $input): int
+    public function manualRow(): ?array
+    {
+        foreach ($this->listing() as $row) {
+            if (trim((string) $row['module_name']) === '') {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The One Registrar Run By Hand, Created The First Time It Is Asked For
+     *
+     * What "By hand (no module)" on the TLD form means. `tlds.registrar_relid`
+     * is NOT NULL, so a TLD sold with nothing automated still needs a row - and
+     * module_name is UNIQUE with "no module" stored as '', so there is exactly
+     * one, and every TLD registered by hand shares it.
+     * @return array
+     */
+    public function manual(): array
+    {
+        $row = $this->manualRow();
+
+        if ($row !== null) {
+            return $row;
+        }
+
+        $id = $this->create([
+            'uid'         =>  Uid::make(),
+            'name'        =>  $this->uniqueName(self::MANUAL_NAME),
+            'module_name' =>  '',
+            'api_url'     =>  '',
+            'credentials' =>  serialize([]),
+            'is_default'  =>  'no',
+            'is_active'   =>  'yes',
+            'test_mode'   =>  'no',
+        ]);
+
+        return (array) $this->find($id);
+    }
+
+    /**
+     * Switch a Registrar Module's Registrar On Or Off - Phase 46
+     *
+     * Enabling a registrar module IS adding its registrar. The row is created
+     * the first time and only then, and switched back on every time after;
+     * disabling switches it off and keeps it, because TLDs and domains point at
+     * it and a lapsed domain may not come back.
+     *
+     * `api_url` is NOT NULL with no default - MySQL's non-strict mode would put
+     * '' in and PostgreSQL would refuse the insert - so it is written blank, and
+     * nothing reads it. `credentials` is always a serialized array: casts run
+     * on READ only, and a row without one took /domains down in Phase 27.3.
+     * @param string $module Module Directory, In Any Case
+     * @param bool $on
+     * @return ?int The Registrar ID, Or Null When Switching Off One That Never Had a Row
+     * @throws RuntimeException When No Such Registrar Module Is Installed
+     */
+    public function attach(string $module, bool $on): ?int
+    {
+        $directory = $this->installedModule($module);
+
+        if ($directory === null) {
+            throw new RuntimeException("No registrar module called [{$module}] is installed.");
+        }
+
+        $row = $this->forModule($directory);
+
+        if ($row !== null) {
+            $this->update((int) $row['dr_id'], ['is_active' => $on ? 'yes' : 'no']);
+
+            return (int) $row['dr_id'];
+        }
+
+        if (!$on) {
+            return null;
+        }
+
+        if (strlen($directory) > 60) {
+            throw new RuntimeException("The module directory [{$directory}] is longer than a registrar can record.");
+        }
+
+        return $this->create([
+            'uid'         =>  Uid::make(),
+            'name'        =>  $this->uniqueName($this->modules()[$directory]['name']),
+            'module_name' =>  $directory,
+            'api_url'     =>  '',
+            'credentials' =>  serialize([]),
+            'is_default'  =>  'no',
+            'is_active'   =>  'yes',
+            'test_mode'   =>  'no',
+        ]);
+    }
+
+    /**
+     * Save What a Registrar Module's Configure Page Posted - Phase 46
+     *
+     * Its credentials, its mode, and whether it is the default. Its name and
+     * module are not the form's to change: the module is what the registrar IS,
+     * and a rename was a way to lose track of which account a TLD points at.
+     * @param int|string $key Registrar ID Or Uid
+     * @param array $input `settings[...]`/`settings_clear[]` for a module that
+     *        declares its fields, the Phase 35 credential pairs for one that
+     *        does not, `mode`, and `is_default`
+     * @return int Affected Rows
+     * @throws RuntimeException Naming a Refused Field Or Credential
+     */
+    public function configure(int|string $key, array $input): int
     {
         $current = $this->find($key);
 
@@ -445,50 +560,24 @@ class Registrar extends Action
             throw new RuntimeException('That registrar no longer exists.');
         }
 
-        $data = $this->prepare($input, $current);
+        $data = [
+            // ALWAYS serialized, an empty set included - see attach().
+            'credentials' =>  serialize($this->credentialsFrom($input, (string) $current['module_name'], $current)),
+        ];
 
-        if ($data['is_default'] === 'yes') {
-            $this->clearDefault();
+        if (array_key_exists('mode', $input)) {
+            $data['test_mode'] = ModuleSettings::mode($input['mode']) === Api::TEST ? 'yes' : 'no';
+        }
+
+        if (array_key_exists('is_default', $input)) {
+            $data['is_default'] = $this->flag($input['is_default']);
+
+            if ($data['is_default'] === 'yes') {
+                $this->clearDefault();
+            }
         }
 
         return $this->update((int) $current['dr_id'], $data);
-    }
-
-    /**
-     * Delete a Registrar
-     *
-     * Refused while anything points at it. A TLD or a domain whose registrar has
-     * gone finds no row, therefore no driver, and is quietly left for staff for
-     * ever - and a domain in that state is one nobody renews. Domains are
-     * checked first because they are the worse of the two: a TLD can be
-     * repointed in a minute, a lapsed domain may not come back.
-     * @param int|string $key Registrar ID Or Uid
-     * @return int Affected rows
-     * @throws RuntimeException
-     */
-    public function remove(int|string $key): int
-    {
-        $row = $this->find($key);
-
-        if ($row === null) {
-            return 0;
-        }
-
-        $usage = $this->usage($row);
-
-        if ($usage['domains'] > 0) {
-            throw new RuntimeException(
-                "{$usage['domains']} domain(s) are registered through this registrar, and deleting it would leave nobody to renew them. Move them to another registrar first."
-            );
-        }
-
-        if ($usage['tlds'] > 0) {
-            throw new RuntimeException(
-                "{$usage['tlds']} TLD(s) are priced through this registrar. Point them at another registrar first."
-            );
-        }
-
-        return $this->delete((int) $row['dr_id']);
     }
 
     ####################################################################################
@@ -496,87 +585,29 @@ class Registrar extends Action
     ####################################################################################
 
     /**
-     * Check a Submission And Turn It Into Columns
-     * @param array $input Submitted Data
-     * @param ?array $current The Row Being Edited, Or Null When Adding
-     * @return array
-     * @throws RuntimeException
+     * A Registrar Name Nobody Else Has
+     *
+     * `name` is UNIQUE, so a module whose manifest name is already taken gets a
+     * number rather than a duplicate-key error on the Enable button.
+     * @param string $wanted The Name It Would Like
+     * @return string
      */
-    private function prepare(array $input, ?array $current): array
+    private function uniqueName(string $wanted): string
     {
-        $data = $this->only($input, self::FIELDS);
-        $id = $current === null ? 0 : (int) $current['dr_id'];
+        $wanted = mb_substr(trim($wanted) === '' ? 'Registrar' : trim($wanted), 0, 90);
+        $taken = [];
 
-        $name = (string) ($data['name'] ?? '');
-
-        if ($name === '') {
-            throw new RuntimeException('A registrar needs a name.');
+        foreach ($this->listing() as $row) {
+            $taken[mb_strtolower((string) $row['name'])] = true;
         }
 
-        if (mb_strlen($name) > 100) {
-            throw new RuntimeException('A registrar name can be 100 characters at most.');
+        $name = $wanted;
+
+        for ($n = 2; isset($taken[mb_strtolower($name)]); $n++) {
+            $name = $wanted . ' ' . $n;
         }
 
-        $others = array_filter(
-            $this->listing(),
-            static fn (array $row): bool => (int) $row['dr_id'] !== $id
-        );
-
-        foreach ($others as $row) {
-            if (mb_strtolower((string) $row['name']) === mb_strtolower($name)) {
-                throw new RuntimeException("There is already a registrar called {$row['name']}.");
-            }
-        }
-
-        $module = $this->moduleFor((string) ($data['module_name'] ?? ''), $current);
-
-        foreach ($others as $row) {
-            if (strcasecmp((string) $row['module_name'], $module) !== 0) {
-                continue;
-            }
-
-            throw new RuntimeException($module === ''
-                ? "{$row['name']} is already the registrar with no module. A registrar is stored against its module and \"no module\" counts as one, so only one can be run by hand - give this one its module, or use {$row['name']}."
-                : "{$row['name']} already uses the {$module} module. A module serves one registrar.");
-        }
-
-        $url = (string) ($data['api_url'] ?? '');
-
-        if ($url !== '' && (
-            !preg_match('#^https?://#i', $url)
-            || filter_var($url, FILTER_VALIDATE_URL) === false
-            || strlen($url) > 255
-        )) {
-            throw new RuntimeException('The API URL must be a whole address starting with http:// or https://.');
-        }
-
-        return [
-            'name'        =>  $name,
-            'module_name' =>  $module,
-
-            // NOT NULL with no default. MySQL's non-strict mode puts '' in for a
-            // missing value and PostgreSQL refuses the insert, so it is always
-            // written, blank or not.
-            'api_url'     =>  $url,
-
-            'is_default'  =>  array_key_exists('is_default', $data)
-                ? $this->flag($data['is_default'])
-                : (string) ($current['is_default'] ?? 'no'),
-            'is_active'   =>  array_key_exists('is_active', $data)
-                ? $this->flag($data['is_active'])
-                : (string) ($current['is_active'] ?? 'yes'),
-
-            // ALWAYS serialized, an empty set included. The column is
-            // `serialize` and casts run on READ only, so a row written without
-            // a value makes the next read of the whole table throw - which took
-            // /domains down for every visitor in Phase 27.3.
-            'credentials' =>  serialize($this->credentialsFrom($input, $module, $current)),
-
-            // Phase 40. Kept as it is unless the form carried the switch.
-            'test_mode'   =>  array_key_exists('mode', $input)
-                ? (ModuleSettings::mode($input['mode']) === Api::TEST ? 'yes' : 'no')
-                : (string) ($current['test_mode'] ?? 'no'),
-        ];
+        return $name;
     }
 
     /**
@@ -584,9 +615,8 @@ class Registrar extends Action
      *
      * A module that declares its fields (Phase 40) is checked against them by
      * ModuleSettings; one that does not keeps the Phase 35 name/value pairs.
-     * The declared fields are applied only when the form CARRIED them: the add
-     * form cannot, because the module is chosen on it, so a new registrar is
-     * saved first and configured on its edit form.
+     * The declared fields are applied only when the form CARRIED them, so a
+     * post that sends none leaves what is stored alone.
      * @param array $input Submitted Data
      * @param string $module The Module Directory Being Saved
      * @param ?array $current The Row Being Edited, Or Null
@@ -635,45 +665,6 @@ class Registrar extends Action
     }
 
     /**
-     * Resolve The Module a Submission Names
-     * @param string $posted What The Form Sent
-     * @param ?array $current The Row Being Edited, Or Null
-     * @return string The directory, in its on-disk spelling, or '' for none
-     * @throws RuntimeException
-     */
-    private function moduleFor(string $posted, ?array $current): string
-    {
-        $posted = trim($posted);
-
-        if ($posted === '') {
-            return '';
-        }
-
-        $installed = $this->installedModule($posted);
-
-        if ($installed !== null) {
-            if (strlen($installed) > 60) {
-                throw new RuntimeException("The module directory [{$installed}] is longer than a registrar can record.");
-            }
-
-            return $installed;
-        }
-
-        // The module this registrar ALREADY has, even though it is no longer on
-        // disk. Refusing it would make the form unsaveable for a registrar whose
-        // module was removed, and the only way out would be to pick another
-        // module or none - exactly the silent change the dropdown keeps the
-        // stored value to prevent.
-        $stored = (string) ($current['module_name'] ?? '');
-
-        if ($stored !== '' && strcasecmp($stored, $posted) === 0) {
-            return $stored;
-        }
-
-        throw new RuntimeException("No registrar module called [{$posted}] is installed. Put it in modules/registrars/ first.");
-    }
-
-    /**
      * Apply a Submission's Credentials To What Is Stored
      *
      * The form posts `credential_name[]` and `credential_value[]` in pairs, and
@@ -706,7 +697,7 @@ class Registrar extends Action
             }
 
             if (in_array(strtolower($name), self::RESERVED, true)) {
-                throw new RuntimeException("{$name} is not a credential - it has its own field on this form, and is handed to the module under that name.");
+                throw new RuntimeException("{$name} cannot be a credential: a module keeps its own address in its code, and mode is the Live/Test switch.");
             }
 
             if ($value === '') {

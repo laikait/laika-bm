@@ -177,8 +177,20 @@ abstract class Controller
         /** {{ invoice.status_relid|status('invoice_statuses') }} */
         $template->addFilter('status', static fn($relid, string $table): array => status_badge($table, $relid));
 
-        /** {{ row.created_at|date_app }} - the operator's format and timezone */
+        /**
+         * One rule decides which of these a date takes: a column that means a
+         * DAY - due, expiry, renewal, registration - uses `date_format`; one
+         * that means a MOMENT - created, signed in, sent - uses `datetime_format`.
+         */
+
+        /** {{ row.created_at|date_app }} - a moment, in the date-and-time format */
         $template->addFilter('date_app', static fn(?string $time): string => format_date($time));
+
+        /** {{ invoice.invoice_due_date|date_day }} - a day, in the date format */
+        $template->addFilter('date_day', static fn(?string $time): string => format_day($time));
+
+        /** {{ reply.reply_created_at|time_app }} - a time on its own, in the time format */
+        $template->addFilter('time_app', static fn(?string $time): string => format_time($time));
 
         /** {{ 1234.5|number }} - grouped, but no currency symbol */
         $template->addFilter('number', static fn($amount): string => decimal($amount ?? 0));

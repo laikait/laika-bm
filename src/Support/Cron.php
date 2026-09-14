@@ -22,6 +22,7 @@ use LBM\Job\DomainRenewalJob;
 use LBM\Job\InvoiceGenerateJob;
 use LBM\Job\InvoiceReminderJob;
 use LBM\Job\PruneTokensJob;
+use LBM\Service\AutoCharge;
 use LBM\Service\Mail;
 use LBM\Service\Dunning;
 use LBM\Service\Provision;
@@ -282,6 +283,16 @@ class Cron
             (new DomainRenewalJob())->handle();
 
             return 'done';
+        });
+
+        // Phase 48. After the invoices are raised, so a renewal raised today can
+        // be charged today when the operator charges on the due date; before the
+        // reminders, so a customer whose card was just charged is not chased.
+        // Daily, like the invoices: a card is charged at most once a day anyway,
+        // and a customer should hear about a decline once, not every five minutes.
+        // It reports `off` until the operator switches it on.
+        $this->task('charge saved cards', static function (): string {
+            return AutoCharge::run();
         });
 
         $this->task('invoice reminders', static function (): string {
