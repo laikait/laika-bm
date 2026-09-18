@@ -3,7 +3,7 @@
  * Laika Bill Manager
  * Author: Showket Ahmed
  * Email: riyadhtayf@gmail.com
- * License: MIT
+ * License: Proprietary - see LICENSE
  * This file is part of Laika Bill Manager.
  * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
  */
@@ -61,7 +61,7 @@ class InstallCommand implements CommandInterface
             'command'     =>  $this->command(),
             'inputs'      =>  [],
             'params'      =>  [
-                'db-driver'   =>  'Database driver: mysql, pgsql, sqlite or sqlsrv (default: mysql)',
+                'db-driver'   =>  'Database driver: mysql (MySQL/MariaDB) or pgsql (default: mysql)',
                 'db-host'     =>  'Database host (default: localhost)',
                 'db-port'     =>  'Database port (default: 3306)',
                 'db-name'     =>  'Database name — required',

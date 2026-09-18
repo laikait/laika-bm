@@ -2,7 +2,7 @@
     "name": "laikait/laika-bm",
     "description": "Laika Bill Manager - billing, provisioning and support for the Laika PHP Framework",
     "type": "package",
-    "license": "MIT",
+    "license": "proprietary",
     "authors": [
         {
             "name": "Laika IT",

@@ -1,0 +1,88 @@
+# Laika Bill Manager — Proprietary License
+
+Copyright (c) 2026 Laika IT  
+All rights reserved.
+
+## 1. Ownership
+
+Laika Bill Manager ("LBM"), including its source code, software architecture, database structure, documentation, configuration, templates, assets, and related materials, is the exclusive property of **Laika IT**, unless otherwise stated in a specific file or third-party license.
+
+## 2. Grant of License
+
+Laika IT grants you a limited, non-exclusive, non-transferable, revocable license to use this software for personal or internal business purposes, subject to the terms of this license.
+
+This license does not transfer ownership or intellectual property rights to you.
+
+## 3. Restrictions
+
+Unless you have received explicit written permission from Laika IT, you may not:
+
+- Sell, sublicense, rent, lease, or distribute this software or substantial portions of it.
+- Publish or redistribute the source code, in whole or in substantial part.
+- Create and distribute a competing product substantially based on this software.
+- Remove or modify copyright, license, or ownership notices.
+- Claim the software or derivative work as your own.
+- Use the Laika IT or Laika Bill Manager name, trademarks, logos, or branding to imply endorsement or affiliation without written permission.
+- Make the software available as a public hosted service where users can access or obtain substantial functionality from the software, unless expressly authorized by Laika IT.
+
+## 4. Modification
+
+You may modify the software for your own personal or internal business use.
+
+Modified versions remain subject to this license unless Laika IT provides written authorization under different terms.
+
+You may not publicly distribute modified versions without prior written permission from Laika IT.
+
+## 5. Third-Party Software
+
+Laika Bill Manager may include or depend upon third-party software, libraries, frameworks, or other components that are distributed under their own licenses.
+
+Such components remain subject to their respective licenses. Nothing in this license is intended to override or restrict rights granted by applicable third-party licenses.
+
+## 6. Commercial Use
+
+Commercial or production use of Laika Bill Manager is permitted only within the scope of the rights granted by this license.
+
+For redistribution, SaaS/hosted deployment, resale, white-label use, integration into a commercial product, or other uses not expressly permitted by this license, a separate commercial license or written authorization from Laika IT is required.
+
+## 7. Contributions
+
+Unless otherwise agreed in writing, any contribution submitted for inclusion in Laika Bill Manager may be used, modified, incorporated, and distributed by Laika IT under the licensing terms selected by Laika IT.
+
+Submitting a contribution does not transfer ownership of Laika Bill Manager to the contributor.
+
+## 8. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR NON-INFRINGEMENT.
+
+LAIKA IT DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE, SECURE, UNINTERRUPTED, OR SUITABLE FOR EVERY PARTICULAR PURPOSE.
+
+## 9. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, LAIKA IT SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR OTHER DAMAGES ARISING FROM OR RELATED TO THE USE OF, OR INABILITY TO USE, THE SOFTWARE.
+
+## 10. Termination
+
+This license automatically terminates if you materially violate its terms.
+
+Upon termination, you must cease all uses of the software that are not otherwise permitted by applicable law or a separate written agreement with Laika IT.
+
+## 11. Copyright and Notices
+
+Copyright and license notices contained in the software must not be removed or altered without written permission from Laika IT.
+
+## 12. Governing Rights
+
+Nothing in this license is intended to limit any rights that Laika IT may have under applicable copyright, trademark, intellectual property, or other applicable laws.
+
+## 13. Contact
+
+For commercial licensing, redistribution permission, partnership, or other licensing inquiries, please contact:
+
+**Laika IT**  
+Email: strblackhawk@gmail.com
+
+---
+
+Copyright (c) 2026 Laika IT  
+All rights reserved.

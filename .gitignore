@@ -1,3 +1,6 @@
 composer.phar
 /vendor/
 composer.lock
+
+# Release archives - built by bin/release.php, published as GitHub release assets (Phase 49).
+/dist/

@@ -1,0 +1,20 @@
+# Line endings: LF in the repository and in every checkout, whatever the OS.
+# Phase 49 - the move from Windows to Linux showed 37 files as modified that
+# differed only in CRLF, and a release built from such a tree ships them.
+* text=auto eol=lf
+
+# Windows-only tooling keeps CRLF so PowerShell 5.1 reads it as it expects.
+*.ps1 text eol=crlf
+
+# Binary - never touched by the rules above.
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

@@ -3,7 +3,7 @@
  * Laika Bill Manager
  * Author: Showket Ahmed
  * Email: riyadhtayf@gmail.com
- * License: MIT
+ * License: Proprietary - see LICENSE
  * This file is part of Laika Bill Manager.
  * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
  */
@@ -26,6 +26,22 @@ class Requirements
 {
     /** @var string Minimum PHP Version */
     public const PHP = '8.1.0';
+
+    /**
+     * Database Engines The Product Supports - Phase 49
+     *
+     * Not every engine laika-model has a grammar for. SQLite and SQL Server
+     * used to be offered here, and an install on either migrated - then broke
+     * on its first update, because every migration in src/Migration speaks
+     * MySQL and PostgreSQL only and throws on anything else. Offer only what
+     * the whole lifetime of an install supports. Installer::testConnection()
+     * refuses anything else, so the CLI cannot slip one past either.
+     * @var array<string,string> driver => label
+     */
+    public const DRIVERS = [
+        'mysql'  =>  'MySQL / MariaDB',
+        'pgsql'  =>  'PostgreSQL',
+    ];
 
     /**
      * @var array<string,string> Required Extensions => Why
@@ -174,20 +190,12 @@ class Requirements
     /**
      * PDO Drivers Available On This Server
      *
-     * Only drivers laika-model has a grammar for are offered - listing one it
-     * cannot build SQL for would fail at the migrate step instead of here.
+     * Only the drivers in DRIVERS are offered, and only when PDO has them.
      * @return array<string,string> driver => label
      */
     public function drivers(): array
     {
-        $supported = [
-            'mysql'  =>  'MySQL / MariaDB',
-            'pgsql'  =>  'PostgreSQL',
-            'sqlite' =>  'SQLite',
-            'sqlsrv' =>  'SQL Server',
-        ];
-
-        return array_intersect_key($supported, array_flip(\PDO::getAvailableDrivers()));
+        return array_intersect_key(self::DRIVERS, array_flip(\PDO::getAvailableDrivers()));
     }
 
     ################################################################################

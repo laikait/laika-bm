@@ -160,6 +160,7 @@ $ExcludeDirs = @(
 $ExcludeFiles = @(
     (Join-Path $AppRoot '.gitignore'),
     (Join-Path $AppRoot 'composer.phar'),
+    (Join-Path $AppRoot 'server.conf'),
     (Join-Path $AppRoot 'laika'),
     (Join-Path $AppRoot 'worker'),
     (Join-Path $AppRoot 'lf-storage\lbm\install.lock'),

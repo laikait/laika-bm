@@ -3,7 +3,7 @@
  * Laika Bill Manager
  * Author: Showket Ahmed
  * Email: riyadhtayf@gmail.com
- * License: MIT
+ * License: Proprietary - see LICENSE
  * This file is part of Laika Bill Manager.
  * For the full copyright and license information, please view the LICENSE file that was distributed with this source code.
  */
@@ -34,6 +34,8 @@ use LBM\Service\Permission;
 use LBM\Support\Permission as PermissionSupport;
 use LBM\Support\Version;
 use Laika\Service\Uid;
+use Laika\Session\Schema\SessionSchema;
+use Laika\Auth\Schema\AuthSchema;
 
 /**
  * The install engine.
@@ -222,6 +224,16 @@ class Installer
      */
     public function testConnection(array $config): ?string
     {
+        // Before any connection attempt: an engine the migrations cannot speak
+        // would install cleanly and fail on the first update. See
+        // Requirements::DRIVERS.
+        $driver = (string) ($config['driver'] ?? '');
+
+        if (!isset(Requirements::DRIVERS[$driver])) {
+            return "Unsupported database driver [{$driver}]. Use one of: "
+                . implode(', ', array_keys(Requirements::DRIVERS)) . '.';
+        }
+
         try {
             // A named probe connection, so a bad attempt never replaces the
             // 'default' one a later step may still need.
@@ -276,12 +288,6 @@ class Installer
             'password' =>  (string) ($input['db_pass'] ?? ''),
         ];
 
-        // SQLite is a file path, not a host and port - sending it either would
-        // be meaningless and the driver ignores them anyway.
-        if ($driver === 'sqlite') {
-            return ['driver' => 'sqlite', 'database' => $config['database']];
-        }
-
         return $config;
     }
 
@@ -329,6 +335,19 @@ class Installer
         foreach ($schemas as $table => $class) {
             $results[$table] = $this->step($class, 'up', 'created');
         }
+
+        // The session table - Phase 49. GlobalPipeline::boot() selects the
+        // database session driver with `install` false, so no request ever
+        // creates it, and laika-session does not register its schema as a
+        // resource, so Infra::getSchemaClasses() above never lists it either.
+        // Without this line the first request after the wizard finishes died on
+        // "Table 'sessions' doesn't exist". This is the same SessionSchema::up()
+        // that `'install' => true` runs, done once, here, where DDL belongs.
+        //
+        // No seed: the table starts empty. M202609190100CreateSessionsTable
+        // does the same for an install made before this line existed.
+        $results['sessions'] ??= $this->step(SessionSchema::class, 'up', 'created');
+        $results['auth_tokens'] ??= $this->step(AuthSchema::class, 'up', 'created');
 
         // Pass two: data. Separate, because a seed may reference a table that a
         // later schema in the same loop would not yet have created.
