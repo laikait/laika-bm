@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use ReflectionClass;
 use Throwable;
+use LBM\Support\Http\Client;
 
 /**
  * What a module's own API client extends - Phase 40.
@@ -57,6 +58,11 @@ use Throwable;
  *
  * Redirects are NOT followed, and only http and https are called. A header
  * carrying an API key goes to the address it was sent to and nowhere else.
+ *
+ * Since Phase 53 all four rules are enforced by LBM\Support\Http\Client,
+ * which this class now sends through, so every other outbound call gets them
+ * too. TLS verification can be turned off per module instance with a
+ * `verify_tls` setting - see verifiesTls().
  */
 abstract class Api
 {
@@ -67,13 +73,13 @@ abstract class Api
     public const TEST = 'test';
 
     /** @var float The Longest Any One Request May Take, In Seconds */
-    public const MAX_TIMEOUT = 30.0;
+    public const MAX_TIMEOUT = Client::MAX_TIMEOUT;
 
     /** @var float The Longest a Connection May Take To Open, In Seconds */
-    public const CONNECT_TIMEOUT = 5.0;
+    public const CONNECT_TIMEOUT = Client::CONNECT_TIMEOUT;
 
     /** @var int The Largest Reply That Is Read */
-    public const MAX_BYTES = 1048576;
+    public const MAX_BYTES = Client::MAX_BYTES;
 
     /** @var array<string,mixed> The Settings The Module Was Constructed With */
     protected array $settings;
@@ -285,123 +291,38 @@ abstract class Api
                 : 'This module has no live address, so nothing was sent.');
         }
 
-        if (!preg_match('#^https?://#i', $url)) {
-            return $this->failed('Only http and https addresses are called.');
-        }
-
-        if (!function_exists('curl_init')) {
-            return $this->failed('The curl extension is not installed, so no module can call its API.');
-        }
-
+        // Phase 53: the transport is Support\Http\Client - the same bounds,
+        // header checks and never-throw rule this method used to carry itself,
+        // now shared with everything else LBM calls. The contract below is
+        // unchanged: GET and HEAD send $data as a query, anything else sends an
+        // array as JSON and a string as it is.
         $method = strtoupper(trim($method)) ?: 'GET';
-        $timeout = max(0.1, min($timeout, self::MAX_TIMEOUT));
-
-        $lines = [];
-        $typed = false;
-        $accepts = false;
-
-        foreach ($headers as $name => $value) {
-            $name = trim((string) $name);
-            $value = (string) $value;
-
-            // A line break in a header is a second header smuggled in - the
-            // same reason Laika Whois refuses one in a domain name.
-            if ($name === '' || preg_match('/[\r\n:]/', $name) || preg_match('/[\r\n]/', $value)) {
-                continue;
-            }
-
-            $typed = $typed || strcasecmp($name, 'Content-Type') === 0;
-            $accepts = $accepts || strcasecmp($name, 'Accept') === 0;
-            $lines[] = $name . ': ' . $value;
-        }
-
-        if (!$accepts) {
-            $lines[] = 'Accept: application/json';
-        }
-
-        $body = null;
+        $options = ['headers' => $headers, 'timeout' => $timeout, 'verify' => $this->verifiesTls()];
 
         if ($method === 'GET' || $method === 'HEAD') {
-            if (is_array($data) && $data !== []) {
-                $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($data);
-            }
+            $options['query'] = is_array($data) ? $data : [];
         } elseif (is_array($data)) {
-            $body = (string) json_encode($data);
-
-            if (!$typed) {
-                $lines[] = 'Content-Type: application/json';
-            }
+            $options['json'] = $data;
         } else {
-            $body = $data;
+            $options['body'] = $data;
         }
 
-        $received = '';
-        $tooBig = false;
+        return (new Client())->send($method, $url, $options)->toArray();
+    }
 
-        $handle = curl_init($url);
+    /**
+     * Whether TLS Certificates Are Checked - Phase 53
+     *
+     * Yes, unless the module's settings carry `verify_tls` set to something
+     * false. A server module offers that for a control panel on a self-signed
+     * certificate; nothing else should.
+     * @return bool
+     */
+    protected function verifiesTls(): bool
+    {
+        $value = $this->settings['verify_tls'] ?? true;
 
-        curl_setopt_array($handle, [
-            CURLOPT_CUSTOMREQUEST     =>  $method,
-            CURLOPT_HTTPHEADER        =>  $lines,
-            CURLOPT_FOLLOWLOCATION    =>  false,
-            CURLOPT_TIMEOUT_MS        =>  (int) ($timeout * 1000),
-            CURLOPT_CONNECTTIMEOUT_MS =>  (int) (min($timeout, self::CONNECT_TIMEOUT) * 1000),
-            CURLOPT_NOSIGNAL          =>  true,
-
-            // Read in pieces and stop at the cap. Returning fewer bytes than
-            // were handed over is how curl is told to abandon the transfer.
-            CURLOPT_WRITEFUNCTION     =>  static function ($curl, string $chunk) use (&$received, &$tooBig): int {
-                if (strlen($received) + strlen($chunk) > self::MAX_BYTES) {
-                    $tooBig = true;
-
-                    return 0;
-                }
-
-                $received .= $chunk;
-
-                return strlen($chunk);
-            },
-        ]);
-
-        if ($body !== null) {
-            curl_setopt($handle, CURLOPT_POSTFIELDS, $body);
-        }
-
-        if ($method === 'HEAD') {
-            curl_setopt($handle, CURLOPT_NOBODY, true);
-        }
-
-        $done = curl_exec($handle);
-        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-        $error = $done === false ? (string) curl_error($handle) : '';
-
-        curl_close($handle);
-
-        if ($tooBig) {
-            return [
-                'status' =>  0,
-                'body'   =>  $received,
-                'json'   =>  null,
-                'error'  =>  'The reply was larger than ' . self::MAX_BYTES . ' bytes, so it was not read.',
-            ];
-        }
-
-        if ($error !== '') {
-            return $this->failed($error);
-        }
-
-        $json = null;
-
-        if ($received !== '') {
-            try {
-                $decoded = json_decode($received, true, 512, JSON_THROW_ON_ERROR);
-                $json = is_array($decoded) ? $decoded : null;
-            } catch (Throwable) {
-                $json = null;
-            }
-        }
-
-        return ['status' => $status, 'body' => $received, 'json' => $json, 'error' => null];
+        return !in_array(is_string($value) ? strtolower(trim($value)) : $value, [false, 0, '0', 'no', 'off', 'false'], true);
     }
 
     /**

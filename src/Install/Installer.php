@@ -34,6 +34,7 @@ use LBM\Service\Permission;
 use LBM\Support\Permission as PermissionSupport;
 use LBM\Support\Version;
 use Laika\Service\Uid;
+use Laika\Service\Vault;
 use Laika\Session\Schema\SessionSchema;
 use Laika\Auth\Schema\AuthSchema;
 
@@ -1105,7 +1106,8 @@ class Installer
             'mail_host'           =>  $mail['host'] ?? 'localhost',
             'mail_port'           =>  $mail['port'] ?? 587,
             'mail_username'       =>  $mail['username'] ?? '',
-            'mail_password'       =>  $mail['password'] ?? '',
+            // Sealed, as Setting::SECRETS are everywhere else (Phase 51).
+            'mail_password'       =>  ($mail['password'] ?? '') !== '' ? Vault::encrypt((string) $mail['password']) : '',
             'mail_encryption'     =>  $mail['encryption'] ?? 'tls',
             'mail_from'           =>  $mail['from'] ?? '',
             'mail_from_name'      =>  $mail['from_name'] ?? '',

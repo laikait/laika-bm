@@ -20,10 +20,9 @@ use Laika\Model\Model;
 use Laika\Service\Visitor;
 use LBM\Model\ClientModel;
 use LBM\Model\LoginLogModel;
-use LBM\Model\PasswordResetModel;
 use LBM\Pipeline\Auth;
+use LBM\Support\LoginThrottle;
 use LBM\Support\PasswordValidator;
-use Laika\Service\Uid;
 
 /**
  * Signing clients and their contacts in and out of the client area.
@@ -49,11 +48,17 @@ class AuthClient extends Action
     /** @var string The Account Exists But Is Not Allowed In */
     public const BLOCKED = 'This account is not active. Please contact support.';
 
+    /** @var string Too Many Failures - sprintf() With Minutes (Phase 52) */
+    public const THROTTLED = 'Too many failed attempts. Please wait %d minute(s) and try again.';
+
     /** @var string What a Reset Request Always Says */
     public const RESET_SENT = 'If that address belongs to an account, a reset link is on its way.';
 
     /** @var int How Long a Reset Link Lasts, In Seconds */
-    public const RESET_TTL = 3600;
+    public const RESET_TTL = PasswordReset::TTL;
+
+    /** @var string[] The Account Types a Client-Area Reset Link May Belong To */
+    private const RESET_TYPES = [PasswordValidator::CLIENT, PasswordValidator::CONTACT];
 
     public function model(): Model
     {
@@ -67,49 +72,68 @@ class AuthClient extends Action
     /**
      * Try To Sign a Client Or Contact In
      *
+     * Phase 52: throttled. A locked account or address is refused before any
+     * password is checked, with `retry_after` set so the controller can answer
+     * 429. Only a wrong password counts as a failure - a right password on a
+     * suspended account is not somebody guessing.
      * @param string $identifier Username Or Email
      * @param string $password Plain Password
-     * @return array{ok:bool,client:?array,contact:?array,guard:?string,error:?string}
+     * @return array{ok:bool,client:?array,contact:?array,guard:?string,error:?string,retry_after?:int}
      */
     public function attempt(string $identifier, string $password): array
     {
-        $passwords = new PasswordValidator();
-        $clients = new Client();
+        $throttle = new LoginThrottle();
+        $wait = $throttle->lockedFor(PANEL, $identifier);
 
-        $client = $clients->findByLogin($identifier);
-
-        if ($client !== null) {
-            $hash = $passwords->current((int) $client['cid'], PasswordValidator::CLIENT);
-
-            if ($passwords->verify($password, $hash)) {
-                return $this->signInClient($client, $clients);
-            }
+        if ($wait > 0) {
+            return [
+                'ok'          =>  false,
+                'client'      =>  null,
+                'contact'     =>  null,
+                'guard'       =>  null,
+                'error'       =>  sprintf(self::THROTTLED, (int) ceil($wait / 60)),
+                'retry_after' =>  $wait,
+            ];
         }
 
-        $contacts = new ClientContact();
-        $contact = $contacts->findByLogin($identifier);
+        $result = $this->check($identifier, $password);
 
-        if ($contact !== null && !empty($contact['username'])) {
-            $hash = $passwords->current((int) $contact['cc_id'], PasswordValidator::CONTACT);
-
-            if ($passwords->verify($password, $hash)) {
-                return $this->signInContact($contact, $clients);
-            }
+        if ($result['ok']) {
+            $throttle->succeeded(PANEL, $identifier);
+        } elseif ($result['error'] === self::FAILURE) {
+            $throttle->failed(PANEL, $identifier);
         }
 
-        // Nothing matched. Hash anyway so a miss costs the same as a wrong
-        // password and the timing cannot be used to enumerate accounts.
-        if ($client === null && $contact === null) {
-            $passwords->verify($password, null);
+        return $result;
+    }
+
+    /**
+     * Sign The Current Client Or Contact Out Of Every Device - Phase 52
+     *
+     * Revokes every token the account holds, this browser's included. A contact
+     * signs out only their own sub-login: they are a separate person, and one
+     * of them losing a phone is no reason to sign the account holder out.
+     * @return void
+     */
+    public function logoutEverywhere(): void
+    {
+        $user = Auth::user(PANEL);
+
+        if ($user === null) {
+            return;
         }
 
-        return [
-            'ok'      =>  false,
-            'client'  =>  null,
-            'contact' =>  null,
-            'guard'   =>  null,
-            'error'   =>  self::FAILURE,
-        ];
+        $contact = Auth::guardOf(PANEL) === Auth::CONTACT;
+        $id = (int) ($contact ? ($user['cc_id'] ?? 0) : ($user['cid'] ?? 0));
+
+        Auth::logoutEverywhere(PANEL, $id, $contact ? Auth::CONTACT : Auth::CLIENT);
+
+        (new Activity())->record(
+            'client.sessions.revoke',
+            'Signed out of every device.',
+            $contact ? Activity::CONTACT : Activity::CLIENT,
+            $id ?: null
+        );
     }
 
     /**
@@ -222,13 +246,20 @@ class AuthClient extends Action
     public function forgot(string $email): string
     {
         $email = strtolower(trim($email));
+
+        // Phase 52: over the limit, the page still says the same thing - a
+        // different answer would tell a script which addresses it has hit.
+        if (!(new LoginThrottle())->allowReset(PANEL, $email)) {
+            return self::RESET_SENT;
+        }
+
         $client = (new Client())->findByLogin($email);
 
         if ($client === null) {
             return self::RESET_SENT;
         }
 
-        $token = $this->issueReset((int) $client['cid'], PasswordValidator::CLIENT);
+        $token = (new PasswordReset())->issue((int) $client['cid'], PasswordValidator::CLIENT);
 
         $this->notify('password-reset', (string) $client['email'], (int) $client['cid'], [
             'first_name' =>  $client['first_name'] ?? '',
@@ -247,20 +278,7 @@ class AuthClient extends Action
      */
     public function findReset(string $token): ?array
     {
-        $token = trim($token);
-
-        if ($token === '') {
-            return null;
-        }
-
-        $model = new PasswordResetModel();
-
-        $row = $model->where(['token' => $this->hashToken($token)])
-            ->isNull('used_at')
-            ->where(['expires_at' => date('Y-m-d H:i:s')], '>')
-            ->first();
-
-        return is_array($row) ? $row : null;
+        return (new PasswordReset())->lookup($token, self::RESET_TYPES);
     }
 
     /**
@@ -282,8 +300,7 @@ class AuthClient extends Action
             return ['ok' => false, 'errors' => ['That reset link has expired or has already been used.']];
         }
 
-        $passwords = new PasswordValidator();
-        $errors = $passwords->validate($password, $confirm);
+        $errors = (new PasswordValidator())->validate($password, $confirm);
 
         if ($errors !== []) {
             return ['ok' => false, 'errors' => $errors];
@@ -292,17 +309,16 @@ class AuthClient extends Action
         $relId = (int) $row['rel_id'];
         $relType = (string) $row['rel_type'];
 
-        (new PasswordResetModel())->transaction(
-            function (PasswordResetModel $m) use ($row, $relId, $relType, $password, $passwords): void {
-                $m->where([$m->id => (int) $row['reset_id']])->update(['used_at' => $this->now()]);
+        (new PasswordReset())->consume($row, $password);
 
-                $passwords->put($relId, $relType, $password);
-            }
+        // Phase 52: every device still signed in with the old password is
+        // signed out. Somebody resetting because an account was taken over
+        // expects the intruder to be gone, not merely unable to sign in again.
+        Auth::revokeAll(
+            PANEL,
+            $relId,
+            $relType === PasswordValidator::CONTACT ? Auth::CONTACT : Auth::CLIENT
         );
-
-        // Any other outstanding link for the same account is now stale - the
-        // password it was issued against no longer exists.
-        $this->revokeResets($relId, $relType);
 
         (new Activity())->record(
             'client.password.reset',
@@ -362,15 +378,59 @@ class AuthClient extends Action
      */
     public function revokeResets(int $relId, string $relType): int
     {
-        return (new PasswordResetModel())
-            ->where(['rel_id' => $relId, 'rel_type' => $relType])
-            ->isNull('used_at')
-            ->update(['used_at' => $this->now()]);
+        return (new PasswordReset())->revoke($relId, $relType);
     }
 
     ####################################################################################
     /*================================= INTERNAL API =================================*/
     ####################################################################################
+
+    /**
+     * Check The Credentials And Sign In On a Match
+     * @param string $identifier Username Or Email
+     * @param string $password Plain Password
+     * @return array{ok:bool,client:?array,contact:?array,guard:?string,error:?string}
+     */
+    private function check(string $identifier, string $password): array
+    {
+        $passwords = new PasswordValidator();
+        $clients = new Client();
+
+        $client = $clients->findByLogin($identifier);
+
+        if ($client !== null) {
+            $hash = $passwords->current((int) $client['cid'], PasswordValidator::CLIENT);
+
+            if ($passwords->verify($password, $hash)) {
+                return $this->signInClient($client, $clients);
+            }
+        }
+
+        $contacts = new ClientContact();
+        $contact = $contacts->findByLogin($identifier);
+
+        if ($contact !== null && !empty($contact['username'])) {
+            $hash = $passwords->current((int) $contact['cc_id'], PasswordValidator::CONTACT);
+
+            if ($passwords->verify($password, $hash)) {
+                return $this->signInContact($contact, $clients);
+            }
+        }
+
+        // Nothing matched. Hash anyway so a miss costs the same as a wrong
+        // password and the timing cannot be used to enumerate accounts.
+        if ($client === null && $contact === null) {
+            $passwords->verify($password, null);
+        }
+
+        return [
+            'ok'      =>  false,
+            'client'  =>  null,
+            'contact' =>  null,
+            'guard'   =>  null,
+            'error'   =>  self::FAILURE,
+        ];
+    }
 
     /**
      * Complete a Client Sign-In
@@ -456,45 +516,6 @@ class AuthClient extends Action
             'guard'   =>  Auth::CONTACT,
             'error'   =>  null,
         ];
-    }
-
-    /**
-     * Issue a Reset Token
-     *
-     * Returns the plain token; only its hash is stored. Any earlier outstanding
-     * link is retired first, so asking twice does not leave two working keys.
-     * @param int $relId Client/Contact ID
-     * @param string $relType client or contact
-     * @return string The plain token
-     */
-    private function issueReset(int $relId, string $relType): string
-    {
-        $this->revokeResets($relId, $relType);
-
-        $token = bin2hex(random_bytes(32));
-        $model = new PasswordResetModel();
-
-        $model->insert([
-            $model->uid  =>  Uid::make(),
-            'rel_id'     =>  $relId,
-            'rel_type'   =>  $relType,
-            'token'      =>  $this->hashToken($token),
-            'ip'         =>  $this->ip(),
-            'expires_at' =>  date('Y-m-d H:i:s', time() + self::RESET_TTL),
-            'created_at' =>  $this->now(),
-        ]);
-
-        return $token;
-    }
-
-    /**
-     * Hash a Reset Token For Storage
-     * @param string $token Plain Token
-     * @return string
-     */
-    private function hashToken(string $token): string
-    {
-        return hash('sha256', $token);
     }
 
     /**

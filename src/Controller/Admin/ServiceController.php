@@ -15,6 +15,7 @@ namespace LBM\Controller\Admin;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use Laika\Service\Redirect;
 use Laika\Service\Request;
 use LBM\Service\Addon;
 use LBM\Service\ConfigOption;
@@ -23,6 +24,7 @@ use LBM\Service\ClientService;
 use LBM\Service\Dunning;
 use LBM\Service\Product;
 use LBM\Service\Server;
+use LBM\Service\ServiceOperation;
 use LBM\Service\Termination;
 
 /**
@@ -129,7 +131,128 @@ class ServiceController extends AdminController
             // kind of thing that reads fine and is wrong the day somebody adds
             // a status.
             'suspended'  =>  (int) $row['status_relid'] === (int) ClientService::statusId('suspended'),
+
+            // Phase 53: what the module can do beyond the lifecycle. The card
+            // shows only the buttons that are true here.
+            'can'        =>  ServiceOperation::capabilities($row),
+            'usage'      =>  ServiceOperation::latestUsage($serviceId),
+            'packages'   =>  $this->packageChoices($row),
         ]);
+    }
+
+    ####################################################################################
+    /*=========================== MODULE OPERATIONS (PHASE 53) =======================*/
+    ####################################################################################
+
+    /**
+     * Sign Staff Into The Account's Control Panel
+     *
+     * Asked for at the click, never when the page was drawn - see the
+     * SingleSignOn contract - and followed at once.
+     * @param string $service Service Uid
+     * @return ?string
+     */
+    public function singleSignOn(string $service): ?string
+    {
+        $row = $this->record(ClientService::find($service), 'service');
+        $result = ServiceOperation::singleSignOn($row, 'staff');
+
+        if (!$result['success']) {
+            return $this->operationFailed($row, $result['message']);
+        }
+
+        Redirect::to((string) $result['url']);
+
+        return null;
+    }
+
+    /**
+     * Set a New Panel Password - Typed, Or Generated When Left Blank
+     * @param string $service Service Uid
+     * @return ?string
+     */
+    public function password(string $service): ?string
+    {
+        $row = $this->record(ClientService::find($service), 'service');
+        $result = ServiceOperation::changePassword($row, (string) Request::input('password', ''));
+
+        if (!$result['success']) {
+            return $this->operationFailed($row, $result['message']);
+        }
+
+        return $this->done('staff.service', local('service_password_changed'), true, ['service' => $row['uid']]);
+    }
+
+    /**
+     * Move The Account To Another Package On The Same Module
+     * @param string $service Service Uid
+     * @return ?string
+     */
+    public function package(string $service): ?string
+    {
+        $row = $this->record(ClientService::find($service), 'service');
+        $result = ServiceOperation::changePackage($row, (int) Request::input('product_relid', 0));
+
+        if (!$result['success']) {
+            return $this->operationFailed($row, $result['message']);
+        }
+
+        return $this->done('staff.service', local('service_package_changed'), true, ['service' => $row['uid']]);
+    }
+
+    /**
+     * Read The Account's Usage From The Panel Now
+     * @param string $service Service Uid
+     * @return ?string
+     */
+    public function usage(string $service): ?string
+    {
+        $row = $this->record(ClientService::find($service), 'service');
+        $result = ServiceOperation::syncUsage($row);
+
+        if (!$result['success']) {
+            return $this->operationFailed($row, $result['message']);
+        }
+
+        return $this->done('staff.service', local('service_usage_synced'), true, ['service' => $row['uid']]);
+    }
+
+    /**
+     * Back To The Service With What The Module Said
+     * @param array $row Service Row
+     * @param string $message
+     * @return null
+     */
+    private function operationFailed(array $row, string $message): null
+    {
+        return $this->done('staff.service', local('service_operation_failed', $message), false, ['service' => $row['uid']]);
+    }
+
+    /**
+     * Products The Account Could Move To: Same Module, Not The Current One
+     * @param array $row Service Row
+     * @return array<int,string> Product ID => Name
+     */
+    private function packageChoices(array $row): array
+    {
+        $current = Product::find((int) $row['product_relid']);
+        $module = trim((string) ($current['module_name'] ?? ''));
+
+        if ($module === '') {
+            return [];
+        }
+
+        $choices = [];
+
+        foreach (Product::all(['module_name' => $module]) as $product) {
+            $id = (int) ($product['pid'] ?? 0);
+
+            if ($id > 0 && $id !== (int) $row['product_relid']) {
+                $choices[$id] = (string) ($product['product_name'] ?? ('#' . $id));
+            }
+        }
+
+        return $choices;
     }
 
     /**

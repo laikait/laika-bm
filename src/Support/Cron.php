@@ -16,12 +16,15 @@ namespace LBM\Support;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Throwable;
+use RuntimeException;
+use Laika\Queue\Abstracts\Job;
 use LBM\Action\ErrorLog as ErrorLogAction;
 use LBM\Support\ErrorLog;
 use LBM\Job\DomainRenewalJob;
 use LBM\Job\InvoiceGenerateJob;
 use LBM\Job\InvoiceReminderJob;
 use LBM\Job\PruneTokensJob;
+use LBM\Job\UsageSyncJob;
 use LBM\Service\AutoCharge;
 use LBM\Service\Mail;
 use LBM\Service\Dunning;
@@ -97,6 +100,9 @@ class Cron
 
     /** @var string[] What Went Wrong, If Anything */
     private array $errors = [];
+
+    /** @var ?QueueRunner Built On First Use - Phase 51 */
+    private ?QueueRunner $runner = null;
 
     /**
      * Run The Scheduled Work
@@ -201,6 +207,20 @@ class Cron
         //
         // Both halves are bounded per tick, so a backlog spreads over several
         // runs instead of making one run last an hour and trip the lock.
+        // Phase 51. Whatever is waiting on LBM's queue: a job's retry that has
+        // come due, or work pushed from a web request. Bounded, so a backlog
+        // spreads over several runs. A supervised `php worker lbm`, if the
+        // operator runs one, drains the same queue; this is for when they do not.
+        $this->task('queued jobs', function (): string {
+            $result = $this->runner()->drain($this->number('cron_queue_seconds', QueueRunner::SECONDS));
+
+            if ($result['failures'] !== []) {
+                throw new RuntimeException($result['done'] . ' run, ' . $result['failed'] . ' failed - ' . implode('; ', $result['failures']));
+            }
+
+            return $result['done'] . ' run';
+        });
+
         $this->task('provision paid orders', static function (): string {
             return Provision::run();
         });
@@ -270,19 +290,15 @@ class Cron
             return;
         }
 
-        $this->task('raise due invoices', static function (): string {
-            (new InvoiceGenerateJob())->handle();
-
-            return 'done';
+        $this->task('raise due invoices', function (): string {
+            return $this->dispatch(new InvoiceGenerateJob());
         });
 
         // Daily, beside the service invoices and for the same reason: raising
         // an invoice queues an email, and a job that ran every five minutes
         // would be one bug away from sending the customer 288 of them.
-        $this->task('raise domain renewals', static function (): string {
-            (new DomainRenewalJob())->handle();
-
-            return 'done';
+        $this->task('raise domain renewals', function (): string {
+            return $this->dispatch(new DomainRenewalJob());
         });
 
         // Phase 48. After the invoices are raised, so a renewal raised today can
@@ -295,16 +311,12 @@ class Cron
             return AutoCharge::run();
         });
 
-        $this->task('invoice reminders', static function (): string {
-            (new InvoiceReminderJob())->handle();
-
-            return 'done';
+        $this->task('invoice reminders', function (): string {
+            return $this->dispatch(new InvoiceReminderJob());
         });
 
-        $this->task('prune expired tokens', static function (): string {
-            (new PruneTokensJob())->handle();
-
-            return 'done';
+        $this->task('prune expired tokens', function (): string {
+            return $this->dispatch(new PruneTokensJob());
         });
 
         // Daily, not per tick: it touches every server row, and the answer
@@ -313,6 +325,12 @@ class Cron
         // for installs carrying the zeroes that shipped from Phase 0 until 24.
         $this->task('recount server accounts', static function (): string {
             return Server::recountAll() . ' servers';
+        });
+
+        // Phase 53: once a day is what usage billing will need, and every
+        // extra read is a call to somebody's control panel.
+        $this->task('sync service usage', function (): string {
+            return $this->dispatch(new UsageSyncJob());
         });
 
         $this->task('prune sent mail', function (): string {
@@ -341,6 +359,37 @@ class Cron
     ################################################################################
     /*=============================== INTERNAL API ===============================*/
     ################################################################################
+
+    /**
+     * Run One Job Through The Queue, In Its Place - Phase 51
+     *
+     * Pushed and worked at once, so the daily order is unchanged (invoices
+     * before cards before reminders) and the job now has what a queue gives
+     * it: retries with backoff, then the failed-job store. A failure still
+     * throws here, so task() records it and cron still exits non-zero.
+     * @param Job $job
+     * @return string
+     * @throws RuntimeException When The Job Failed
+     */
+    private function dispatch(Job $job): string
+    {
+        $failure = $this->runner()->run($job);
+
+        if ($failure !== null) {
+            throw new RuntimeException($failure);
+        }
+
+        return 'done';
+    }
+
+    /**
+     * The Queue Runner, Built Once Per Run
+     * @return QueueRunner
+     */
+    private function runner(): QueueRunner
+    {
+        return $this->runner ??= new QueueRunner();
+    }
 
     /**
      * Run One Task, Catching Whatever It Throws

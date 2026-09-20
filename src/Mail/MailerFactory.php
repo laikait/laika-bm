@@ -16,6 +16,7 @@ namespace LBM\Mail;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Mailman\Mailer;
+use LBM\Action\Setting;
 
 /**
  * Builds a configured Laika\Mailman\Mailer from the options table.
@@ -54,7 +55,8 @@ class MailerFactory
             'host'          =>  option('mail_host', 'localhost'),
             'port'          =>  option_int('mail_port', 587),
             'username'      =>  option('mail_username', ''),
-            'password'      =>  option('mail_password', ''),
+            // Sealed since Phase 51 - opened here, never read with option().
+            'password'      =>  (new Setting())->secret('mail_password'),
             'encryption'    =>  option('mail_encryption', 'tls'),
             'from'          =>  option('mail_from', ''),
             'from_name'     =>  option('mail_from_name', ''),

@@ -350,6 +350,18 @@ Url::group(ADMIN, function () use ($uid): void {
     Url::post("/service/{service:{$uid}}/terminate", [ServiceController::class, 'terminate'])
         ->name('staff.service.terminate')->pipeline([Permission::class . '|perm=order.delete']);
 
+    // Phase 53: the optional module operations. All on order.update - each one
+    // changes the account on somebody's server, and signing in to its panel
+    // reaches everything in it.
+    Url::post("/service/{service:{$uid}}/sso", [ServiceController::class, 'singleSignOn'])
+        ->name('staff.service.sso')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/service/{service:{$uid}}/password", [ServiceController::class, 'password'])
+        ->name('staff.service.password')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/service/{service:{$uid}}/package", [ServiceController::class, 'package'])
+        ->name('staff.service.package')->pipeline([Permission::class . '|perm=order.update']);
+    Url::post("/service/{service:{$uid}}/usage", [ServiceController::class, 'usage'])
+        ->name('staff.service.usage')->pipeline([Permission::class . '|perm=order.update']);
+
     /*=============================== INVOICES ==============================*/
     Url::get('/invoices', [InvoiceController::class, 'index'])
         ->name('staff.invoices')->pipeline([Permission::class . '|perm=invoice.read']);
@@ -531,6 +543,10 @@ Url::group(ADMIN, function () use ($uid): void {
         ->name('staff.server.edit')->pipeline([Permission::class . '|perm=server.update']);
     Url::post("/settings/server/{server:{$uid}}/edit", [ServerController::class, 'edit'])
         ->pipeline([Permission::class . '|perm=server.update']);
+
+    // Phase 53: read-only, so server.read.
+    Url::get("/settings/server/{server:{$uid}}/accounts", [ServerController::class, 'accounts'])
+        ->name('staff.server.accounts')->pipeline([Permission::class . '|perm=server.read']);
 
     Url::post("/settings/server/{server:{$uid}}/test", [ServerController::class, 'test'])
         ->name('staff.server.test')->pipeline([Permission::class . '|perm=server.update']);
@@ -884,4 +900,13 @@ Url::group(ADMIN, function (): void {
 
     /** POST, not GET: signing out is a state change (instruction 16). */
     Url::post('/logout', [AuthController::class, 'logout'])->name('staff.logout');
+
+    /**
+     * Phase 52: staff password reset, mirroring the client area's. The token is
+     * a Vault::token() - URL-safe base64, hence `-` and `_`.
+     */
+    Url::get('/forgot-password', [AuthController::class, 'forgot'])->name('staff.forgot');
+    Url::post('/forgot-password', [AuthController::class, 'forgot']);
+    Url::get('/reset-password/{token:[a-zA-Z0-9_\-]+}', [AuthController::class, 'reset'])->name('staff.reset');
+    Url::post('/reset-password/{token:[a-zA-Z0-9_\-]+}', [AuthController::class, 'reset']);
 });

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Laika Bill Manager test suite - Phase 51.
+
+    Run:   php tools/phpunit.phar
+    Needs: tools/phpunit.phar (PHPUnit 12; see tests/README.md), MySQL
+           credentials in the app's lf-config/database.php, and LBM_APP_ROOT
+           when the app is not the `cloud` directory beside this checkout.
+
+    Tests run against a throwaway `lbm_test` database the bootstrap rebuilds
+    on every run - never the application's own.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.5/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory="tools/.phpunit.cache"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="lbm">
+            <directory suffix="Test.php">tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

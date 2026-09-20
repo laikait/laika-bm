@@ -18,6 +18,8 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use Laika\Service\Request;
 use LBM\Service\Module;
 use LBM\Service\Server;
+use LBM\Service\ClientService;
+use LBM\Service\ServiceOperation;
 
 /**
  * Provisioning servers.
@@ -55,6 +57,9 @@ class ServerController extends AdminController
         // number to draw rather than a calculation to get right.
         foreach ($page['rows'] as $i => $row) {
             $page['rows'][$i]['usage'] = Server::usage($row);
+
+            // Phase 53: offer the accounts list only where the module has one.
+            $page['rows'][$i]['lists_accounts'] = ServiceOperation::listsAccounts($row);
         }
 
         return $this->screen('servers', local('servers'), [
@@ -110,6 +115,40 @@ class ServerController extends AdminController
         }
 
         return $this->form($row, local('edit_named', $row['name']));
+    }
+
+    /**
+     * The Panel's Own Account List, Beside LBM's Services - Phase 53
+     *
+     * Read-only, and on GET: it asks the panel, it changes nothing. An account
+     * the panel has that no service here points at is what an operator is
+     * looking for - billed nowhere, or left behind by a failed terminate.
+     * @param string $server Server Uid
+     * @return string
+     */
+    public function accounts(string $server): string
+    {
+        $row = $this->record(Server::find($server), 'server');
+        $result = ServiceOperation::accounts($row);
+
+        $known = [];
+
+        foreach (ClientService::all(['server_relid' => (int) $row['server_id']]) as $service) {
+            $username = strtolower(trim((string) ($service['username'] ?? '')));
+
+            if ($username !== '') {
+                $known[$username] = $service;
+            }
+        }
+
+        foreach ($result['accounts'] as $i => $account) {
+            $result['accounts'][$i]['service'] = $known[strtolower($account['username'])] ?? null;
+        }
+
+        return $this->screen('server-accounts', local('accounts_on_server'), [
+            'server' =>  $row,
+            'result' =>  $result,
+        ]);
     }
 
     /**

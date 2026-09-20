@@ -58,6 +58,11 @@ interface ServerInterface
      *   `password` is returned in the clear and stored encrypted by
      *   `LBM\Action\ClientService::setCredential()` - never write it anywhere
      *   yourself, and never log it.
+     *
+     *   Optionally `data`: an array the module needs to find the account again
+     *   (a VPS id, a subscription id). Phase 54: it is kept in the service's
+     *   `module_data['module']` and handed back in every later call's $service.
+     *   Nothing secret - it is stored as it is.
      */
     public function create(array $service, array $context = []): array;
 

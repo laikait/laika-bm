@@ -14,6 +14,12 @@ use Laika\Model\Contract\SchemaAbstract;
 
 class ProvisioningLogSchema extends SchemaAbstract
 {
+    /** @var string[] Every Module Operation That Is Logged (Phase 53 added the last four) */
+    public const ACTIONS = [
+        'create', 'suspend', 'unsuspend', 'terminate',
+        'change_package', 'change_password', 'single_sign_on', 'sync_usage',
+    ];
+
     /** @var string Database Table Name */
     protected string $table = 'provisioning_logs';
 
@@ -28,7 +34,9 @@ class ProvisioningLogSchema extends SchemaAbstract
             $t->unsignedBigInteger('service_relid')->comment('client_services -> service_id');
             $t->enum('creator_type', ['staff', 'client', 'system']);
             $t->unsignedBigInteger('creator_relid')->nullable()->comment('staff/client/null -> sid/cid/system');
-            $t->enum('action', ['create','suspend','unsuspend','terminate'])->comment('create, suspend, unsuspend, terminate');
+            // Phase 53 added the four optional operations; the migration
+            // M202609200100WidenProvisioningLogAction brings older installs level.
+            $t->enum('action', ProvisioningLogSchema::ACTIONS)->comment('What was asked of the module');
             $t->unsignedInteger('result_relid')->default(1)->comment('provisioning_results -> result_id');
             $t->serialize('request_data')->nullable();
             $t->serialize('response_data')->nullable();

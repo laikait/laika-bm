@@ -51,6 +51,8 @@ Url::group(PANEL, function () use ($uid): void {
     /*=============================== SERVICES ==============================*/
     Url::get('/services', [ServiceController::class, 'index'])->name('client.services');
     Url::get("/service/{service:{$uid}}", [ServiceController::class, 'show'])->name('client.service');
+    /** Phase 53: a POST, because it signs somebody into another system. */
+    Url::post("/service/{service:{$uid}}/sso", [ServiceController::class, 'singleSignOn'])->name('client.service.sso');
     Url::post("/service/{service:{$uid}}/cancel", [ServiceController::class, 'cancel'])
         ->name('client.service.cancel');
 
@@ -140,6 +142,9 @@ Url::group(PANEL, function () use ($uid): void {
     Url::post('/profile', [ProfileController::class, 'update']);
     Url::post('/profile/password', [ProfileController::class, 'password'])->name('client.profile.password');
     Url::post('/profile/currency', [ProfileController::class, 'currency'])->name('client.profile.currency');
+    /** Phase 52: revoke every token this login holds, this browser's included. */
+    Url::post('/profile/sessions/revoke', [ProfileController::class, 'revokeSessions'])
+        ->name('client.profile.sessions.revoke');
 
     /*---------------------------- Sub-Logins -----------------------------*/
     Url::get('/contacts', [ProfileController::class, 'contacts'])->name('client.contacts');
@@ -169,8 +174,9 @@ Url::group(PANEL, function (): void {
     /** Password reset: request a link, then set a new password with the token. */
     Url::get('/forgot-password', [AuthController::class, 'forgot'])->name('client.forgot');
     Url::post('/forgot-password', [AuthController::class, 'forgot']);
-    Url::get('/reset-password/{token:[a-zA-Z0-9]+}', [AuthController::class, 'reset'])->name('client.reset');
-    Url::post('/reset-password/{token:[a-zA-Z0-9]+}', [AuthController::class, 'reset']);
+    // Phase 52: `-` and `_` too - tokens are Vault::token(), URL-safe base64.
+    Url::get('/reset-password/{token:[a-zA-Z0-9_\-]+}', [AuthController::class, 'reset'])->name('client.reset');
+    Url::post('/reset-password/{token:[a-zA-Z0-9_\-]+}', [AuthController::class, 'reset']);
 
     /** Client self-registration, gated by the allow_registration option. */
     Url::get('/register', [AuthController::class, 'register'])->name('client.register');

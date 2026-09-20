@@ -383,6 +383,25 @@ class Tld extends Action
     }
 
     /**
+     * What Restoring a Domain From Redemption Costs - Phase 50
+     *
+     * renewalPrice()'s rules, for the same reasons: no `is_active` gate (a
+     * withdrawn TLD still owes its existing customers a way back) and the
+     * currency enforced. One event whatever the term, so never multiplied.
+     * @param array $tld TLD Row
+     * @param int $currencyId The Currency The Domain Is Billed In
+     * @return ?string Decimal string, or null when it cannot be priced
+     */
+    public function restorePrice(array $tld, int $currencyId): ?string
+    {
+        if ($currencyId <= 0 || (int) ($tld['currency_relid'] ?? 0) !== $currencyId) {
+            return null;
+        }
+
+        return Money::round((string) ($tld['restore_price'] ?? '0'));
+    }
+
+    /**
      * The Billing Cycle a Term Is Recorded As
      * @param int $years Term
      * @return ?string Cycle name, or null when no cycle means that many years

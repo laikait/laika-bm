@@ -144,6 +144,8 @@ $ExcludeDirs = @(
     (Join-Path $AppRoot 'docs'),
     (Join-Path $AppRoot 'lf-logs'),
     (Join-Path $AppRoot 'lf-storage\cache'),
+    # Phase 52: the firewall's and the sign-in throttle's live counters.
+    (Join-Path $AppRoot 'lf-storage\shield'),
     (Join-Path $AppRoot 'lf-storage\keys'),
     (Join-Path $AppRoot 'uploads')
 )
@@ -193,7 +195,7 @@ $PkgStage = Join-Path $Stage 'vendor\laikait\laika-bm'
 
 if (Test-Path $PkgStage) { Remove-Item $PkgStage -Recurse -Force }
 
-& robocopy $RepoRoot $PkgStage '/E' '/XJ' '/R:1' '/W:1' '/NFL' '/NDL' '/NJH' '/NJS' '/NP' '/XD' '.git' 'dist' 'bin' | Out-Null
+& robocopy $RepoRoot $PkgStage '/E' '/XJ' '/R:1' '/W:1' '/NFL' '/NDL' '/NJH' '/NJS' '/NP' '/XD' '.git' 'dist' 'bin' (Join-Path $RepoRoot 'tests') (Join-Path $RepoRoot 'tools') '/XF' (Join-Path $RepoRoot 'phpunit.xml.dist') | Out-Null
 
 if ($LASTEXITCODE -ge 8) { Stop-Build "robocopy failed copying laika-bm (exit $LASTEXITCODE)" }
 

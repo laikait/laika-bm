@@ -244,6 +244,8 @@ copy_tree($appRoot, $stage, ['.git'], [
     'worker',
     'lf-storage/lbm/install.lock',
     'lf-storage/queues/jobs.json',
+    // Phase 52: the firewall's and the sign-in throttle's live counters.
+    'lf-storage/shield',
     'lf-app/Controller/HomeController.php',
     'lf-app/Filter/LogFilter.php',
     'lf-app/Job/WriteLog.php',
@@ -256,7 +258,9 @@ copy_tree($appRoot, $stage, ['.git'], [
 note('app root copied');
 
 // The product, as real files.
-copy_tree($repoRoot, $stage . '/vendor/laikait/laika-bm', ['.git', 'dist', 'bin'], []);
+// tests/, tools/ and phpunit.xml.dist are the test suite and its runner (Phase 51):
+// development only, and a PHPUnit phar on an operator's server is an attack surface.
+copy_tree($repoRoot, $stage . '/vendor/laikait/laika-bm', ['.git', 'dist', 'bin'], ['tests', 'tools', 'phpunit.xml.dist']);
 
 note('laika-bm resolved to real files');
 

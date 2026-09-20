@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Request;
 use Laika\Service\Redirect;
+use Laika\Service\Response;
 use LBM\Controller\Controller;
 use LBM\Pipeline\Auth;
 use LBM\Service\AuthStaff;
@@ -91,11 +92,101 @@ class AuthController extends Controller
                 // On the form rather than against a field: which half was wrong
                 // is exactly what a failed sign-in must not reveal.
                 Request::addError('form', (string) $result['error']);
+
+                if (($result['retry_after'] ?? 0) > 0) {
+                    $this->tooManyAttempts((int) $result['retry_after']);
+                }
             }
         }
 
         return $this->render('login', [
             'page_title' =>  local('sign_in'),
+        ]);
+    }
+
+    /**
+     * Ask For a Reset Link - Phase 52
+     *
+     * The same answer whether or not the address is a staff member's, and it
+     * comes from the action, so this screen cannot be more helpful than it
+     * should be.
+     * @return ?string
+     */
+    public function forgot(): ?string
+    {
+        if (Auth::check(ADMIN)) {
+            Redirect::to('staff.dashboard');
+
+            return null;
+        }
+
+        if (Request::isPost()) {
+            $email = trim((string) Request::input('email', ''));
+
+            if ($email === '') {
+                Request::addError('email', local('enter_account_email'));
+            } elseif (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+                Request::addError('email', local('not_an_email_address'));
+            }
+
+            if (Request::errors() === []) {
+                Redirect::with(AuthStaff::forgot($email), true)->to('staff.forgot');
+
+                return null;
+            }
+        }
+
+        return $this->render('forgot', [
+            'page_title' =>  local('reset_your_password'),
+        ]);
+    }
+
+    /**
+     * Set a New Password From a Reset Link - Phase 52
+     *
+     * Checked before the form is drawn: an expired link is a 410 that says so,
+     * not a form that takes the new password twice and then refuses it.
+     * @param string $token Reset Token
+     * @return ?string
+     */
+    public function reset(string $token): ?string
+    {
+        // A dead link gets the request-a-new-one form, with the reason on it,
+        // as a 410. Phase 52: it used to throw HttpException(410), which the
+        // framework renders as a bare 500 error page - a dead end for somebody
+        // who only clicked an old email.
+        if (AuthStaff::findReset($token) === null) {
+            Response::setStatus(410);
+            Request::addError('form', local('reset_link_expired'));
+
+            return $this->render('forgot', [
+                'page_title' =>  local('reset_your_password'),
+            ]);
+        }
+
+        if (Request::isPost()) {
+            $input = Request::inputs();
+
+            $result = AuthStaff::reset(
+                $token,
+                (string) ($input['password'] ?? ''),
+                $input['password_confirm'] ?? null
+            );
+
+            if ($result['ok']) {
+                Redirect::with(local('password_changed_sign_in'), true)->to('staff.login');
+
+                return null;
+            }
+
+            foreach ($result['errors'] as $error) {
+                Request::addError('form', $error);
+            }
+        }
+
+        return $this->render('reset', [
+            'page_title' =>  local('choose_a_new_password'),
+            'token'      =>  $token,
         ]);
     }
 

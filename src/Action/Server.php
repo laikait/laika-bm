@@ -207,6 +207,18 @@ class Server extends Action
 
         fclose($socket);
 
+        // Phase 54: the port answering says the machine is there, not that the
+        // credentials are right. A module that can check them is asked next.
+        $check = (new ServiceOperation())->checkServer($server);
+
+        if ($check !== null) {
+            return [
+                'ok'      =>  $check['success'],
+                'message' =>  "Reached {$host}:{$port} in {$ms}ms. " . $check['message'],
+                'ms'      =>  $ms,
+            ];
+        }
+
         return ['ok' => true, 'message' => "Reached {$host}:{$port} in {$ms}ms.", 'ms' => $ms];
     }
 

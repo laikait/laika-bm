@@ -1082,6 +1082,198 @@ if (!str_contains($installer, 'SessionSchema::class')) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 49.5. laika-session 5.1 moved scopes to Session::scope($name)->...
+// The old form - the scope as a trailing argument - still parses, and PHP drops
+// the extra argument without a word, so every such call read and wrote the
+// shared APP scope. Session::purge('CART') emptied the whole session and signed
+// the customer out; staff and client tokens overwrote each other. Nothing
+// fails, so nothing but this check notices.
+// ---------------------------------------------------------------------------
+$checked++;
+$scopeHits = [];
+$scan = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($stage . '/vendor/laikait/laika-bm', FilesystemIterator::SKIP_DOTS)
+);
+
+foreach ($scan as $file) {
+    /** @var SplFileInfo $file */
+    if ($file->getExtension() !== 'php' || str_contains($file->getPathname(), '/laika-bm/vendor/')) {
+        continue;
+    }
+
+    foreach (file($file->getPathname()) ?: [] as $n => $line) {
+        // get/set take at most two arguments, has/pop one, purge none.
+        if (
+            preg_match('/Session::(get|set)\((?:[^(),]|\([^()]*\))*,(?:[^(),]|\([^()]*\))*,/', $line)
+            || preg_match('/Session::(has|pop)\((?:[^(),]|\([^()]*\))*,/', $line)
+            || preg_match('/Session::purge\(\s*[^)\s]/', $line)
+        ) {
+            $scopeHits[] = ltrim(str_replace($stage, '', $file->getPathname()), '/') . ':' . ($n + 1);
+        }
+    }
+}
+
+if ($scopeHits !== []) {
+    fault("SESSION  scope passed as an argument (silently ignored - writes the shared APP scope). Use Session::scope(\$name)->...:\n           - " . implode("\n           - ", array_slice($scopeHits, 0, 10)));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 50. Correctness fixes. Each of these is a file whose absence turns a
+// fix back into the bug it fixed - silently, since the code that calls them
+// is written to cope with a missing piece.
+// ---------------------------------------------------------------------------
+foreach ([
+    'vendor/laikait/laika-bm/src/Controller/AreaErrorController.php'
+        => 'The admin and client 404. Without it every mistyped /admin or /panel URL is a 500 again.',
+    'template/admin/bootstrap/404.twig'
+        => 'The admin 404 view. AreaErrorController renders it.',
+    'template/panel/bootstrap/404.twig'
+        => 'The client 404 view. AreaErrorController renders it.',
+    'vendor/laikait/laika-bm/src/Module/Contracts/RestoresDomains.php'
+        => 'The registrar restore contract. DomainRenewal names it; without it the class does not load and no domain renews.',
+    'vendor/laikait/laika-bm/src/Migration/M202609190200AddQuarterlyCycle.php'
+        => 'Adds the quarterly cycle to an existing install.',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+// The two lang keys the area 404 reads, in the two areas it renders in. A
+// missing key is an exception, and the exception is the 500 this replaced.
+foreach (['admin', 'panel'] as $area) {
+    $checked++;
+    $lang = (string) @file_get_contents($stage . "/lf-lang/{$area}/en.local.php");
+
+    if (!str_contains($lang, '$page_not_found') || !str_contains($lang, '$not_found_lead')) {
+        fault("LANG     lf-lang/{$area}/en.local.php lacks page_not_found or not_found_lead - its 404 would throw.");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 51. The test suite stays home; the secret handling ships.
+// ---------------------------------------------------------------------------
+foreach ([
+    'vendor/laikait/laika-bm/tests'            => 'The test suite. Development only.',
+    'vendor/laikait/laika-bm/tools'            => 'The PHPUnit phar. An executable test runner on an operator\'s server.',
+    'vendor/laikait/laika-bm/phpunit.xml.dist' => 'The test configuration.',
+] as $dev => $why) {
+    must_not_exist($dev, $why);
+}
+
+foreach ([
+    'vendor/laikait/laika-bm/src/Support/Plain.php'
+        => 'Undoes the request encoding on credentials. Without it Setting and ModuleSettings do not load.',
+    'vendor/laikait/laika-bm/src/Migration/M202609190300SealMailPassword.php'
+        => 'Seals an SMTP password stored before Phase 51. Without it the password stays readable in the database.',
+    'vendor/laikait/laika-bm/src/Support/QueueRunner.php'
+        => 'How cron runs the daily jobs through the queue. Without it Cron does not load and nothing is billed.',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+// The Mail screen must not put the saved password back into the page.
+$checked++;
+$mailScreen = (string) @file_get_contents($stage . '/template/admin/bootstrap/settings-mail.twig');
+
+if (str_contains($mailScreen, 'settings.mail_password') && !str_contains($mailScreen, 'settings.mail_password_saved')) {
+    fault('SECRET   settings-mail.twig renders settings.mail_password - the SMTP password would be in the page source.');
+}
+
+// ---------------------------------------------------------------------------
+// Phase 52. The firewall, the sign-in throttle and the reset they share.
+// ---------------------------------------------------------------------------
+foreach ([
+    'vendor/laikait/laika-bm/src/Pipeline/Firewall.php'
+        => 'The first global pipeline. Without it no route loads - helpers/routes/app.php names it.',
+    'vendor/laikait/laika-bm/src/Support/LoginThrottle.php'
+        => 'Counts failed sign-ins. Without it neither sign-in form loads.',
+    'vendor/laikait/laika-bm/src/Action/PasswordReset.php'
+        => 'Reset links for staff and clients. Without it neither forgot-password form works.',
+    'vendor/laikait/laika-bm/helpers/hooks/security.php'
+        => 'Closes CORS and sets the security headers. Without it every origin may read responses.',
+    'lf-config/shield.php'
+        => 'The operator\'s firewall and throttle settings. Defaults apply without it, but there is nothing to edit.',
+    'template/admin/bootstrap/forgot.twig'
+        => 'The staff forgot-password screen (Phase 52).',
+    'template/admin/bootstrap/reset.twig'
+        => 'The staff reset screen (Phase 52).',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+must_not_exist('lf-storage/shield', 'The build machine\'s live firewall counters - every install would start with its lockouts.');
+
+// Firewall must stay FIRST: a pipeline ahead of it runs for requests it refuses.
+$checked++;
+$appRoutes = (string) @file_get_contents($stage . '/vendor/laikait/laika-bm/helpers/routes/app.php');
+
+if (!preg_match('/globalPipeline\(\[\s*Firewall::class\s*,/', $appRoutes)) {
+    fault('FIREWALL helpers/routes/app.php does not register Firewall first in Url::globalPipeline().');
+}
+
+// ---------------------------------------------------------------------------
+// Phase 53. The HTTP client, the optional server contracts and their screens.
+// ---------------------------------------------------------------------------
+foreach ([
+    'vendor/laikait/laika-bm/src/Support/Http/Client.php'
+        => 'Every module API call and the update check send through it. Without it no module can call out.',
+    'vendor/laikait/laika-bm/src/Support/Http/Response.php'
+        => 'What the client answers with.',
+    'vendor/laikait/laika-bm/src/Action/ServiceOperation.php'
+        => 'Package, password, single sign-on, usage and account-list calls. The service screens load it.',
+    'vendor/laikait/laika-bm/src/Job/UsageSyncJob.php'
+        => 'The daily usage read. Without it Cron does not load.',
+    'vendor/laikait/laika-bm/src/Migration/M202609200100WidenProvisioningLogAction.php'
+        => 'Lets older installs log the new operations. Without it every one of them fails its log write.',
+    'template/admin/bootstrap/server-accounts.twig'
+        => 'The accounts-on-this-server screen (Phase 53).',
+] as $shipped => $why) {
+    must_exist($shipped, $why);
+}
+
+foreach (['ChangesPackage', 'ChangesPassword', 'SingleSignOn', 'SyncsUsage', 'ListsAccounts'] as $contract) {
+    must_exist(
+        "vendor/laikait/laika-bm/src/Module/Contracts/{$contract}.php",
+        'An optional server contract (Phase 53). A module implementing it fails to load without it.'
+    );
+}
+
+// One transport. A second curl_init() in the product is a second set of rules
+// about timeouts, redirects and TLS, and the first place they will differ.
+$checked++;
+$curlOutside = [];
+
+foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($stage . '/vendor/laikait/laika-bm/src', FilesystemIterator::SKIP_DOTS)) as $file) {
+    if ($file->getExtension() === 'php'
+        && !str_ends_with(str_replace('\\', '/', $file->getPathname()), 'Support/Http/Client.php')
+        && str_contains((string) file_get_contents($file->getPathname()), 'curl_init(')) {
+        $curlOutside[] = basename($file->getPathname());
+    }
+}
+
+if ($curlOutside !== []) {
+    fault('TRANSPORT curl_init() outside Support/Http/Client.php: ' . implode(', ', $curlOutside));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 54. The first real server modules.
+// ---------------------------------------------------------------------------
+foreach ([
+    'Cpanel'      => ['Cpanel.php', 'Whm.php'],
+    'DirectAdmin' => ['DirectAdmin.php', 'Da.php'],
+    'Plesk'       => ['Plesk.php', 'Xml.php'],
+] as $panel => $files) {
+    must_exist("modules/servers/{$panel}/module.php", "The {$panel} module's manifest - without it the modules screen does not list it.");
+    must_exist("modules/servers/{$panel}/index.php", 'Denies the directory over the web, like every module directory.');
+
+    foreach ($files as $file) {
+        must_exist("modules/servers/{$panel}/src/{$file}", "Part of the {$panel} module.");
+    }
+}
+
+must_exist('vendor/laikait/laika-bm/src/Module/Accounts.php', 'Usernames and passwords for every server module (Phase 54).');
+must_exist('vendor/laikait/laika-bm/src/Module/Contracts/ChecksServer.php', 'Lets Check on the servers screen test credentials (Phase 54).');
+
+// ---------------------------------------------------------------------------
 // Phase 32. The error log a shipped install has never had.
 // ---------------------------------------------------------------------------
 //

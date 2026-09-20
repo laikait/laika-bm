@@ -105,7 +105,7 @@ class Termination extends Action
 
         return $cancelled . ' cancelled, ' . $terminated['done'] . ' terminated'
             . ($terminated['failed'] > 0 ? ', ' . $terminated['failed'] . ' failed' : '')
-            . ($this->retainDays() > 0 ? '' : ' (auto-terminate off)');
+            . ($this->retainDays() > 0 || $this->suspendedRetainDays() > 0 ? '' : ' (auto-terminate off)');
     }
 
     /**
@@ -115,6 +115,24 @@ class Termination extends Action
     public function retainDays(): int
     {
         $days = option_int('terminate_cancelled_days', 0);
+
+        return $days > 0 ? $days : 0;
+    }
+
+    /**
+     * How Long a Service Suspended For Non-Payment Is Kept - Phase 50
+     *
+     * Until Phase 50 only CANCELLED services were ever terminated, so a service
+     * dunning had suspended stayed suspended for ever: occupying an account on
+     * the server, counting against its capacity, and never reaching an end.
+     *
+     * Off by default, for Phase 23's reason: this destroys a customer's data on
+     * the strength of an unpaid invoice, and an operator has to choose that.
+     * @return int Days, counted from the suspension. Zero means never
+     */
+    public function suspendedRetainDays(): int
+    {
+        $days = option_int('terminate_suspended_days', 0);
 
         return $days > 0 ? $days : 0;
     }
@@ -151,6 +169,12 @@ class Termination extends Action
             $result['success'] ? $done++ : $failed++;
         }
 
+        foreach ($this->suspendedTooLong() as $service) {
+            $result = $this->terminate($service, 'Suspended for non-payment for longer than the retention period.');
+
+            $result['success'] ? $done++ : $failed++;
+        }
+
         return ['done' => $done, 'failed' => $failed];
     }
 
@@ -175,6 +199,61 @@ class Termination extends Action
         }
 
         return $model->order($model->id, self::ASC)->limit(self::BATCH)->get();
+    }
+
+    /**
+     * Services Dunning Suspended, Long Enough Ago To Destroy - Phase 50
+     *
+     * ONLY what dunning suspended (Dunning::isSuspendedByUs). A suspension staff
+     * made by hand - abuse, a dispute, an investigation - is a person's decision
+     * and stays one; ending it automatically on a timer nobody set for it would
+     * be deleting evidence.
+     *
+     * The clock is `module_data['suspended_at']`, which dunning stamps when it
+     * suspends. That column is serialised, so the date is read in PHP; the query
+     * bounds the read to suspended rows, oldest first.
+     * @return array
+     */
+    public function suspendedTooLong(): array
+    {
+        $days = $this->suspendedRetainDays();
+        $suspended = Status::idOf(self::SERVICE_STATUSES, 'suspended');
+
+        if ($days === 0 || $suspended === null) {
+            return [];
+        }
+
+        $cutoff = strtotime('-' . $days . ' days');
+        $dunning = new Dunning();
+        $model = $this->model();
+
+        $rows = $model->where(['status_relid' => $suspended])
+            ->order($model->id, self::ASC)
+            ->limit(self::BATCH * 10)
+            ->get();
+
+        $out = [];
+
+        foreach ($rows as $row) {
+            $since = strtotime((string) ($row['module_data']['suspended_at'] ?? ''));
+
+            if (
+                !$dunning->isSuspendedByUs($row)
+                || $since === false
+                || $since > $cutoff
+                || $this->attempts($row, 'terminate') >= self::MAX_ATTEMPTS
+            ) {
+                continue;
+            }
+
+            $out[] = $row;
+
+            if (count($out) >= self::BATCH) {
+                break;
+            }
+        }
+
+        return $out;
     }
 
     /**

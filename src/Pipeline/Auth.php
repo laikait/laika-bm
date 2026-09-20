@@ -67,6 +67,15 @@ class Auth implements PipelineInterface
     private static array $resolved = [];
 
     /**
+     * @var ?AuthManager One Per Process - Phase 51
+     *
+     * It reads lf-config/auth.php when constructed and caches its guards, so a
+     * fresh one per call - as guard() used to make - re-read the config and
+     * rebuilt a TokenGuard on every login, logout and user lookup.
+     */
+    private static ?AuthManager $manager = null;
+
+    /**
      * Handle The Request
      * @param callable $next Next Pipeline
      * @param array $params Route Parameters
@@ -81,8 +90,8 @@ class Auth implements PipelineInterface
             // Nothing to revoke - the token is either absent, expired or already
             // revoked - but the stale session key would otherwise be retried on
             // every request.
-            Session::pop(self::TOKEN, self::scope($area));
-            Session::pop(self::GUARD, self::scope($area));
+            Session::scope(self::scope($area))->pop(self::TOKEN);
+            Session::scope(self::scope($area))->pop(self::GUARD);
 
             // A route NAME, not a path: Handler::namedUrl() throws on anything
             // it has not seen declared.
@@ -118,8 +127,8 @@ class Auth implements PipelineInterface
         $issued = self::guard($guard)->issueToken($userId, self::lifetime());
 
         Session::regenerate();
-        Session::set(self::TOKEN, $issued['token'], self::scope($area));
-        Session::set(self::GUARD, $guard, self::scope($area));
+        Session::scope(self::scope($area))->set(self::TOKEN, $issued['token']);
+        Session::scope(self::scope($area))->set(self::GUARD, $guard);
 
         unset(self::$resolved[$area]);
 
@@ -134,8 +143,8 @@ class Auth implements PipelineInterface
     public static function logout(string $area): void
     {
         $namespace = self::scope($area);
-        $token     = Session::get(self::TOKEN, null, $namespace);
-        $guard     = Session::get(self::GUARD, self::guardName($area), $namespace);
+        $token     = Session::scope($namespace)->get(self::TOKEN);
+        $guard     = Session::scope($namespace)->get(self::GUARD, self::guardName($area));
 
         // Revoking marks revoked_at rather than deleting, so the row stays as an
         // audit trail of the session that existed.
@@ -143,7 +152,7 @@ class Auth implements PipelineInterface
             self::guard((string) $guard)->revoke($token);
         }
 
-        Session::purge($namespace);
+        Session::scope($namespace)->purge();
         unset(self::$resolved[$area]);
     }
 
@@ -151,13 +160,30 @@ class Auth implements PipelineInterface
      * Sign a User Out Of Every Device
      * @param string $area ADMIN or PANEL
      * @param int $userId Staff/Client/Contact ID
+     * @param ?string $guard Defaults to the area's; pass CONTACT for a sub-login (Phase 52)
      * @return void
      */
-    public static function logoutEverywhere(string $area, int $userId): void
+    public static function logoutEverywhere(string $area, int $userId, ?string $guard = null): void
     {
-        self::guard(self::guardName($area))->revokeAllForUser($userId);
-        Session::purge(self::scope($area));
+        self::revokeAll($area, $userId, $guard);
+        Session::scope(self::scope($area))->purge();
         unset(self::$resolved[$area]);
+    }
+
+    /**
+     * Revoke Every Token An Account Holds, Leaving This Browser's Session Alone
+     *
+     * For a password reset - Phase 52. The account being reset is not
+     * necessarily whoever this browser is signed in as, so their session must
+     * not be the one that gets purged.
+     * @param string $area ADMIN or PANEL
+     * @param int $userId Staff/Client/Contact ID
+     * @param ?string $guard Defaults to the area's
+     * @return void
+     */
+    public static function revokeAll(string $area, int $userId, ?string $guard = null): void
+    {
+        self::guard($guard ?? self::guardName($area))->revokeAllForUser($userId);
     }
 
     /**
@@ -184,8 +210,8 @@ class Auth implements PipelineInterface
         }
 
         $namespace = self::scope($area);
-        $token     = Session::get(self::TOKEN, null, $namespace);
-        $guard     = Session::get(self::GUARD, self::guardName($area), $namespace);
+        $token     = Session::scope($namespace)->get(self::TOKEN);
+        $guard     = Session::scope($namespace)->get(self::GUARD, self::guardName($area));
 
         if (!is_string($token) || $token === '') {
             return self::$resolved[$area] = null;
@@ -228,7 +254,7 @@ class Auth implements PipelineInterface
             return null;
         }
 
-        $guard = Session::get(self::GUARD, self::guardName($area), self::scope($area));
+        $guard = Session::scope(self::scope($area))->get(self::GUARD, self::guardName($area));
 
         return is_string($guard) && $guard !== '' ? $guard : self::guardName($area);
     }
@@ -240,7 +266,7 @@ class Auth implements PipelineInterface
      */
     public static function guard(string $name): TokenGuard
     {
-        $guard = (new AuthManager())->guard($name);
+        $guard = (self::$manager ??= new AuthManager())->guard($name);
 
         if (!$guard instanceof TokenGuard) {
             throw new \RuntimeException(

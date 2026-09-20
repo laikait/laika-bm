@@ -17,6 +17,9 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Model\Model;
 use Laika\Service\Option;
+use Laika\Service\Vault;
+use LBM\Support\Plain;
+use Throwable;
 use LBM\Service\Mailer;
 use LBM\Service\Money;
 use LBM\Service\Status;
@@ -56,6 +59,17 @@ class Setting extends Action
         'mail_validate_cert', 'suspend_overdue', 'prices_include_tax', 'auto_charge',
     ];
 
+    /**
+     * @var string[] Settings Stored Sealed, And Never Sent Back To a Browser - Phase 51
+     *
+     * The SMTP password sat in `options` as typed, and the Mail screen put it in
+     * the page as the field's value - readable in the source by anybody allowed
+     * to open the screen. Now: sealed with Vault on save (as module secrets have
+     * been since Phase 40), shown blank, and a blank box keeps what is saved.
+     * Read it with secret(), never option().
+     */
+    public const SECRETS = ['mail_password'];
+
     /** @var array<string,string[]> Which Keys Belong To Which Settings Screen */
     public const GROUPS = [
         'general' => [
@@ -71,6 +85,7 @@ class Setting extends Action
             'invoice_prefix', 'order_prefix', 'ticket_prefix', 'invoice_due_days',
             'late_fee_percent', 'invoice_generate_days', 'invoice_reminder_days',
             'suspend_overdue', 'suspend_overdue_days', 'terminate_cancelled_days',
+            'terminate_suspended_days',
             'domain_renew_days', 'domain_grace_days', 'error_log_days',
             'auto_charge', 'auto_charge_days',
         ],
@@ -252,6 +267,18 @@ class Setting extends Action
                 continue;
             }
 
+            // A secret: a blank box keeps what is saved, anything typed is
+            // stored exactly as typed (not HTML-encoded) and sealed.
+            if (in_array($key, self::SECRETS, true)) {
+                $typed = Plain::text(trim((string) $input[$key]));
+
+                if ($typed !== '') {
+                    $values[$key] = Vault::encrypt($typed);
+                }
+
+                continue;
+            }
+
             // boolean(), not !empty(): the checkbox macro submits the literal
             // string 'false' for an unticked box, and empty('false') is false -
             // so !empty() would read "off" as on, and unticking a setting would
@@ -275,9 +302,43 @@ class Setting extends Action
 
         foreach (self::GROUPS[$group] ?? [] as $key) {
             $values[$key] = option($key, '');
+
+            // Never the secret itself - only whether one is saved, so the
+            // screen can say "leave blank to keep it".
+            if (in_array($key, self::SECRETS, true)) {
+                $values[$key . '_saved'] = $values[$key] !== '' && $values[$key] !== null;
+                $values[$key] = '';
+            }
         }
 
         return $values;
+    }
+
+    /**
+     * Read a Sealed Setting, Opened - Phase 51
+     *
+     * A value Vault cannot open is returned as stored: that is a password saved
+     * before sealing existed and not yet migrated (M202609190300SealMailPassword
+     * seals it), and refusing it would stop mail on the one install that has not
+     * run the update yet.
+     * @param string $key One of SECRETS
+     * @return string
+     */
+    public function secret(string $key): string
+    {
+        $stored = (string) (option($key, '') ?? '');
+
+        if ($stored === '') {
+            return '';
+        }
+
+        try {
+            $plain = Vault::decrypt($stored);
+        } catch (Throwable) {
+            return $stored;
+        }
+
+        return is_string($plain) ? $plain : $stored;
     }
 
     /**

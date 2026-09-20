@@ -22,6 +22,7 @@ use Laika\Core\App\Template;
 use Laika\Session\Session;
 use Laika\Session\SessionManager;
 use Laika\Service\Icon;
+use Laika\Service\Response;
 use LBM\Service\Money;
 
 /**
@@ -265,6 +266,21 @@ abstract class Controller
         }
 
         return ($value === null || $value === '') ? $default : $value;
+    }
+
+    /**
+     * Answer 429 For a Throttled Sign-In Or Reset - Phase 52
+     *
+     * The form still renders, with the action's message on it, so a person sees
+     * why; the status and Retry-After are for scripts, which read nothing else.
+     * Through the Response service for the reason AreaErrorController gives.
+     * @param int $seconds Until The Next Try Is Allowed
+     * @return void
+     */
+    protected function tooManyAttempts(int $seconds): void
+    {
+        Response::setStatus(429);
+        Response::setHeader('Retry-After', (string) max(1, $seconds));
     }
 
     /**

@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Throwable;
 use Laika\Model\Connection;
+use Laika\Service\AppKey;
 use LBM\Install\Requirements;
 use LBM\Service\Mail;
 
@@ -188,25 +189,33 @@ class Health
             ];
         }
 
-        // A FILE, not a config value. config('app', 'key') is valid syntax and
-        // answers null, because lf-config/app.php holds name, url and
-        // documentation and nothing else - so checking there reports every
-        // healthy install as broken. Laika\Core\App\Key writes and reads
-        // lf-storage/keys/app.key, and that is what has to exist.
+        // Asked of the framework's own key class, not read off the disk here
+        // (Phase 51). config('app', 'key') is valid syntax and answers null -
+        // lf-config/app.php holds no key - and reading lf-storage/keys/app.key
+        // by hand only proved the file was not empty. AppKey::validate() is the
+        // same check every decrypt depends on: present, decodable, the right
+        // length. A key that fails it is one Vault cannot use, however full the
+        // file is.
         //
         // The directory is excluded from the release archive on purpose: every
         // installation generates its own, and a shipped key would be the same
         // key on every site running this software.
-        $keyFile = APP_PATH . DS . 'lf-storage' . DS . 'keys' . DS . 'app.key';
-        $hasKey = is_file($keyFile) && trim((string) file_get_contents($keyFile)) !== '';
+        try {
+            $hasKey = AppKey::validate();
+            $keyProblem = '';
+        } catch (Throwable $e) {
+            $hasKey = false;
+            $keyProblem = $e->getMessage();
+        }
 
         $checks[] = [
             'label'    =>  'application key is present',
             'ok'       =>  $hasKey,
             'required' =>  true,
             // Never the key itself. This screen is readable by anybody with
-            // settings.read, and the key decrypts every stored secret.
-            'state'    =>  $hasKey ? 'present' : 'missing from lf-storage/keys',
+            // settings.read, and the key decrypts every stored secret. The
+            // framework's message names the file and the command, not the key.
+            'state'    =>  $hasKey ? 'present' : $keyProblem,
         ];
 
         $cron = $this->cron();

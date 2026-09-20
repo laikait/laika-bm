@@ -18,6 +18,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 use RuntimeException;
 use Laika\Core\Exceptions\HttpException;
 use Laika\Service\Request;
+use LBM\Support\Http\Client;
 use LBM\Action\ErrorLog as ActionErrorLog;
 use LBM\Install\Installer;
 use LBM\Service\ErrorLog;
@@ -393,35 +394,19 @@ class UtilController extends AdminController
             return null;
         }
 
-        $context = stream_context_create([
-            'http' => [
-                'method'        => 'GET',
-                'timeout'       => self::FEED_TIMEOUT,
-                'ignore_errors' => true,
-                'header'        => "Accept: application/json\r\nUser-Agent: " . Version::PRODUCT . '/' . Version::CURRENT . "\r\n",
-            ],
-            'ssl'  => [
-                'verify_peer'      => true,
-                'verify_peer_name' => true,
-            ],
+        // Phase 53: through Support\Http\Client. It verifies TLS, never
+        // follows a redirect and never throws - the last is what the old
+        // file_get_contents() needed a try/catch for, because the framework
+        // promotes a failed connection's warning to an exception.
+        $response = (new Client(['timeout' => self::FEED_TIMEOUT]))->get($url, [], [
+            'User-Agent' => Version::PRODUCT . '/' . Version::CURRENT,
         ]);
 
-        // NOT @file_get_contents(). The framework's error handler promotes
-        // warnings to ErrorException whatever the @ says, so suppressing a
-        // failed connection here would take the whole request down instead of
-        // returning false - the same trap that has bitten every harness in
-        // this project.
-        try {
-            $body = file_get_contents($url, false, $context);
-        } catch (\Throwable) {
+        if (!$response->ok()) {
             return null;
         }
 
-        if (!is_string($body) || $body === '') {
-            return null;
-        }
-
-        $data = json_decode($body, true);
+        $data = $response->json();
 
         if (!is_array($data)) {
             return null;

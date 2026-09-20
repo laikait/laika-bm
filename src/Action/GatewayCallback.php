@@ -72,6 +72,22 @@ class GatewayCallback extends Action
     /** @var string Understood, And Refused */
     public const REJECTED = 'rejected';
 
+    /**
+     * @var string[] What a Driver May Report As `reversal` - Phase 50
+     *
+     *   refund         `amount` is the processor's RUNNING TOTAL refunded on the
+     *                  charge, not this one refund - so the same event twice, or
+     *                  events out of order, can only ever settle the ledger to
+     *                  the same figure.
+     *   dispute_opened the customer's bank is contesting it; the money is held.
+     *   dispute_lost   the bank took it back. `amount` is what was taken.
+     *   dispute_won    it stays with the operator.
+     *
+     * `payment_reference` names the ORIGINAL payment, as recorded in its
+     * transaction_ref; `reference` stays the event's own, for idempotency.
+     */
+    public const REVERSALS = ['refund', 'dispute_opened', 'dispute_lost', 'dispute_won'];
+
     /** @var string[] Columns a Caller May Write */
     public const FIELDS = [
         'gateway_relid', 'event_ref', 'event_type', 'invoice_relid',
@@ -287,6 +303,11 @@ class GatewayCallback extends Action
      */
     private function apply(int $id, array $gateway, array $result, string $reference): array
     {
+        // Money going back the other way (Phase 50) - see reverse().
+        if (in_array($result['reversal'] ?? null, self::REVERSALS, true)) {
+            return $this->reverse($id, $gateway, $result);
+        }
+
         $invoiceId = (int) ($result['invoice_id'] ?? 0);
 
         // A callback that says nothing succeeded. Ordinary - `payment.failed`
@@ -378,6 +399,102 @@ class GatewayCallback extends Action
         );
 
         return $this->answer(self::APPLIED, 200, 'Payment recorded.', $id, $transaction);
+    }
+
+    /**
+     * Money Going Back: Refunds And Disputes Made At The Processor - Phase 50
+     *
+     * Until now every callback was read as a payment, and a refund issued on the
+     * processor's dashboard, or a chargeback, left the ledger saying the money
+     * was still here. Nothing here un-settles an invoice: a refund row is
+     * written through Action\Refund, bounded as every refund is, and the invoice
+     * moves only as far as Transaction::refund() moves it.
+     * @param int $id Callback Row ID
+     * @param array $gateway Gateway Row
+     * @param array $result Driver Result, with `reversal` set
+     * @return array
+     */
+    private function reverse(int $id, array $gateway, array $result): array
+    {
+        $kind = (string) $result['reversal'];
+        $paymentRef = trim((string) ($result['payment_reference'] ?? ''));
+
+        $payment = $paymentRef === '' ? null : (new Transaction())->first([
+            'gateway_relid'   =>  (int) ($gateway['gateway_id'] ?? 0),
+            'transaction_ref' =>  $paymentRef,
+            'type'            =>  Transaction::PAYMENT,
+        ]);
+
+        // A charge this installation never recorded - taken some other way, or
+        // by another system on the same account. Written down, nothing touched.
+        if ($payment === null) {
+            $this->close($id, self::IGNORED, 'A ' . str_replace('_', ' ', $kind)
+                . ' for a payment this installation has no record of.');
+
+            return $this->answer(self::IGNORED, 200, 'No such payment here.', $id);
+        }
+
+        $invoiceId = (int) ($payment['invoice_relid'] ?? 0) ?: null;
+        $amount = $this->amount($result['amount'] ?? null);
+        $refunds = new Refund();
+
+        if ($kind === 'dispute_opened' || $kind === 'dispute_won') {
+            $opened = $kind === 'dispute_opened';
+
+            (new Activity())->record(
+                $opened ? 'payment.dispute.opened' : 'payment.dispute.won',
+                ($opened
+                    ? 'A dispute was opened on transaction #' . (int) $payment['tx_id'] . ($amount !== null ? ' for ' . Money::format($amount) : '')
+                        . '. The processor is holding the money until it is decided - answer it on their dashboard.'
+                    : 'The dispute on transaction #' . (int) $payment['tx_id'] . ' was decided for you. Nothing changes here.'),
+                Activity::SYSTEM
+            );
+
+            $this->close($id, self::IGNORED, $opened ? 'Dispute opened - staff alerted.' : 'Dispute won.', $invoiceId);
+
+            return $this->answer(self::IGNORED, 200, 'Recorded.', $id);
+        }
+
+        if ($amount === null) {
+            $this->close($id, self::REJECTED, 'The callback carried no usable amount.', $invoiceId);
+
+            return $this->answer(self::REJECTED, 422, 'Unusable amount.', $id);
+        }
+
+        try {
+            if ($kind === 'refund') {
+                // A running total: record only what the ledger does not already
+                // hold, which also covers refunds this installation made itself.
+                $missing = Money::sub($amount, $refunds->recordedFor($payment));
+
+                $transaction = Money::isGreater($missing, '0')
+                    ? $refunds->fromGateway($payment, $missing, 'Refunded at ' . ($gateway['display_name'] ?? 'the payment processor'), Refund::GATEWAY, $paymentRef)
+                    : null;
+            } else {
+                $transaction = $refunds->fromGateway($payment, $amount, 'Chargeback - dispute lost', Refund::CHARGEBACK, $paymentRef);
+
+                (new Activity())->record(
+                    'payment.dispute.lost',
+                    'The dispute on transaction #' . (int) $payment['tx_id'] . ' was lost, and '
+                        . Money::format($amount) . ' was taken back. Recorded as a chargeback.',
+                    Activity::SYSTEM
+                );
+            }
+        } catch (Throwable $e) {
+            $this->close($id, self::REJECTED, 'The reversal could not be recorded: ' . $e->getMessage(), $invoiceId);
+
+            return $this->answer(self::REJECTED, 500, 'Could not record the reversal.', $id);
+        }
+
+        if ($transaction === null) {
+            $this->close($id, self::IGNORED, 'Already recorded - nothing new to write.', $invoiceId);
+
+            return $this->answer(self::IGNORED, 200, 'Already recorded.', $id);
+        }
+
+        $this->close($id, self::APPLIED, ucfirst(str_replace('_', ' ', $kind)) . ' recorded.', $invoiceId, $transaction);
+
+        return $this->answer(self::APPLIED, 200, 'Reversal recorded.', $id, $transaction);
     }
 
     /**

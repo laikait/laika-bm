@@ -168,6 +168,20 @@ class ProfileController extends ClientController
     }
 
     /**
+     * Sign Out Of Every Device - Phase 52
+     *
+     * Straight to the sign-in page: this browser's session is revoked with the
+     * rest, so there is no signed-in page left to return to.
+     * @return ?string
+     */
+    public function revokeSessions(): ?string
+    {
+        AuthClient::logoutEverywhere();
+
+        return $this->done('client.login', local('signed_out_everywhere_msg'));
+    }
+
+    /**
      * Change The Currency The Client Is Billed In
      *
      * Only to a currency the operator actually has switched on - a client who

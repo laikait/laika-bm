@@ -222,9 +222,10 @@ class InvoiceController extends ClientController
         // Redirect::to() sends an absolute URL straight out - it checks for a
         // host before treating the argument as a route name.
         //
-        // Nothing in 22.1 returns a redirect, but the contract allows one, and a
-        // silently ignored redirect would strand the first driver that used it
-        // on a screen saying the payment had started when it had not.
+        // Stripe Checkout sends the customer to Stripe, and Stripe Card sends
+        // them to their bank for 3-D Secure (Phase 48) - both through here. A
+        // silently ignored redirect would strand the customer on a screen
+        // saying the payment had started when it had not.
         if (trim((string) ($result['redirect'] ?? '')) !== '') {
             Redirect::to((string) $result['redirect']);
 
@@ -336,16 +337,17 @@ class InvoiceController extends ClientController
     /**
      * Settle An Invoice From Account Credit
      *
-     * This is the only kind of payment a client can make themselves, and that
-     * is deliberate. Credit is money the operator has already received and
+     * The one payment a client makes without a gateway, and that is
+     * deliberate. Credit is money the operator has already received and
      * recorded; spending it against an invoice moves a number that is provably
-     * theirs. Anything else - a card, a bank transfer - is a gateway's job, and
-     * the gateway runtime is a later phase.
+     * theirs. Anything else - a card, a bank transfer - is a gateway's job:
+     * see checkout() and cardReturn(), and Action\GatewayCallback.
      *
      * What this route must never become is "the client says they paid": a form
      * that let somebody record their own payment would let anyone mark their
-     * own invoice settled. When gateways arrive, the payment will be recorded
-     * from the gateway's callback, not from a form the payer controls.
+     * own invoice settled. A gateway payment is recorded from the gateway's
+     * callback, or from the charge the product itself made - never from a form
+     * the payer controls.
      * @param string $invoice Invoice Uid
      * @return ?string
      */

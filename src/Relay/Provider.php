@@ -94,6 +94,7 @@ class Provider extends RelayProvider
             'action.gateway.callback' =>  Action\GatewayCallback::class,
             'action.provision'      =>  Action\Provision::class,
             'action.dunning'        =>  Action\Dunning::class,
+            'action.service.operation' =>  Action\ServiceOperation::class,
             'action.termination'    =>  Action\Termination::class,
             'action.tax'            =>  Action\Tax::class,
             'action.addon'          =>  Action\Addon::class,

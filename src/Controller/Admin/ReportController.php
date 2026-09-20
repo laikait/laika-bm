@@ -15,6 +15,7 @@ namespace LBM\Controller\Admin;
 // Deny Direct Access
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
+use Laika\Service\Date;
 use Laika\Service\Request;
 use LBM\Service\Client;
 use LBM\Service\Invoice;
@@ -259,17 +260,41 @@ class ReportController extends AdminController
     {
         $months = [];
 
-        for ($back = self::MONTHS - 1; $back >= 0; $back--) {
-            $start = date('Y-m-01 00:00:00', strtotime("-{$back} months"));
-            $end = date('Y-m-t 23:59:59', strtotime("-{$back} months"));
-
+        foreach ($this->lastMonths() as $window) {
             $months[] = [
-                'label' =>  date('M Y', strtotime($start)),
-                'total' =>  Transaction::income($start, $end),
+                'label' =>  $window['label'],
+                'total' =>  Transaction::income($window['start'], $window['end']),
             ];
         }
 
         return $months;
+    }
+
+    /**
+     * The Last MONTHS Calendar Months, Oldest First - Phase 51
+     *
+     * "first day of -N months", through the framework's Date. The old
+     * strtotime("-N months") counted back from TODAY's day of the month, so on
+     * the 29th-31st it overflowed: on 31 March, "-1 months" is 3 March, so the
+     * chart showed March twice, skipped February, and a month of income was
+     * missing from a report nobody would think to doubt.
+     * @return array<int,array{start:string,end:string,label:string}>
+     */
+    private function lastMonths(): array
+    {
+        $out = [];
+
+        for ($back = self::MONTHS - 1; $back >= 0; $back--) {
+            $first = Date::now()->modify("first day of -{$back} months");
+
+            $out[] = [
+                'start' =>  $first->format('Y-m-01 00:00:00'),
+                'end'   =>  $first->modify('last day of this month')->format('Y-m-d 23:59:59'),
+                'label' =>  $first->format('M Y'),
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -306,13 +331,10 @@ class ReportController extends AdminController
     {
         $months = [];
 
-        for ($back = self::MONTHS - 1; $back >= 0; $back--) {
-            $start = date('Y-m-01 00:00:00', strtotime("-{$back} months"));
-            $end = date('Y-m-t 23:59:59', strtotime("-{$back} months"));
-
+        foreach ($this->lastMonths() as $window) {
             $months[] = [
-                'label' =>  date('M Y', strtotime($start)),
-                'count' =>  Client::countBetween($start, $end),
+                'label' =>  $window['label'],
+                'count' =>  Client::countBetween($window['start'], $window['end']),
             ];
         }
 

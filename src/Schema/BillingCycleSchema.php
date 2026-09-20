@@ -46,6 +46,10 @@ class BillingCycleSchema extends SchemaAbstract
         $cycles = [
             ['billing_cycle_name' => 'one_time'],
             ['billing_cycle_name' => 'monthly'],
+            // Phase 50. Provision and InvoiceGenerateJob already knew it as three
+            // months; it was only never offered. M202609190200AddQuarterlyCycle
+            // adds the row on an existing install.
+            ['billing_cycle_name' => 'quarterly'],
             ['billing_cycle_name' => 'semi_annual'],
             ['billing_cycle_name' => 'annual'],
             ['billing_cycle_name' => 'biennial'],

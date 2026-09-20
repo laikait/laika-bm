@@ -20,6 +20,7 @@ use LBM\Controller\Front\CartController;
 use LBM\Controller\Front\DomainController;
 use LBM\Controller\Front\HomeController;
 use LBM\Controller\Front\ErrorController;
+use LBM\Controller\AreaErrorController;
 use LBM\Controller\Front\SupportController;
 use LBM\Controller\Front\ServiceController;
 use LBM\Controller\Front\AnnouncementController;
@@ -207,4 +208,19 @@ Url::post('/contact', [SupportController::class, 'contact']);
 
 Url::fallback(null, static function (): string {
     return (new ErrorController())->notFound();
+}, [Install::class, GlobalPipeline::class]);
+
+// Phase 50. The admin and client areas answer their own unmatched URLs.
+//
+// The language catalogue follows the first URL segment, so /admin/nope loaded
+// the ADMIN catalogue - and the `/` fallback above rendered the FRONT 404 with
+// it, whose first front-only key threw. Every mistyped staff or client URL was
+// a 500. Longer prefixes win in dispatchFallback(), so these take /admin/ and
+// /panel/ and the one above keeps everything else. Same pipelines, same reason.
+Url::fallback(ADMIN, static function (): string {
+    return (new AreaErrorController(ADMIN))->notFound();
+}, [Install::class, GlobalPipeline::class]);
+
+Url::fallback(PANEL, static function (): string {
+    return (new AreaErrorController(PANEL))->notFound();
 }, [Install::class, GlobalPipeline::class]);

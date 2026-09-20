@@ -178,7 +178,10 @@ final class ModuleSettings
         foreach ($fields as $name => $field) {
             $label = (string) $field['label'];
             $raw = $posted[$name] ?? null;
-            $value = is_scalar($raw) ? trim((string) $raw) : '';
+            // As typed, not as the request sanitizer encoded it (Phase 51): these
+            // are API keys, passwords and endpoint URLs handed to a module, and
+            // `&` stored as `&amp;` is a credential that no longer works.
+            $value = is_scalar($raw) ? Plain::text(trim((string) $raw)) : '';
             $saved = is_string($stored[$name] ?? null) && $stored[$name] !== '';
 
             // Last in intent, first in code: a tick to clear beats whatever

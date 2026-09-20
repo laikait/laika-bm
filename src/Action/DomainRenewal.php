@@ -19,8 +19,10 @@ use Throwable;
 use Laika\Model\Model;
 use LBM\Model\DomainModel;
 use LBM\Model\InvoiceItemModel;
+use LBM\Service\Money;
 use LBM\Service\Status;
 use LBM\Support\RegistersDomains;
+use LBM\Module\Contracts\RestoresDomains;
 
 /**
  * Keeping a domain, and losing it.
@@ -253,8 +255,24 @@ class DomainRenewal extends Action
             ];
         }
 
+        // In redemption the registry wants a RESTORE, not a renewal (Phase 50).
+        // A module that cannot restore is left to staff, as with no module at
+        // all: a renewal the registry is bound to refuse would only spend the
+        // retry budget and put a false failure on the record.
+        $inRedemption = (int) ($domain['status_relid'] ?? 0) === (int) Status::idOf(self::STATUSES, 'redemption');
+
+        if ($inRedemption && !$driver instanceof RestoresDomains) {
+            return [
+                'success' =>  false,
+                'manual'  =>  true,
+                'message' =>  'In redemption, and the registrar module cannot restore. Left for staff to restore by hand.',
+            ];
+        }
+
         try {
-            $result = $driver->renew($domain, $years, $this->contextFor($domain));
+            $result = $inRedemption
+                ? $driver->restore($domain, $years, $this->contextFor($domain))
+                : $driver->renew($domain, $years, $this->contextFor($domain));
         } catch (Throwable $e) {
             return $this->failed($domain, 'The registrar module threw: ' . $e->getMessage());
         }
@@ -383,6 +401,10 @@ class DomainRenewal extends Action
                     ($row['domain'] ?? 'A domain') . ' is past its grace period and needs a restore fee.',
                     Activity::SYSTEM
                 );
+
+                // And now it is actually asked for (Phase 50). Once, here, on
+                // the transition - the status only moves this way once.
+                $this->chargeRestore($row);
 
                 $redemption++;
             }
@@ -528,24 +550,127 @@ class DomainRenewal extends Action
      */
     private function unpaidRenewal(int $domainId): ?string
     {
+        $invoice = $this->unpaidRenewalInvoice($domainId);
+
+        return $invoice === null ? null : (string) ($invoice['invoice_number'] ?? '');
+    }
+
+    /**
+     * The Unpaid Renewal Invoice Still Open For One Domain
+     *
+     * Renewal lines only - a line with a period - so a restore fee line, which
+     * has none, can never be mistaken for the renewal it rides on. A cancelled
+     * invoice is not waiting for anybody, so it does not count (Phase 50: it
+     * used to, and the expiry notice told the customer to pay a void invoice).
+     * @param int $domainId Domain ID
+     * @return ?array Invoice Row
+     */
+    private function unpaidRenewalInvoice(int $domainId): ?array
+    {
         $items = new InvoiceItemModel();
 
         $rows = $items->where(['domain_relid' => $domainId])
+            ->notNull('period_end')
             ->order($items->id, self::DESC)
             ->limit(5)
             ->get();
 
         $invoices = new Invoice();
         $provision = new Provision();
+        $cancelled = $invoices->statusId('cancelled');
 
         foreach ($rows as $row) {
             $invoice = $invoices->find((int) ($row['invoice_relid'] ?? 0));
 
-            if (is_array($invoice) && !$provision->isPaid($invoice)) {
-                return (string) ($invoice['invoice_number'] ?? '');
+            if (
+                is_array($invoice)
+                && !$provision->isPaid($invoice)
+                && (int) ($invoice['status_relid'] ?? 0) !== (int) $cancelled
+            ) {
+                return $invoice;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Put The Restore Fee On a Domain's Renewal Invoice - Phase 50
+     *
+     * `tlds.restore_price` was written by the TLD form and read by nothing, so a
+     * domain went into redemption and the customer was still asked only for the
+     * renewal - which the registry would refuse. The fee goes onto the renewal
+     * invoice that is already waiting, as its own line, so paying that one
+     * invoice pays for both.
+     *
+     * The line carries the domain and NO period. awaiting() only treats a line
+     * with a period as a renewal, so the fee can never be read as a second one;
+     * the missing period is also how this recognises a fee it already added.
+     *
+     * No open renewal invoice - it was paid, cancelled or never raised - means
+     * there is nothing to add to, and raising a bill for a restore alone would
+     * charge for half of what the registry needs. That is left to staff, loudly.
+     * @param array $domain Domain Row
+     * @return bool Whether a fee line was added
+     */
+    private function chargeRestore(array $domain): bool
+    {
+        $domainId = (int) $domain['domain_id'];
+        $name = (string) ($domain['domain'] ?? 'A domain');
+
+        $tlds = new Tld();
+        $tld = $tlds->byName((string) ($domain['tld'] ?? ''));
+        $price = is_array($tld) ? $tlds->restorePrice($tld, (int) ($domain['currency_relid'] ?? 0)) : null;
+
+        // A registry with no restore charge, or an operator who absorbs it.
+        if ($price !== null && Money::isZero($price)) {
+            return false;
+        }
+
+        $invoice = $this->unpaidRenewalInvoice($domainId);
+
+        if ($price === null || $invoice === null) {
+            (new Activity())->record(
+                'domain.restore.unbilled',
+                $name . ' needs a restore fee, but ' . ($price === null
+                    ? 'its TLD has no restore price in the domain\'s currency.'
+                    : 'there is no open renewal invoice to add it to.')
+                    . ' Raise it by hand.',
+                Activity::SYSTEM
+            );
+
+            return false;
+        }
+
+        $invoiceId = (int) $invoice['invoice_id'];
+
+        $already = (new InvoiceItemModel())->where([
+            'invoice_relid' =>  $invoiceId,
+            'domain_relid'  =>  $domainId,
+        ])->isNull('period_end')->count() > 0;
+
+        if ($already) {
+            return false;
+        }
+
+        // Taxed like the renewal line beside it: asked fresh, from the client.
+        $tax = new Tax();
+        $rate = $tax->rateForClient((int) ($domain['client_relid'] ?? 0), 0);
+
+        (new Invoice())->addItem($invoiceId, [
+            'description'  =>  'Domain restore fee: ' . $name,
+            'quantity'     =>  '1',
+            'unit_price'   =>  $tax->inclusive() ? $tax->netOf($price, $rate) : $price,
+            'tax'          =>  $rate,
+            'domain_relid' =>  $domainId,
+        ]);
+
+        (new Activity())->record(
+            'domain.restore.invoiced',
+            'Added the restore fee for ' . $name . ' to invoice ' . ($invoice['invoice_number'] ?? $invoiceId) . '.',
+            Activity::SYSTEM
+        );
+
+        return true;
     }
 }

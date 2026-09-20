@@ -35,6 +35,7 @@ use Laika\Relay\Relay;
  * @method static ?array first(array $where)
  * @method static string forgot(string $email)
  * @method static void logout()
+ * @method static void logoutEverywhere()
  * @method static Model model()
  * @method static array register(array $input, string $password)
  * @method static array reset(string $token, string $password, ?string $confirm = null)

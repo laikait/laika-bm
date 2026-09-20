@@ -14,6 +14,7 @@ declare(strict_types=1);
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Route\Url;
+use LBM\Pipeline\Firewall;
 use LBM\Pipeline\Install;
 use LBM\Pipeline\GlobalPipeline;
 use LBM\Controller\Webhook\GatewayWebhookController;
@@ -30,7 +31,12 @@ use LBM\Controller\Webhook\GatewayWebhookController;
 //
 // GlobalPipeline then boots the request - database, timezone, session, language -
 // and CSRF-checks every POST (instructions 5, 15, 21).
+//
+// Firewall goes ahead of both (Phase 52). It needs neither a database nor a
+// session, and a firewall is only one if nothing has run before it - a request
+// it refuses must not open a database connection or start a session first.
 Url::globalPipeline([
+    Firewall::class,
     Install::class,
     GlobalPipeline::class,
 ]);

@@ -20,6 +20,8 @@ use LBM\Service\Addon;
 use LBM\Service\ConfigOption;
 use LBM\Service\ClientService;
 use LBM\Service\Server;
+use LBM\Service\ServiceOperation;
+use Laika\Service\Redirect;
 
 /**
  * The products a client has.
@@ -97,7 +99,47 @@ class ServiceController extends ClientController
             // The hostname only - never the server's own credentials, which are
             // the operator's and have nothing to do with the client.
             'hostname'   =>  $this->hostname($row),
+
+            // Phase 53: a one-click way into the control panel, for a live
+            // service whose module offers it.
+            'sso'        =>  ClientService::isActive($row) && ServiceOperation::capabilities($row)['sso'],
         ]);
+    }
+
+    /**
+     * Sign The Client Into Their Control Panel - Phase 53
+     *
+     * Only their own service, and only while it is active: a suspended account
+     * is suspended on the panel too, and a sign-in link would be the way round
+     * it. The link is fetched now and followed at once, never shown or stored.
+     * @param string $service Service Uid
+     * @return ?string
+     */
+    public function singleSignOn(string $service): ?string
+    {
+        $this->allow('service');
+
+        $row = $this->mine(
+            static fn(int|string $key, int $clientId): ?array => ClientService::forClientKey($key, $clientId),
+            $service,
+            'service'
+        );
+
+        if (!ClientService::isActive($row)) {
+            return $this->done('client.service', local('panel_unavailable'), false, ['service' => $row['uid']]);
+        }
+
+        $result = ServiceOperation::singleSignOn($row, 'client');
+
+        if (!$result['success']) {
+            // What the module said is for staff - it is in the provisioning log
+            // and the error log. The customer gets a plain answer.
+            return $this->done('client.service', local('panel_unavailable'), false, ['service' => $row['uid']]);
+        }
+
+        Redirect::to((string) $result['url']);
+
+        return null;
     }
 
     /**

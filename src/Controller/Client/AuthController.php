@@ -17,6 +17,7 @@ defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!'
 
 use Laika\Service\Request;
 use Laika\Service\Redirect;
+use Laika\Service\Response;
 use Laika\Core\Exceptions\HttpException;
 use LBM\Controller\Controller;
 use LBM\Pipeline\Auth;
@@ -110,6 +111,10 @@ class AuthController extends Controller
                 // On the form rather than against a field: which half was wrong
                 // is exactly what a failed sign-in must not reveal.
                 Request::addError('form', (string) $result['error']);
+
+                if (($result['retry_after'] ?? 0) > 0) {
+                    $this->tooManyAttempts((int) $result['retry_after']);
+                }
             }
         }
 
@@ -188,8 +193,17 @@ class AuthController extends Controller
      */
     public function reset(string $token): ?string
     {
+        // A dead link gets the request-a-new-one form, with the reason on it,
+        // as a 410. Phase 52: it used to throw HttpException(410), which the
+        // framework renders as a bare 500 error page - a dead end for somebody
+        // who only clicked an old email.
         if (AuthClient::findReset($token) === null) {
-            throw new HttpException(410, local('reset_link_expired'));
+            Response::setStatus(410);
+            Request::addError('form', local('reset_link_expired'));
+
+            return $this->render('forgot', [
+                'page_title' =>  local('reset_your_password'),
+            ]);
         }
 
         if (Request::isPost()) {

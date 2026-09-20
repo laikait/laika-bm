@@ -4,3 +4,6 @@ composer.lock
 
 # Release archives - built by bin/release.php, published as GitHub release assets (Phase 49).
 /dist/
+
+# The test runner (PHPUnit phar) and its cache - fetched per checkout, never committed (Phase 51).
+/tools/

@@ -131,7 +131,7 @@ class Cart
             return [];
         }
 
-        $stored = Session::get(self::KEY, [], self::SCOPE);
+        $stored = Session::scope(self::SCOPE)->get(self::KEY, []);
 
         if (!is_array($stored)) {
             return [];
@@ -232,7 +232,7 @@ class Cart
             return '';
         }
 
-        $code = Session::get(self::PROMO, '', self::SCOPE);
+        $code = Session::scope(self::SCOPE)->get(self::PROMO, '');
 
         return is_string($code) ? mb_substr(trim($code), 0, self::MAX_CODE) : '';
     }
@@ -252,7 +252,7 @@ class Cart
             return;
         }
 
-        Session::set(self::PROMO, mb_substr(trim($code), 0, self::MAX_CODE), self::SCOPE);
+        Session::scope(self::SCOPE)->set(self::PROMO, mb_substr(trim($code), 0, self::MAX_CODE));
     }
 
     /**
@@ -262,7 +262,7 @@ class Cart
     public static function clearPromo(): void
     {
         if (SessionManager::isConfigured()) {
-            Session::set(self::PROMO, '', self::SCOPE);
+            Session::scope(self::SCOPE)->set(self::PROMO, '');
         }
     }
 
@@ -665,7 +665,7 @@ class Cart
     public static function clear(): void
     {
         if (SessionManager::isConfigured()) {
-            Session::purge(self::SCOPE);
+            Session::scope(self::SCOPE)->purge();
         }
     }
 
@@ -1109,7 +1109,7 @@ class Cart
             $items = array_slice($items, 0, self::MAX_LINES, true);
         }
 
-        Session::set(self::KEY, $items, self::SCOPE);
+        Session::scope(self::SCOPE)->set(self::KEY, $items);
     }
 
     /**

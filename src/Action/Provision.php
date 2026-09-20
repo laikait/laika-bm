@@ -443,7 +443,17 @@ class Provision extends Action
             $services->setCredential($serviceId, $password);
         }
 
-        $this->remember($service, ['provisioned_at' => $this->now(), 'last_error' => null]);
+        // Phase 54: what the module needs to find the account again - a VPS id,
+        // a subscription id - kept under its own key so it can never overwrite
+        // LBM's bookkeeping beside it. Every later call hands it back in
+        // $service['module_data']['module'].
+        $keep = ['provisioned_at' => $this->now(), 'last_error' => null];
+
+        if (is_array($result['data'] ?? null) && $result['data'] !== []) {
+            $keep['module'] = $result['data'];
+        }
+
+        $this->remember($service, $keep);
 
         $services->setStatus($serviceId, 'active');
 

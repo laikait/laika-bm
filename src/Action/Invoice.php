@@ -665,8 +665,35 @@ class Invoice extends Action
                 return;
             }
 
-            $paid = Money::round(Money::add((string) ($invoice['amount_paid'] ?? '0'), (string) $amount));
+            // Only what is owed lands on the invoice; anything over it becomes
+            // account credit (Phase 50). Before, the whole amount went onto
+            // amount_paid and balance() floored the difference at zero - its
+            // comment said "an overpayment is a credit on the client account"
+            // while nothing ever put it there, and the money vanished.
+            //
+            // Capping amount_paid is also what keeps refunds honest: a refund is
+            // bounded by what the invoice received (Refund::refundableOn), so the
+            // excess, once it is credit, cannot be refunded a second time as part
+            // of the payment.
+            $owed    = $this->balance($invoice);
+            $applied = Money::isGreater((string) $amount, $owed) ? $owed : Money::round((string) $amount);
+            $excess  = Money::sub((string) $amount, $applied);
+
+            $paid = Money::round(Money::add((string) ($invoice['amount_paid'] ?? '0'), $applied));
             $invoice['amount_paid'] = $paid;
+
+            // Inside the same transaction, so the invoice and the credit move
+            // together or not at all. Transaction::credit() writes the `credit`
+            // ledger row and moves clients.credit_balance - the one place credit
+            // is counted (see Action\CreditNote).
+            if (Money::isGreater($excess, '0') && (int) ($invoice['client_relid'] ?? 0) > 0) {
+                (new Transaction())->credit(
+                    (int) $invoice['client_relid'],
+                    $excess,
+                    'Overpayment on invoice ' . ($invoice['invoice_number'] ?? "#{$invoiceId}"),
+                    (int) ($invoice['currency_relid'] ?? 0) ?: null
+                );
+            }
 
             $settled = $this->isSettled($invoice);
 

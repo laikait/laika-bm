@@ -16,6 +16,8 @@ namespace LBM\Support;
 defined('APP_PATH') || http_response_code(403) . die('403 Direct Access Denied!');
 
 use Laika\Service\Url;
+use Laika\Service\Request;
+use Laika\Service\Response;
 use Laika\Service\Redirect;
 use Laika\Core\Exceptions\HttpException;
 
@@ -39,7 +41,7 @@ final class Referrer
      */
     public static function url(): ?string
     {
-        $referer = trim((string) ($_SERVER['HTTP_REFERER'] ?? ''));
+        $referer = trim((string) (Request::header('Referer') ?? ''));
 
         if ($referer === '' || preg_match('/[\x00-\x1f\x7f]/', $referer)) {
             return null;
@@ -77,9 +79,10 @@ final class Referrer
     public static function refuse(string $message, string $fallbackRoute): never
     {
         if (self::wantsJson()) {
-            http_response_code(403);
-            header('Content-Type: application/json; charset=UTF-8');
-            echo json_encode(['message' => $message], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            // Through the framework's Response (Phase 51) rather than header()
+            // and echo by hand: same status, same content type, and one place
+            // that knows how a response is written.
+            Response::json(['message' => $message], 403)->send();
             exit();
         }
 
@@ -106,9 +109,14 @@ final class Referrer
      */
     public static function wantsJson(): bool
     {
-        return str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
-            || str_starts_with(strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? '')), 'application/json')
-            || strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+        // Request::header(), not $_SERVER (Phase 51). Not Request::isAjax():
+        // it lowercases a header that may be absent, and strtolower(null) is a
+        // deprecation the error handler turns into an exception - plan U3.
+        $header = static fn (string $name): string => strtolower((string) (Request::header($name) ?? ''));
+
+        return str_contains($header('Accept'), 'application/json')
+            || str_starts_with($header('Content-Type'), 'application/json')
+            || $header('X-Requested-With') === 'xmlhttprequest';
     }
 
     /**

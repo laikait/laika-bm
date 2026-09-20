@@ -100,6 +100,9 @@ class Refund extends Action
     /** @var string A Refund The Operator Made Themselves */
     public const MANUAL = 'manual';
 
+    /** @var string Money The Card Network Took Back - a Lost Dispute (Phase 50) */
+    public const CHARGEBACK = 'chargeback';
+
     public function model(): Model
     {
         return new TransactionModel();
@@ -323,6 +326,21 @@ class Refund extends Action
         $sent = trim((string) ($result['amount'] ?? ''));
         $sent = $sent !== '' && Money::isGreater($sent, '0') ? Money::round($sent) : $asking;
 
+        // The processor's `charge.refunded` webhook can land before this line
+        // does, and fromGateway() records it (Phase 50). Only what is still
+        // unrecorded is written here, so the one refund is never counted twice;
+        // when the webhook took all of it, the row it wrote is the answer.
+        $unrecorded = $this->refundableOn($payment);
+        $sent = Money::isGreater($sent, $unrecorded) ? $unrecorded : $sent;
+
+        if (!Money::isGreater($sent, '0')) {
+            $latest = $this->latestRefundOf($payment);
+
+            if ($latest !== null) {
+                return $latest;
+            }
+        }
+
         $id = (new Transaction())->refund($payment['tx_id'], $sent, $this->describe($reason, $sent, $asking));
 
         // The processor's own reference for the REFUND goes in gateway_data,
@@ -340,6 +358,108 @@ class Refund extends Action
         // No restate() call here: Transaction::refund() moves the invoice as
         // part of writing the row, so the two cannot come apart.
         return $id;
+    }
+
+    /**
+     * Record Money The Processor Sent Back Without Us Asking - Phase 50
+     *
+     * A refund made on the processor's own dashboard, or a dispute the customer
+     * won at their bank. The money has ALREADY gone; the only choice left is
+     * whether the ledger says so. Until Phase 50 it did not, and the income
+     * report, the invoice and the client's history all went on describing money
+     * the operator no longer had.
+     *
+     * This is not the "a refund is a decision a person makes" rule being broken
+     * (Action\GatewayCallback). A person did make it - at the processor - and
+     * this only writes down what they did.
+     *
+     * Bounded by refundableOn(), like every refund: when the processor sent back
+     * more than this invoice still holds - most often because an overpayment was
+     * moved to account credit - the rest is left for staff, loudly, because
+     * whether to take it off the client's credit is a judgement.
+     * @param array $payment Transaction Row Of Type payment
+     * @param string $amount What The Processor Sent Back
+     * @param string $reason Description For The Ledger
+     * @param string $method GATEWAY or CHARGEBACK
+     * @param ?string $reference The Processor's Reference For The Event
+     * @return ?int New Transaction ID, or null when there was nothing left to record
+     */
+    public function fromGateway(array $payment, string $amount, string $reason, string $method, ?string $reference = null): ?int
+    {
+        $room = $this->refundableOn($payment);
+        $record = Money::isGreater($amount, $room) ? $room : Money::round($amount);
+
+        if (Money::isGreater($amount, $room)) {
+            (new Activity())->record(
+                'refund.gateway.excess',
+                'The payment processor sent back ' . Money::format($amount) . ' on transaction #'
+                    . (int) $payment['tx_id'] . ', but only ' . Money::format($room)
+                    . ' was left to refund on its invoice. Check the client\'s credit balance.',
+                Activity::SYSTEM
+            );
+        }
+
+        if (!Money::isGreater($record, '0')) {
+            return null;
+        }
+
+        $id = (new Transaction())->refund($payment['tx_id'], $record, $reason);
+
+        (new Transaction())->recordGatewayData($id, [
+            'refund_of'        =>  (int) $payment['tx_id'],
+            'refund_method'    =>  $method,
+            'refund_reference' =>  $reference,
+            'via'              =>  'webhook',
+        ]);
+
+        return $id;
+    }
+
+    /**
+     * Everything Already Recorded As Refunded On One Payment - Phase 50
+     *
+     * Refund rows carry the original payment's `transaction_ref` (see
+     * throughGateway()), so the ledger can say, per charge, how much of it has
+     * gone back - which is what a processor's running total is compared with.
+     * @param array $payment Transaction Row Of Type payment
+     * @return string Decimal string
+     */
+    public function recordedFor(array $payment): string
+    {
+        $reference = (string) ($payment['transaction_ref'] ?? '');
+
+        if ($reference === '') {
+            return '0';
+        }
+
+        $rows = (new Transaction())->all([
+            'transaction_ref' =>  $reference,
+            'gateway_relid'   =>  (int) ($payment['gateway_relid'] ?? 0),
+            'type'            =>  Transaction::REFUND,
+        ]);
+
+        return Money::round(Money::sum(array_map(
+            static fn(array $row): string => (string) ($row['amount'] ?? '0'),
+            $rows
+        )));
+    }
+
+    /**
+     * The Most Recent Refund Row Of One Payment
+     * @param array $payment Transaction Row Of Type payment
+     * @return ?int Transaction ID
+     */
+    private function latestRefundOf(array $payment): ?int
+    {
+        $model = new TransactionModel();
+
+        $row = $model->where([
+            'transaction_ref' =>  (string) ($payment['transaction_ref'] ?? ''),
+            'gateway_relid'   =>  (int) ($payment['gateway_relid'] ?? 0),
+            'type'            =>  Transaction::REFUND,
+        ])->order($model->id, self::DESC)->limit(1)->get();
+
+        return isset($row[0]) ? (int) $row[0][$model->id] : null;
     }
 
     /**
